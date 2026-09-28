@@ -8,17 +8,17 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8000054C,func_8000054C,ours,0,,rust_verified,unit_diff,high,empty; spills a0 to [sp] (game::util)
 0x80000554,func_80000554,ours,0,util,rust_verified,unit_diff,high,zero a1 words at a0 (game::util)
 0x800005B4,func_800005B4,ours,1,,recomp,,,
-0x8000097C,func_8000097C,ours,0,,recomp,,,
+0x8000097C,func_8000097C,ours,0,,rust_verified,unit_diff,high,record time/pos/dir at 0x800AE8B0 unless T-E < t and d.S >= d.r (d = p-q) (game::misc)
 0x80000B00,func_80000B00,ours,1,,recomp,,,
 0x80000D80,func_80000D80,ours,2,,recomp,,,
 0x80000E94,func_80000E94,ours,3,,recomp,,,
 0x80001864,func_80001864,ours,4,,recomp,,,
-0x80001D34,func_80001D34,ours,0,,recomp,,,
+0x80001D34,func_80001D34,ours,0,,rust_verified,unit_diff,high,"ray/plane hit t in f0 or -1.0; |n.v| band [-1e-4,1e-4] in double; out = v*t + o (game::math)"
 0x80001E80,func_80001E80,ours,2,,recomp,,,
 0x800020D8,func_800020D8,ours,3,,recomp,,,
 0x800026BC,func_800026BC,ours,3,,recomp,,,
-0x80002BD4,func_80002BD4,ours,0,,recomp,,,
-0x80002E2C,func_80002E2C,ours,0,,recomp,,,
+0x80002BD4,func_80002BD4,ours,0,,rust_verified,unit_diff,high,"0 if 4 points all beyond one face of box C=[0x800AE908] h=[0x800AE8E0], else 1 (game::misc)"
+0x80002E2C,func_80002E2C,ours,0,,rust_verified,unit_diff,high,as 80002BD4 for 3 points (game::misc)
 0x80002FFC,func_80002FFC,ours,5,,recomp,,,
 0x80003348,func_80003348,ours,5,,recomp,,,
 0x800035BC,func_800035BC,ours,1,,recomp,,,

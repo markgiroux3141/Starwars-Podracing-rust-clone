@@ -7,6 +7,496 @@ use crate::imports;
 use n64mem::Mem;
 use crate::recomp::{addu, div, enter, fpu, lb, lbu, ld, lh, li, lw, multu, reg::*, s32, sb, sh, sll, sllv, slt, sltu, sra, subu, sw, RecompContext};
 
+/// The state [`func_8000097C`] records: a time (f32) at `0x800AE8B0`, then
+/// two float triples at `0x800AE8B8` (a position, **guess**) and
+/// `0x800AE8C8` (a direction, **guess**).
+pub const TRACKED: u32 = 0x800A_E8B0;
+
+/// [`func_8000097C`]'s record step: `[TRACKED] = t` (`f12`), the triple at
+/// `a2` to `TRACKED + 8`, the one at `a3` to `TRACKED + 0x18` (each loaded
+/// just before its store), then `[0x800AE8D8] = [0x800AE938]` and
+/// `[0x800AEC7C] = 1`. `temps` are the two GPRs the path uses for the last
+/// two words (`t8`/`t9` or `t6`/`t7`).
+fn record(m: &mut Mem, g: &mut [u64; 32], f: &mut [crate::recomp::Fpr; 32], (word, one): (usize, usize)) {
+    sw(m, g[V0], 0, u64::from(f[12].u32l()));
+    f[8].set_u32l(lw(m, g[A2], 0) as u32);
+    g[A0] = li(0x800A_E8B8);
+    sw(m, g[A0], 0, u64::from(f[8].u32l()));
+    f[4].set_u32l(lw(m, g[A2], 4) as u32);
+    g[V1] = li(0x800A_E8C8);
+    sw(m, g[A0], 4, u64::from(f[4].u32l()));
+    f[10].set_u32l(lw(m, g[A2], 8) as u32);
+    sw(m, g[A0], 8, u64::from(f[10].u32l()));
+    f[6].set_u32l(lw(m, g[A3], 0) as u32);
+    sw(m, g[V1], 0, u64::from(f[6].u32l()));
+    f[16].set_u32l(lw(m, g[A3], 4) as u32);
+    sw(m, g[V1], 4, u64::from(f[16].u32l()));
+    f[18].set_u32l(lw(m, g[A3], 8) as u32);
+    sw(m, g[V1], 8, u64::from(f[18].u32l()));
+    g[word] = lw(m, li(0x800B_0000), -0x16C8);
+    g[AT] = li(0x800B_0000);
+    sw(m, g[AT], -0x1728, g[word]);
+    g[one] = 1;
+    sw(m, g[AT], -0x1384, g[one]);
+}
+
+/// `func_8000097C(_, p, q, r)` with the float `t` in `f12`: record `t`, `q`
+/// and `r` in [`TRACKED`] ([`record`]) unless `T - E < t` (`T = [TRACKED]`,
+/// `E = [0x800A80F8]`, 0.01 in the ROM) and the stored direction `S =
+/// [TRACKED + 0x18]` fails the test below. With `d = p - q` (stored to the
+/// stack at `sp - 0xC..`), it records anyway when `S2*d2 + (d0*S0 + d1*S1)
+/// < (d0*r0 + d1*r1) + d2*r2`, i.e. when `d` points further along `r` than
+/// along `S`. The sums are in that order; nothing is fused.
+///
+/// Leaves `v0 = TRACKED`, `f6 = E`, `f8 = T - E` on the first path. The dot
+/// test leaves `v1 = TRACKED + 0x18` and `f4`..`f18` as it used them; the
+/// record step leaves `a0`, `v1`, `at = 0x800B0000`, `f4`..`f18` = the
+/// words it copied and its two temporaries.
+///
+/// Domain: canonical pointers, 12 bytes each; `T` and `E` not NaN. On the
+/// dot-test path `p`, `q`, `S`, `r` not NaN and no NaN intermediate (`inf -
+/// inf`, `0 * inf`) reaching another operation; the two dot products may be
+/// NaN (only compared). `t` may be anything (only compared and stored).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000097C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    g[V0] = li(TRACKED);
+    g[AT] = li(0x800B_0000);
+    f[6].set_u32l(lw(m, g[AT], -0x7F08) as u32);
+    f[4].set_u32l(lw(m, g[V0], 0) as u32);
+    g[SP] = addu(g[SP], (-0x10i64) as u64);
+    f[8].set_fl(f[4].fl() - f[6].fl());
+    if !(f[8].fl() < f[12].fl()) {
+        record(m, g, f, (T8, T9));
+    } else {
+        // d = p - q, spilled to the frame; dot1 = d . S, dot2 = d . r.
+        f[10].set_u32l(lw(m, g[A1], 0) as u32);
+        f[16].set_u32l(lw(m, g[A2], 0) as u32);
+        g[V1] = li(0x800A_E8C8);
+        f[18].set_fl(f[10].fl() - f[16].fl());
+        sw(m, g[SP], 4, u64::from(f[18].u32l()));
+        f[6].set_u32l(lw(m, g[A2], 4) as u32);
+        f[4].set_u32l(lw(m, g[A1], 4) as u32);
+        f[8].set_fl(f[4].fl() - f[6].fl());
+        f[6].set_u32l(lw(m, g[V1], 0) as u32);
+        f[4].set_u32l(lw(m, g[SP], 4) as u32);
+        sw(m, g[SP], 8, u64::from(f[8].u32l()));
+        f[16].set_u32l(lw(m, g[A2], 8) as u32);
+        f[10].set_u32l(lw(m, g[A1], 8) as u32);
+        f[8].set_fl(f[4].fl() * f[6].fl());
+        f[18].set_fl(f[10].fl() - f[16].fl());
+        f[16].set_u32l(lw(m, g[V1], 4) as u32);
+        f[10].set_u32l(lw(m, g[SP], 8) as u32);
+        sw(m, g[SP], 0xC, u64::from(f[18].u32l()));
+        f[18].set_fl(f[10].fl() * f[16].fl());
+        f[16].set_u32l(lw(m, g[V1], 8) as u32);
+        f[6].set_fl(f[8].fl() + f[18].fl());
+        f[8].set_u32l(lw(m, g[SP], 0xC) as u32);
+        f[18].set_fl(f[16].fl() * f[8].fl());
+        f[16].set_fl(f[18].fl() + f[6].fl());
+        f[18].set_u32l(lw(m, g[A3], 0) as u32);
+        f[6].set_fl(f[4].fl() * f[18].fl());
+        f[4].set_u32l(lw(m, g[A3], 4) as u32);
+        f[18].set_fl(f[10].fl() * f[4].fl());
+        f[4].set_u32l(lw(m, g[A3], 8) as u32);
+        f[10].set_fl(f[6].fl() + f[18].fl());
+        f[6].set_fl(f[8].fl() * f[4].fl());
+        f[18].set_fl(f[10].fl() + f[6].fl());
+        if f[16].fl() < f[18].fl() {
+            record(m, g, f, (T6, T7));
+        }
+    }
+    g[SP] = addu(g[SP], 0x10);
+}
+
+/// `func_80002BD4(a, b, c, d)`: 0 if the four points (float triples) all
+/// lie beyond the same face of the box of half-size `h = [0x800AE8E0]`
+/// around `C = [0x800AE908]` (a trivial reject, **guess**: of a quad
+/// against a view or collision box), else 1. With `r_k = p_k - C` (all
+/// twelve computed first and spilled to the frame at `sp - 0x30..`), it
+/// tests in order: all `r_k.x < -h`, all `h < r_k.x`, then y, then z; each
+/// test stops at the first point that fails it. Only strict compares.
+///
+/// Leaves `f0 = -h`, `f2 = h`, `f12`..`f16` = `C` or the last components
+/// reloaded, and `f4`..`f18` as the tests that ran left them.
+///
+/// Domain: canonical pointers to 12 bytes each; the points, `C` and `h` not
+/// NaN, and no `r_k` NaN (`inf - inf`). NaN compares would be false.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80002BD4(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    let mut c1cs;
+    'b_80002E28: {
+        'b_80002E20: {
+            'b_80002CCC: {
+                g[V0] = li(0x800A_E908);
+                f[12].set_u32l(lw(m, g[V0], 0) as u32);
+                f[4].set_u32l(lw(m, g[A0], 0) as u32);
+                g[SP] = addu(g[SP], (-0x30i64) as u64);
+                f[14].set_u32l(lw(m, g[V0], 4) as u32);
+                f[6].set_fl(f[4].fl() - f[12].fl());
+                f[16].set_u32l(lw(m, g[V0], 8) as u32);
+                g[AT] = li(0x800B_0000);
+                f[2].set_u32l(lw(m, g[AT], -0x1720) as u32);
+                sw(m, g[SP], 0x24, u64::from(f[6].u32l()));
+                f[8].set_u32l(lw(m, g[A0], 4) as u32);
+                f[0].set_fl(-f[2].fl());
+                f[10].set_fl(f[8].fl() - f[14].fl());
+                sw(m, g[SP], 0x28, u64::from(f[10].u32l()));
+                f[18].set_u32l(lw(m, g[A0], 8) as u32);
+                f[4].set_fl(f[18].fl() - f[16].fl());
+                sw(m, g[SP], 0x2C, u64::from(f[4].u32l()));
+                f[6].set_u32l(lw(m, g[A1], 0) as u32);
+                f[8].set_fl(f[6].fl() - f[12].fl());
+                sw(m, g[SP], 0x18, u64::from(f[8].u32l()));
+                f[10].set_u32l(lw(m, g[A1], 4) as u32);
+                f[18].set_fl(f[10].fl() - f[14].fl());
+                sw(m, g[SP], 0x1C, u64::from(f[18].u32l()));
+                f[4].set_u32l(lw(m, g[A1], 8) as u32);
+                f[6].set_fl(f[4].fl() - f[16].fl());
+                sw(m, g[SP], 0x20, u64::from(f[6].u32l()));
+                f[8].set_u32l(lw(m, g[A2], 0) as u32);
+                f[10].set_fl(f[8].fl() - f[12].fl());
+                sw(m, g[SP], 0xC, u64::from(f[10].u32l()));
+                f[18].set_u32l(lw(m, g[A2], 4) as u32);
+                f[4].set_fl(f[18].fl() - f[14].fl());
+                sw(m, g[SP], 0x10, u64::from(f[4].u32l()));
+                f[6].set_u32l(lw(m, g[A2], 8) as u32);
+                f[8].set_fl(f[6].fl() - f[16].fl());
+                sw(m, g[SP], 0x14, u64::from(f[8].u32l()));
+                f[10].set_u32l(lw(m, g[A3], 0) as u32);
+                f[18].set_fl(f[10].fl() - f[12].fl());
+                sw(m, g[SP], 0, u64::from(f[18].u32l()));
+                f[4].set_u32l(lw(m, g[A3], 4) as u32);
+                f[18].set_u32l(lw(m, g[SP], 0x24) as u32);
+                f[6].set_fl(f[4].fl() - f[14].fl());
+                f[4].set_u32l(lw(m, g[SP], 0x18) as u32);
+                c1cs = f[18].fl() < f[0].fl();
+                sw(m, g[SP], 4, u64::from(f[6].u32l()));
+                f[8].set_u32l(lw(m, g[A3], 8) as u32);
+                f[10].set_fl(f[8].fl() - f[16].fl());
+                sw(m, g[SP], 8, u64::from(f[10].u32l()));
+                if c1cs {
+                    c1cs = f[4].fl() < f[0].fl();
+                    f[6].set_u32l(lw(m, g[SP], 0xC) as u32);
+                    if !c1cs {
+                        f[10].set_u32l(lw(m, g[SP], 0x24) as u32);
+                        break 'b_80002CCC;
+                    }
+                    c1cs = f[6].fl() < f[0].fl();
+                    f[8].set_u32l(lw(m, g[SP], 0) as u32);
+                    if !c1cs {
+                        f[10].set_u32l(lw(m, g[SP], 0x24) as u32);
+                        break 'b_80002CCC;
+                    }
+                    c1cs = f[8].fl() < f[0].fl();
+                    if c1cs {
+                        break 'b_80002E20;
+                    }
+                }
+                // L_80002CC8
+                f[10].set_u32l(lw(m, g[SP], 0x24) as u32);
+            }
+            // L_80002CCC
+            f[18].set_u32l(lw(m, g[SP], 0x18) as u32);
+            f[12].set_u32l(lw(m, g[SP], 0x28) as u32);
+            c1cs = f[2].fl() < f[10].fl();
+            if !c1cs {
+                c1cs = f[12].fl() < f[0].fl();
+            } else {
+                c1cs = f[2].fl() < f[18].fl();
+                f[4].set_u32l(lw(m, g[SP], 0xC) as u32);
+                if !c1cs {
+                    c1cs = f[12].fl() < f[0].fl();
+                } else {
+                    c1cs = f[2].fl() < f[4].fl();
+                    f[6].set_u32l(lw(m, g[SP], 0) as u32);
+                    if !c1cs {
+                        c1cs = f[12].fl() < f[0].fl();
+                    } else {
+                        c1cs = f[2].fl() < f[6].fl();
+                        if c1cs {
+                            break 'b_80002E20;
+                        }
+                        c1cs = f[12].fl() < f[0].fl();
+                    }
+                }
+            }
+            // L_80002D18
+            f[8].set_u32l(lw(m, g[SP], 0x1C) as u32);
+            if !c1cs {
+                c1cs = f[2].fl() < f[12].fl();
+            } else {
+                c1cs = f[8].fl() < f[0].fl();
+                f[10].set_u32l(lw(m, g[SP], 0x10) as u32);
+                if !c1cs {
+                    c1cs = f[2].fl() < f[12].fl();
+                } else {
+                    c1cs = f[10].fl() < f[0].fl();
+                    f[18].set_u32l(lw(m, g[SP], 4) as u32);
+                    if !c1cs {
+                        c1cs = f[2].fl() < f[12].fl();
+                    } else {
+                        c1cs = f[18].fl() < f[0].fl();
+                        if c1cs {
+                            break 'b_80002E20;
+                        }
+                        c1cs = f[2].fl() < f[12].fl();
+                    }
+                }
+            }
+            // L_80002D58
+            f[12].set_u32l(lw(m, g[SP], 0x2C) as u32);
+            f[4].set_u32l(lw(m, g[SP], 0x1C) as u32);
+            if !c1cs {
+                c1cs = f[12].fl() < f[0].fl();
+            } else {
+                c1cs = f[2].fl() < f[4].fl();
+                f[6].set_u32l(lw(m, g[SP], 0x10) as u32);
+                if !c1cs {
+                    c1cs = f[12].fl() < f[0].fl();
+                } else {
+                    c1cs = f[2].fl() < f[6].fl();
+                    f[8].set_u32l(lw(m, g[SP], 4) as u32);
+                    if !c1cs {
+                        c1cs = f[12].fl() < f[0].fl();
+                    } else {
+                        c1cs = f[2].fl() < f[8].fl();
+                        if c1cs {
+                            break 'b_80002E20;
+                        }
+                        c1cs = f[12].fl() < f[0].fl();
+                    }
+                }
+            }
+            // L_80002D9C
+            f[10].set_u32l(lw(m, g[SP], 0x20) as u32);
+            if !c1cs {
+                c1cs = f[2].fl() < f[12].fl();
+            } else {
+                c1cs = f[10].fl() < f[0].fl();
+                f[18].set_u32l(lw(m, g[SP], 0x14) as u32);
+                if !c1cs {
+                    c1cs = f[2].fl() < f[12].fl();
+                } else {
+                    c1cs = f[18].fl() < f[0].fl();
+                    f[4].set_u32l(lw(m, g[SP], 8) as u32);
+                    if !c1cs {
+                        c1cs = f[2].fl() < f[12].fl();
+                    } else {
+                        c1cs = f[4].fl() < f[0].fl();
+                        if c1cs {
+                            break 'b_80002E20;
+                        }
+                        c1cs = f[2].fl() < f[12].fl();
+                    }
+                }
+            }
+            // L_80002DDC
+            f[6].set_u32l(lw(m, g[SP], 0x20) as u32);
+            g[V0] = 1;
+            if !c1cs {
+                break 'b_80002E28;
+            }
+            c1cs = f[2].fl() < f[6].fl();
+            f[8].set_u32l(lw(m, g[SP], 0x14) as u32);
+            if !c1cs {
+                break 'b_80002E28;
+            }
+            c1cs = f[2].fl() < f[8].fl();
+            f[10].set_u32l(lw(m, g[SP], 8) as u32);
+            if !c1cs {
+                break 'b_80002E28;
+            }
+            c1cs = f[2].fl() < f[10].fl();
+            if !c1cs {
+                break 'b_80002E28;
+            }
+        }
+        // L_80002E1C
+        g[V0] = 0;
+    }
+    // L_80002E24
+    g[SP] = addu(g[SP], 0x30);
+}
+
+/// `func_80002E2C(a, b, c)`: [`func_80002BD4`] for three points: 0 if all
+/// three lie beyond the same face of the box around `C = [0x800AE908]` with
+/// half-size `h = [0x800AE8E0]`, else 1. The nine differences go to the
+/// frame at `sp - 0x28..`, then the same six tests in the same order.
+///
+/// Leaves `f0 = -h`, `f2 = h`, and `f4`..`f18` as the tests left them.
+///
+/// Domain: as for [`func_80002BD4`].
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80002E2C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    let mut c1cs;
+    'b_80002FF8: {
+        'b_80002FF0: {
+            'b_80002EF4: {
+                g[V0] = li(0x800A_E908);
+                f[12].set_u32l(lw(m, g[V0], 0) as u32);
+                f[4].set_u32l(lw(m, g[A0], 0) as u32);
+                g[SP] = addu(g[SP], (-0x28i64) as u64);
+                f[14].set_u32l(lw(m, g[V0], 4) as u32);
+                f[6].set_fl(f[4].fl() - f[12].fl());
+                f[16].set_u32l(lw(m, g[V0], 8) as u32);
+                g[AT] = li(0x800B_0000);
+                f[2].set_u32l(lw(m, g[AT], -0x1720) as u32);
+                sw(m, g[SP], 0x1C, u64::from(f[6].u32l()));
+                f[8].set_u32l(lw(m, g[A0], 4) as u32);
+                f[0].set_fl(-f[2].fl());
+                f[10].set_fl(f[8].fl() - f[14].fl());
+                sw(m, g[SP], 0x20, u64::from(f[10].u32l()));
+                f[18].set_u32l(lw(m, g[A0], 8) as u32);
+                f[4].set_fl(f[18].fl() - f[16].fl());
+                sw(m, g[SP], 0x24, u64::from(f[4].u32l()));
+                f[6].set_u32l(lw(m, g[A1], 0) as u32);
+                f[8].set_fl(f[6].fl() - f[12].fl());
+                sw(m, g[SP], 0x10, u64::from(f[8].u32l()));
+                f[10].set_u32l(lw(m, g[A1], 4) as u32);
+                f[18].set_fl(f[10].fl() - f[14].fl());
+                sw(m, g[SP], 0x14, u64::from(f[18].u32l()));
+                f[4].set_u32l(lw(m, g[A1], 8) as u32);
+                f[6].set_fl(f[4].fl() - f[16].fl());
+                sw(m, g[SP], 0x18, u64::from(f[6].u32l()));
+                f[8].set_u32l(lw(m, g[A2], 0) as u32);
+                f[10].set_fl(f[8].fl() - f[12].fl());
+                sw(m, g[SP], 4, u64::from(f[10].u32l()));
+                f[18].set_u32l(lw(m, g[A2], 4) as u32);
+                f[10].set_u32l(lw(m, g[SP], 0x1C) as u32);
+                f[4].set_fl(f[18].fl() - f[14].fl());
+                f[18].set_u32l(lw(m, g[SP], 0x10) as u32);
+                c1cs = f[10].fl() < f[0].fl();
+                sw(m, g[SP], 8, u64::from(f[4].u32l()));
+                f[6].set_u32l(lw(m, g[A2], 8) as u32);
+                f[8].set_fl(f[6].fl() - f[16].fl());
+                f[6].set_u32l(lw(m, g[SP], 0x1C) as u32);
+                sw(m, g[SP], 0xC, u64::from(f[8].u32l()));
+                if c1cs {
+                    c1cs = f[18].fl() < f[0].fl();
+                    f[4].set_u32l(lw(m, g[SP], 4) as u32);
+                    if !c1cs {
+                        c1cs = f[2].fl() < f[6].fl();
+                        break 'b_80002EF4;
+                    }
+                    c1cs = f[4].fl() < f[0].fl();
+                    if c1cs {
+                        break 'b_80002FF0;
+                    }
+                }
+                // L_80002EF0
+                c1cs = f[2].fl() < f[6].fl();
+            }
+            // L_80002EF4
+            f[8].set_u32l(lw(m, g[SP], 0x10) as u32);
+            f[12].set_u32l(lw(m, g[SP], 0x20) as u32);
+            if !c1cs {
+                c1cs = f[12].fl() < f[0].fl();
+            } else {
+                c1cs = f[2].fl() < f[8].fl();
+                f[10].set_u32l(lw(m, g[SP], 4) as u32);
+                if !c1cs {
+                    c1cs = f[12].fl() < f[0].fl();
+                } else {
+                    c1cs = f[2].fl() < f[10].fl();
+                    if c1cs {
+                        break 'b_80002FF0;
+                    }
+                    c1cs = f[12].fl() < f[0].fl();
+                }
+            }
+            // L_80002F28
+            f[18].set_u32l(lw(m, g[SP], 0x14) as u32);
+            if !c1cs {
+                c1cs = f[2].fl() < f[12].fl();
+            } else {
+                c1cs = f[18].fl() < f[0].fl();
+                f[4].set_u32l(lw(m, g[SP], 8) as u32);
+                if !c1cs {
+                    c1cs = f[2].fl() < f[12].fl();
+                } else {
+                    c1cs = f[4].fl() < f[0].fl();
+                    if c1cs {
+                        break 'b_80002FF0;
+                    }
+                    c1cs = f[2].fl() < f[12].fl();
+                }
+            }
+            // L_80002F58
+            f[12].set_u32l(lw(m, g[SP], 0x24) as u32);
+            f[6].set_u32l(lw(m, g[SP], 0x14) as u32);
+            if !c1cs {
+                c1cs = f[12].fl() < f[0].fl();
+            } else {
+                c1cs = f[2].fl() < f[6].fl();
+                f[8].set_u32l(lw(m, g[SP], 8) as u32);
+                if !c1cs {
+                    c1cs = f[12].fl() < f[0].fl();
+                } else {
+                    c1cs = f[2].fl() < f[8].fl();
+                    if c1cs {
+                        break 'b_80002FF0;
+                    }
+                    c1cs = f[12].fl() < f[0].fl();
+                }
+            }
+            // L_80002F8C
+            f[10].set_u32l(lw(m, g[SP], 0x18) as u32);
+            if !c1cs {
+                c1cs = f[2].fl() < f[12].fl();
+            } else {
+                c1cs = f[10].fl() < f[0].fl();
+                f[18].set_u32l(lw(m, g[SP], 0xC) as u32);
+                if !c1cs {
+                    c1cs = f[2].fl() < f[12].fl();
+                } else {
+                    c1cs = f[18].fl() < f[0].fl();
+                    if c1cs {
+                        break 'b_80002FF0;
+                    }
+                    c1cs = f[2].fl() < f[12].fl();
+                }
+            }
+            // L_80002FBC
+            f[4].set_u32l(lw(m, g[SP], 0x18) as u32);
+            g[V0] = 1;
+            if !c1cs {
+                break 'b_80002FF8;
+            }
+            c1cs = f[2].fl() < f[4].fl();
+            f[6].set_u32l(lw(m, g[SP], 0xC) as u32);
+            if !c1cs {
+                break 'b_80002FF8;
+            }
+            c1cs = f[2].fl() < f[6].fl();
+            if !c1cs {
+                break 'b_80002FF8;
+            }
+        }
+        // L_80002FEC
+        g[V0] = 0;
+    }
+    // L_80002FF4
+    g[SP] = addu(g[SP], 0x28);
+}
+
 /// `func_80005AFC`: decrement `[0x8009A29C]` if it is positive (signed).
 ///
 /// Leaves `v1 = 0x8009A29C`, `v0` = the old value and `t6` = old - 1 (the
