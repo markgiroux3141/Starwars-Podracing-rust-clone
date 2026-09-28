@@ -18,6 +18,7 @@
 pub mod asset;
 pub mod heap;
 pub mod imports;
+pub mod libultra;
 pub mod loader;
 pub mod math;
 pub mod misc;
@@ -295,4 +296,6 @@ pub const PORTED: &[Ported] = &[
     Ported { vram: 0x8008_4C30, name: "func_80084C30", func: misc::func_80084C30 },
     Ported { vram: 0x8008_635C, name: "func_8008635C", func: misc::func_8008635C },
     Ported { vram: 0x8008_6CC8, name: "func_80086CC8", func: misc::func_80086CC8 },
+    Ported { vram: 0x8008_A750, name: "func_8008A750", func: libultra::func_8008A750 },
+    Ported { vram: 0x8008_A8C0, name: "func_8008A8C0", func: libultra::func_8008A8C0 },
 ];

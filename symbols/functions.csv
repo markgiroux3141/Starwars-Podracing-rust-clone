@@ -1168,8 +1168,8 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8008A690,func_8008A690,ours,1,,recomp,,,
 0x8008A6B4,sprintf,libultra,5,,recomp,,high,_Printf (0x80093180) with proutSprintf 0x8008A690 (indirect call)
 0x8008A710,func_8008A710,ours,7,,recomp,,,
-0x8008A750,cosf,libultra,0,,recomp,,med,"libultra cosf by shape (exponent test 310); port, never std"
-0x8008A8C0,sinf,libultra,0,,recomp,,med,"libultra sinf by shape (exponent tests 255/230, table 0x800ADE20); port, never std"
+0x8008A750,cosf,libultra,0,,rust_verified,unit_diff,high,"libultra cosf, confirmed (model vs std cos within 2e-6); constants at 0x800ADDD0 (game::libultra)"
+0x8008A8C0,sinf,libultra,0,,rust_verified,unit_diff,high,"libultra sinf, confirmed (model vs std sin within 2e-6); constants at 0x800ADE20 (game::libultra)"
 0x8008AAE0,func_8008AAE0,ours,0,,recomp,,,
 0x8008AB0C,func_8008AB0C,ours,0,,recomp,,,
 0x8008AB48,__ull_div,libultra,0,,recomp,,high,pure 64-bit helper; break 7 on zero
