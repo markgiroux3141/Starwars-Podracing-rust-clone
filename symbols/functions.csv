@@ -473,15 +473,15 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80030274,func_80030274,ours,18,,recomp,,,
 0x80030298,func_80030298,ours,2,,recomp,,,
 0x80030304,func_80030304,ours,1,,recomp,,,
-0x80030328,texture_read,ours,17,asset,recomp,,med,"reads (pixels, palette) of a texture entry"
+0x80030328,texture_read,ours,17,asset,rust_verified,unit_diff,high,"(hdr, &pix, &pal): pixels then palette at 64-aligned heap; *pal untouched if no palette; OOM if free < size+0x80"
 0x8003043C,texture_block_init,ours,17,asset,recomp,,med,count -> 0x800DB890; QUIRK: hangs if > 1700
-0x800304AC,texture_get,ours,18,asset,recomp,,med,"texture block 0x0102ABB0 by index, cached at 0x800D9E00"
+0x800304AC,texture_get,ours,18,asset,rust_verified,unit_diff,high,cache 0x800D9E00 holds &pix of the first loader; QUIRK: later hits copy that pair (null if it OOMed); idx >= count -> null
 0x80030574,func_80030574,ours,0,,recomp,,,
-0x800305E8,model_load,ours,19,asset,recomp,,med,"model block 0x0141E200: mask, Comp, relocation"
+0x800305E8,model_load,ours,19,asset,rust_verified,unit_diff,high,"mask, Comp to heap top, relocation, tag; QUIRK: Comp header read before space check; window can overlap output (corrupt model)"
 0x80030964,func_80030964,ours,1,,recomp,,,
 0x80030A7C,func_80030A7C,ours,0,,recomp,,,
 0x80030B68,func_80030B68,ours,0,,recomp,,,
-0x80030B90,func_80030B90,ours,2,,recomp,,,
+0x80030B90,mask_buffer_init,ours,2,asset,recomp,,med,[0x80114528] = align64(cursor); cursor += 0x4B000/0x25800 + 0x40
 0x80030C08,func_80030C08,ours,2,,recomp,,,
 0x80030C98,func_80030C98,ours,20,,recomp,,,
 0x80030EA0,func_80030EA0,ours,21,,recomp,,,
@@ -600,7 +600,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80039914,func_80039914,ours,0,,recomp,,,
 0x80039984,func_80039984,ours,0,,recomp,,,
 0x800399F0,func_800399F0,ours,21,,recomp,,,
-0x80039A30,func_80039A30,ours,0,,recomp,,,
+0x80039A30,framebuffers_init,ours,0,video,recomp,,med,"3 framebuffers from the top of RDRAM at 0x80114530..38: stride w*240*bpp + 2*(4*w) (8 MB: 640, 4 bpp)"
 0x80039B70,func_80039B70,ours,16,,recomp,,,
 0x80039CD8,func_80039CD8,ours,0,,recomp,,,
 0x80039D34,func_80039D34,ours,17,,recomp,,,
@@ -1048,7 +1048,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8008241C,func_8008241C,ours,0,,recomp,,,
 0x80082440,func_80082440,ours,2,,recomp,,,
 0x80082624,func_80082624,ours,4,,recomp,,,
-0x800827C0,func_800827C0,ours,0,,recomp,,,
+0x800827C0,model_error,ours,0,,recomp,,low,called by model_load on an unknown tag; not understood (test double returns)
 0x800827C8,func_800827C8,ours,0,,recomp,,,
 0x800827E0,func_800827E0,ours,2,,recomp,,,
 0x800829F4,func_800829F4,ours,2,,recomp,,,

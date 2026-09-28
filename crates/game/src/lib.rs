@@ -18,6 +18,7 @@
 pub mod asset;
 pub mod heap;
 pub mod imports;
+pub mod loader;
 pub mod recomp;
 pub mod util;
 
@@ -38,4 +39,7 @@ pub const PORTED: &[Ported] = &[
     Ported { vram: 0x8002_FAFC, name: "func_8002FAFC", func: heap::func_8002FAFC },
     Ported { vram: 0x8002_FC58, name: "func_8002FC58", func: heap::func_8002FC58 },
     Ported { vram: 0x8002_FC80, name: "func_8002FC80", func: heap::func_8002FC80 },
+    Ported { vram: 0x8003_0328, name: "func_80030328", func: loader::func_80030328 },
+    Ported { vram: 0x8003_04AC, name: "func_800304AC", func: loader::func_800304AC },
+    Ported { vram: 0x8003_05E8, name: "func_800305E8", func: loader::func_800305E8 },
 ];

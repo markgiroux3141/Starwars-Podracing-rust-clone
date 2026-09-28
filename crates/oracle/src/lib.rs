@@ -196,7 +196,17 @@ pub mod doubles {
     pub(crate) fn dispatch(name: &'static str, mem: &mut Mem, ctx: &mut RecompContext) -> bool {
         let Some(body) = DOUBLES.with_borrow(|d| d.get(name).cloned()) else { return false };
         TRACE.with_borrow_mut(|t| t.push(Call { name, gpr: ctx.gpr }));
-        (body.borrow_mut())(mem, ctx);
+        // A panic can't unwind through the C frames above us: report it and
+        // abort, the same way a trap does.
+        let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (body.borrow_mut())(mem, ctx)));
+        if let Err(e) = run {
+            let msg = e
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| e.downcast_ref::<&str>().copied())
+                .unwrap_or("(no message)");
+            crate::trap_now(&format!("test double for {name} panicked: {msg}"));
+        }
         true
     }
 }
@@ -224,6 +234,13 @@ pub unsafe extern "C" fn oracle_callee(name: *const c_char, rdram: *mut u8, ctx:
 pub extern "C" fn oracle_trap(msg: *const c_char) -> ! {
     // SAFETY: the C side always passes a NUL-terminated buffer.
     let msg = unsafe { CStr::from_ptr(msg) }.to_string_lossy();
-    eprintln!("\n*** oracle trap: {msg}\n*** aborting the test process");
+    trap_now(&msg)
+}
+
+/// Print straight to the process's stderr (the test harness captures
+/// `eprintln!` and would lose it in the abort), then abort.
+fn trap_now(msg: &str) -> ! {
+    use std::io::Write;
+    let _ = write!(std::io::stderr(), "\n*** oracle trap: {msg}\n*** aborting the test process\n");
     std::process::abort()
 }

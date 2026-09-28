@@ -139,6 +139,25 @@ pub fn sll(rt: u64, sa: u32) -> u64 {
     s32((rt as u32) << sa)
 }
 
+/// `lw`: the sign-extended word at `base + offset`. (`MEM_W` adds in 64 bits,
+/// so `base` must be canonical for the C to agree; ports' domains say so.)
+#[inline]
+pub fn lw(mem: &Mem, base: u64, offset: i32) -> u64 {
+    s32(mem.read_u32((base as u32).wrapping_add(offset as u32)))
+}
+
+/// `sw`: store the low word of `value` at `base + offset`.
+#[inline]
+pub fn sw(mem: &mut Mem, base: u64, offset: i32, value: u64) {
+    mem.write_u32((base as u32).wrapping_add(offset as u32), value as u32)
+}
+
+/// `lui` + `ori`/`addiu`: a 32-bit constant, sign-extended.
+#[inline]
+pub fn li(v: u32) -> u64 {
+    s32(v)
+}
+
 /// Call another N64Recomp-shaped function, as a `jal` in the original does.
 ///
 /// Ports call their callees through the C symbols N64Recomp gives them,

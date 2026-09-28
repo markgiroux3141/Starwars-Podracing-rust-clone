@@ -278,6 +278,14 @@ mod tests {
     }
 
     #[test]
+    fn every_port_is_compiled_into_the_oracle() {
+        for p in game::PORTED {
+            assert_eq!(p.name, format!("func_{:08X}", p.vram));
+            assert!(oracle::recomp::by_name(p.name).is_some(), "{} is ported but not in crates/oracle/functions.txt", p.name);
+        }
+    }
+
+    #[test]
     fn f_odd_follows_clones() {
         let a = State::new();
         let b = a.clone();
