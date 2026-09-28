@@ -704,7 +704,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80045314,func_80045314,ours,23,,recomp,,,
 0x800454A8,func_800454A8,ours,1,,recomp,,,
 0x80045588,func_80045588,ours,19,,recomp,,,
-0x80045634,func_80045634,ours,0,,recomp,,,
+0x80045634,func_80045634,ours,0,,rust_verified,unit_diff,high,replace every old with new in the word list at [obj+0x18] (game::misc)
 0x80045694,func_80045694,ours,20,,recomp,,,
 0x80045C88,func_80045C88,ours,20,,recomp,,,
 0x80045DA0,func_80045DA0,ours,1,,recomp,,,
@@ -720,7 +720,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80046974,func_80046974,ours,1,,recomp,,,
 0x800469B4,func_800469B4,ours,24,,recomp,,,
 0x80046DC4,func_80046DC4,ours,8,,recomp,,,
-0x80047920,func_80047920,ours,0,,recomp,,,
+0x80047920,func_80047920,ours,0,,rust_verified,unit_diff,high,"player objects: +0xE = (i != current), +0x10 |= 4 (game::misc)"
 0x800479A4,func_800479A4,ours,2,,recomp,,,
 0x80047A78,func_80047A78,ours,1,,recomp,,,
 0x80047DB0,func_80047DB0,ours,9,,recomp,,,
@@ -749,20 +749,20 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8004BE90,func_8004BE90,ours,22,,recomp,,,
 0x8004CA50,func_8004CA50,ours,23,,recomp,,,
 0x8004DC0C,func_8004DC0C,ours,25,,recomp,,,
-0x8004DFEC,func_8004DFEC,ours,0,,recomp,,,
+0x8004DFEC,func_8004DFEC,ours,0,,rust_verified,unit_diff,high,"mask arrays 0x800A4B94 = -1, 0x800A4BA4 = 0 (x4) (game::misc)"
 0x8004E034,func_8004E034,ours,2,,recomp,,,
 0x8004E0A0,func_8004E0A0,ours,1,,recomp,,,
-0x8004E488,func_8004E488,ours,0,,recomp,,,
+0x8004E488,func_8004E488,ours,0,,rust_verified,unit_diff,high,"clear mask bits, or set them and record newly set (game::misc)"
 0x8004E4F4,func_8004E4F4,ours,2,,recomp,,,
 0x8004EA08,func_8004EA08,ours,20,,recomp,,,
 0x8004F254,func_8004F254,ours,1,,recomp,,,
 0x8004F358,func_8004F358,ours,18,,recomp,,,
-0x8004F6E8,func_8004F6E8,ours,0,,recomp,,,
+0x8004F6E8,func_8004F6E8,ours,0,,rust_verified,unit_diff,high,"0x800A4B7C: 4 x -1, then word i = i for i < (s8)[p+0x70]; QUIRK unbounded (game::misc)"
 0x8004F790,func_8004F790,ours,3,,recomp,,,
-0x8004FE30,func_8004FE30,ours,0,,recomp,,,
-0x8004FF7C,func_8004FF7C,ours,0,,recomp,,,
+0x8004FE30,func_8004FE30,ours,0,,rust_verified,unit_diff,high,"choose slot: last key match (tagged AAII in mode 0), fallbacks (game::misc)"
+0x8004FF7C,func_8004FF7C,ours,0,,rust_verified,unit_diff,high,0x800A4B6C..78 = -1 (game::misc)
 0x8004FFA8,func_8004FFA8,ours,23,,recomp,,,
-0x80050208,func_80050208,ours,0,,recomp,,,
+0x80050208,func_80050208,ours,0,,rust_verified,unit_diff,high,"init record (+0x64..+0x90, +0x72+i = i) (game::misc)"
 0x80050290,func_80050290,ours,24,,recomp,,,
 0x800503E8,func_800503E8,ours,2,,recomp,,,
 0x80050450,func_80050450,ours,23,,recomp,,,
@@ -777,13 +777,13 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800517D8,func_800517D8,ours,21,,recomp,,,
 0x80051898,func_80051898,ours,17,,recomp,,,
 0x80051934,func_80051934,ours,3,,recomp,,,
-0x80051994,func_80051994,ours,0,,recomp,,,
+0x80051994,func_80051994,ours,0,,rust_verified,unit_diff,high,swap two words of the table at 0x8011A508 (game::misc)
 0x800519C0,func_800519C0,ours,2,,recomp,,,
 0x80051C80,func_80051C80,ours,2,,recomp,,,
 0x80051D2C,func_80051D2C,ours,8,,recomp,,,
-0x80051FF4,func_80051FF4,ours,0,,recomp,,,
+0x80051FF4,func_80051FF4,ours,0,,rust_verified,unit_diff,high,"index of the first zero of the four words at 0x8011B1BC, or 4 (game::misc)"
 0x80052060,func_80052060,ours,2,,recomp,,,
-0x800520C8,func_800520C8,ours,0,,recomp,,,
+0x800520C8,func_800520C8,ours,0,,rust_verified,unit_diff,high,"index of x among the four words at 0x8011B1BC, or -1 (game::misc)"
 0x80052134,func_80052134,ours,0,,recomp,,,
 0x800521C0,func_800521C0,ours,1,,recomp,,,
 0x80052208,func_80052208,ours,2,,recomp,,,

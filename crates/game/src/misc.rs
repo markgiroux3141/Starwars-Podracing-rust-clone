@@ -5128,6 +5128,493 @@ pub unsafe extern "C" fn func_8003FB78(rdram: *mut u8, ctx: *mut RecompContext) 
     g[V0] = multu(g[T7], g[A1]).0;
 }
 
+/// `func_80045634(obj, old, new)`: if all three are nonzero, replace every
+/// `old` in the word list at `[obj + 0x18]` (`[obj + 0x14]` entries, signed,
+/// the count re-read after each replacement) with `new`. Leaves `v0` = the
+/// entries visited, `a3 = 4 * v0`, `v1` = the count, `t0` = the last entry's
+/// address, `t6`/`t7` = the list and the last entry, `at = 0`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80045634(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    if g[A0] == 0 || g[A1] == 0 || g[A2] == 0 {
+        return;
+    }
+    g[V1] = lw(m, g[A0], 0x14);
+    g[V0] = 0;
+    g[A3] = 0;
+    if (g[V1] as i64) <= 0 {
+        return;
+    }
+    loop {
+        g[T6] = lw(m, g[A0], 0x18);
+        g[V0] = addu(g[V0], 1);
+        g[T0] = addu(g[T6], g[A3]);
+        g[T7] = lw(m, g[T0], 0);
+        if g[A1] == g[T7] {
+            sw(m, g[T0], 0, g[A2]);
+            g[V1] = lw(m, g[A0], 0x14);
+        }
+        g[AT] = slt(g[V0], g[V1]);
+        g[A3] = addu(g[A3], 4);
+        if g[AT] == 0 {
+            break;
+        }
+    }
+}
+
+/// The 16-word table at `0x8011A508` that [`func_80047920`] and
+/// [`func_80051994`] use (players? **guess**); `[entry + 0x238]` points to
+/// each one's object pointer.
+pub const PLAYER_TABLE: u32 = 0x8011_A508;
+
+/// `func_80047920()`: for each `i < [0x8011A26C]` (signed, the count re-read
+/// after each live entry), the object `o = *[PLAYER_TABLE + 4i + 0x238]`, if
+/// nonzero, gets the halfword `+0xE` = 0 if `i == [0x800A4BE8]` else 1, and
+/// bit 2 set in `+0x10`. Leaves `v0` = the count reached, `a1` = the table
+/// position, `a2 = 0x800A4BE8`, `a3 = 1`, `v1` = the count, `a0` = the last
+/// object, and the loads in `t0`, `t1`, `t6`..`t9`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80047920(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V1] = lw(m, li(0x8012_0000), -0x5D94);
+    g[A1] = li(PLAYER_TABLE);
+    g[V0] = 0;
+    if (g[V1] as i64) <= 0 {
+        return;
+    }
+    g[A2] = li(0x800A_4BE8);
+    g[A3] = 1;
+    loop {
+        g[T6] = lw(m, g[A1], 0x238);
+        g[A0] = lw(m, g[T6], 0);
+        if g[A0] != 0 {
+            g[T7] = lw(m, g[A2], 0);
+            g[V1] = li(0x8012_0000);
+            if g[V0] != g[T7] {
+                g[T0] = lw(m, g[A0], 0x10);
+                sh(m, g[A0], 0xE, g[A3]);
+                g[T1] = g[T0] | 4;
+                sw(m, g[A0], 0x10, g[T1]);
+            } else {
+                g[T8] = lw(m, g[A0], 0x10);
+                sh(m, g[A0], 0xE, 0);
+                g[T9] = g[T8] | 4;
+                sw(m, g[A0], 0x10, g[T9]);
+            }
+            g[V1] = lw(m, g[V1], -0x5D94);
+        }
+        g[V0] = addu(g[V0], 1);
+        g[AT] = slt(g[V0], g[V1]);
+        g[A1] = addu(g[A1], 4);
+        if g[AT] == 0 {
+            break;
+        }
+    }
+}
+
+/// `func_8004DFEC()`: for `i < 4`, `[0x800A4B94 + 4i] = -1` and
+/// `[0x800A4BA4 + 4i] = 0` (see [`func_8004E488`]). Leaves `v0 = 4` (an
+/// s16 count), `v1 = 12`, `a0 = 0x800A4B94`, `a2 = 0x800A4BA4`, `a1 = -1`,
+/// `t6`/`t7` = the last addresses, `t8 = 4 << 16`, `at = 0`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8004DFEC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[A2] = li(0x800A_4BA4);
+    g[A0] = li(0x800A_4B94);
+    g[V0] = 0;
+    g[A1] = u64::MAX;
+    loop {
+        g[V1] = sll(g[V0], 2);
+        g[V0] = addu(g[V0], 1);
+        g[T8] = sll(g[V0], 16);
+        g[V0] = sra(g[T8], 16);
+        g[T6] = addu(g[A0], g[V1]);
+        g[AT] = slt(g[V0], 4);
+        sw(m, g[T6], 0, g[A1]);
+        g[T7] = addu(g[A2], g[V1]);
+        sw(m, g[T7], 0, 0);
+        if g[AT] == 0 {
+            break;
+        }
+    }
+}
+
+/// `func_8004E488(i, on, mask)`: with `on == 0` (64-bit), clear `mask` in
+/// `[0x800A4B94 + 4i]`. Otherwise set it there, and if none of `mask`'s
+/// bits were set before, also OR `mask` into `[0x800A4BA4 + 4i]` (the bits
+/// newly turned on, **guess**). Unbounded `i`. Leaves `t2 = 4i`, `v1` = the
+/// word's address, and the loads and results in `a0`, `a1`, `v0`,
+/// `t0`..`t9`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8004E488(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T2] = sll(g[A0], 2);
+    if g[A1] == 0 {
+        g[T3] = li(0x800A_4B94);
+        g[V1] = addu(g[T2], g[T3]);
+        g[T4] = lw(m, g[V1], 0);
+        g[T5] = !g[A2];
+        g[T6] = g[T4] & g[T5];
+        sw(m, g[V1], 0, g[T6]);
+        return;
+    }
+    g[T6] = li(0x800A_4B94);
+    g[V0] = sll(g[A0], 2);
+    g[V1] = addu(g[V0], g[T6]);
+    g[A1] = lw(m, g[V1], 0);
+    g[T8] = li(0x800A_4BA4);
+    g[T7] = g[A1] & g[A2];
+    g[T1] = g[A1] | g[A2];
+    if g[T7] == 0 {
+        g[A0] = addu(g[V0], g[T8]);
+        g[T9] = lw(m, g[A0], 0);
+        g[T0] = g[T9] | g[A2];
+        sw(m, g[A0], 0, g[T0]);
+    }
+    sw(m, g[V1], 0, g[T1]);
+}
+
+/// `func_8004F6E8(p)`: set the four words from `0x800A4B7C` to -1, then
+/// word `i` to `i` for `i < n = (s8) [p + 0x70]`, in a loop the compiler
+/// unrolled by four after `n & 3` single steps.
+///
+/// QUIRK: `n` isn't bounded by the four words, so up to 127 words from
+/// `0x800A4B7C` are written. Leaves `a0 = v1 = n` (0 if `n <= 0`), `a1` =
+/// past the last word written, `v0 = n`, `a2 = a3 = n & 3`, `t6`..`t9`,
+/// `t0`..`t2` from the loops.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8004F6E8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V0] = lb(m, g[A0], 0x70);
+    g[A0] = li(0x800A_4B8C);
+    g[A1] = li(0x800A_4B7C);
+    g[V1] = u64::MAX;
+    loop {
+        g[A1] = addu(g[A1], 4);
+        g[AT] = sltu(g[A1], g[A0]);
+        sw(m, g[A1], -4, g[V1]);
+        if g[AT] == 0 {
+            break;
+        }
+    }
+    g[A0] = 0;
+    g[V1] = 0;
+    if (g[V0] as i64) <= 0 {
+        return;
+    }
+    g[A3] = g[V0] & 3;
+    g[A2] = g[A3];
+    if g[A3] != 0 {
+        g[T7] = li(0x800A_4B7C);
+        g[T6] = 0;
+        g[A1] = addu(g[T6], g[T7]);
+        loop {
+            sw(m, g[A1], 0, g[V1]);
+            g[V1] = addu(g[V1], 1);
+            g[A0] = addu(g[A0], 1);
+            g[A1] = addu(g[A1], 4);
+            if g[A2] == g[V1] {
+                break;
+            }
+        }
+        if g[V1] == g[V0] {
+            g[T9] = li(0x800A_0000);
+            return;
+        }
+    }
+    g[T9] = li(0x800A_4B7C);
+    g[T8] = sll(g[A0], 2);
+    g[A1] = addu(g[T8], g[T9]);
+    loop {
+        g[T0] = addu(g[V1], 1);
+        g[T1] = addu(g[V1], 2);
+        g[T2] = addu(g[V1], 3);
+        sw(m, g[A1], 0, g[V1]);
+        g[V1] = addu(g[V1], 4);
+        sw(m, g[A1], 0xC, g[T2]);
+        sw(m, g[A1], 8, g[T1]);
+        sw(m, g[A1], 4, g[T0]);
+        g[A1] = addu(g[A1], 0x10);
+        if g[V1] == g[V0] {
+            break;
+        }
+    }
+}
+
+/// `"AAII"`, the tag at `+4` of a valid 0x88-byte slot at `0x80118F90`
+/// (save slots, **guess**).
+const SLOT_TAG: u32 = 0x4141_4949;
+
+/// `func_8004FE30(p)`: choose an index among `n = (s8) [p + 0x71]`: the
+/// last `i < n` whose byte `(s8) [p + 0x72 + i]` equals the key `(s8)
+/// [0x800A21C2 + 12 * (s8) [p + 0x5D]]`. With `[p + 0x64] != 0` that's
+/// the answer, or 0 if none. With `[p + 0x64] == 0` a match also needs
+/// slot `i` (`0x80118F90 + 0x88 * i`) tagged [`SLOT_TAG`]; with no such
+/// match, the first tagged slot below `n`, else -1.
+///
+/// Leaves `v1 = v0`, `a1 = n`, `a2 = -1`, and the scans' registers (`a0`,
+/// `a3`, `t0`..`t9`, `at`).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8004FE30(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let m = &mem;
+    let g = &mut ctx.gpr;
+    g[T6] = lw(m, g[A0], 0x64);
+    g[V1] = u64::MAX;
+    // The key: (s8) [0x800A21C2 + 12 * (s8) [p + 0x5D]], through `idx`/`t`.
+    let key = |g: &mut [u64; 32], idx: usize, t: usize| {
+        g[idx] = lb(m, g[A0], 0x5D);
+        g[t] = sll(g[idx], 2);
+        g[t] = subu(g[t], g[idx]);
+        g[t] = sll(g[t], 2);
+    };
+    if g[T6] != 0 {
+        g[A1] = lb(m, g[A0], 0x71);
+        g[V0] = 0;
+        if (g[A1] as i64) > 0 {
+            key(g, T7, T8);
+            g[A3] = li(0x800A_0000);
+            g[A2] = g[A0];
+            g[A3] = addu(g[A3], g[T8]);
+            g[A3] = lb(m, g[A3], 0x21C2);
+            loop {
+                g[T9] = lb(m, g[A2], 0x72);
+                if g[T9] == g[A3] {
+                    g[V1] = g[V0];
+                }
+                g[V0] = addu(g[V0], 1);
+                g[AT] = slt(g[V0], g[A1]);
+                g[A2] = addu(g[A2], 1);
+                if g[AT] == 0 {
+                    break;
+                }
+            }
+        }
+        g[A2] = u64::MAX;
+        g[V0] = if g[V1] == g[A2] { 0 } else { g[V1] };
+        return;
+    }
+    g[A1] = lb(m, g[A0], 0x71);
+    g[V0] = 0;
+    g[A2] = g[A0];
+    g[A3] = li(0x800A_0000);
+    if (g[A1] as i64) > 0 {
+        key(g, T2, T3);
+        g[A0] = li(0x8011_8F90);
+        g[T0] = li(SLOT_TAG);
+        g[A3] = addu(g[A3], g[T3]);
+        g[A3] = lb(m, g[A3], 0x21C2);
+        g[T1] = 0x88;
+        loop {
+            g[T4] = lb(m, g[A2], 0x72);
+            if g[T4] == g[A3] {
+                g[T5] = multu(g[V0], g[T1]).0;
+                g[T6] = addu(g[A0], g[T5]);
+                g[T7] = lw(m, g[T6], 4);
+                if g[T0] == g[T7] {
+                    g[V1] = g[V0];
+                }
+            }
+            g[V0] = addu(g[V0], 1);
+            g[AT] = slt(g[V0], g[A1]);
+            g[A2] = addu(g[A2], 1);
+            if g[AT] == 0 {
+                break;
+            }
+        }
+    }
+    g[A2] = u64::MAX;
+    g[T0] = li(SLOT_TAG);
+    if g[V1] == g[A2] {
+        // No tagged match: the first tagged slot.
+        g[V0] = 0;
+        g[T8] = 0;
+        if (g[A1] as i64) > 0 {
+            g[T9] = li(0x8011_8F90);
+            g[A0] = addu(g[T8], g[T9]);
+            g[T2] = lw(m, g[A0], 4);
+            loop {
+                if g[T0] == g[T2] {
+                    g[V1] = g[V0];
+                } else {
+                    g[V0] = addu(g[V0], 1);
+                    g[A0] = addu(g[A0], 0x88);
+                }
+                g[AT] = slt(g[V0], g[A1]);
+                if g[V1] != g[A2] || g[AT] == 0 {
+                    break;
+                }
+                g[T2] = lw(m, g[A0], 4);
+            }
+        }
+    }
+    g[V0] = g[V1];
+}
+
+/// `func_8004FF7C()`: the four words `0x800A4B6C..0x800A4B78` = -1 (stored
+/// `6C`, `78`, `74`, `70`). Leaves `t6`..`t9 = -1`, `at = 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8004FF7C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[AT] = li(0x800A_0000);
+    for (r, off) in [(T6, 0x4B6C), (T9, 0x4B78), (T8, 0x4B74), (T7, 0x4B70)] {
+        g[r] = u64::MAX;
+        sw(m, g[AT], off, g[r]);
+    }
+}
+
+/// `func_80050208(p)`: initialise a record (the one [`func_8004FE30`] and
+/// [`func_8004F6E8`] read): `+0x64 = 0`, `+0x68 = -1`, the bytes `+0x6C =
+/// 1`, `+0x6D..+0x6F = 0`, `+0x70 = 1`, `+0x71 = 12`, `+0x8E = 3`, `+0x8F
+/// = +0x90 = 2`, and `+0x72 + i = i` for `i < 23`. Leaves `a2 = 1`, `a3 =
+/// 2`, `t6 = -1`, `t7 = 12`, `t8 = 3`, `a0 = v0 = 23`, `v1 = p + 23`,
+/// `t9`/`t0`/`t1` = 20..22.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80050208(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[A2] = 1;
+    g[A3] = 2;
+    g[T6] = u64::MAX;
+    g[T7] = 0xC;
+    g[T8] = 3;
+    sw(m, g[A0], 0x64, 0);
+    sw(m, g[A0], 0x68, g[T6]);
+    for (off, v) in [
+        (0x6C, g[A2]),
+        (0x6D, 0),
+        (0x6E, 0),
+        (0x6F, 0),
+        (0x70, g[A2]),
+        (0x71, g[T7]),
+        (0x8E, g[T8]),
+        (0x8F, g[A3]),
+        (0x90, g[A3]),
+        (0x74, g[A3]),
+        (0x73, g[A2]),
+        (0x72, 0),
+    ] {
+        sb(m, g[A0], off, v);
+    }
+    g[V1] = addu(g[A0], 3);
+    g[A0] = 0x17;
+    g[V0] = 3;
+    loop {
+        g[T9] = addu(g[V0], 1);
+        g[T0] = addu(g[V0], 2);
+        g[T1] = addu(g[V0], 3);
+        sb(m, g[V1], 0x72, g[V0]);
+        g[V0] = addu(g[V0], 4);
+        sb(m, g[V1], 0x75, g[T1]);
+        sb(m, g[V1], 0x74, g[T0]);
+        sb(m, g[V1], 0x73, g[T9]);
+        g[V1] = addu(g[V1], 4);
+        if g[V0] == g[A0] {
+            break;
+        }
+    }
+}
+
+/// `func_80051994(a, b)`: swap the words `a` and `b` of [`PLAYER_TABLE`]
+/// (unbounded). Leaves `a3` = the table, `t6`/`t7 = 4a`/`4b`, `v1`/`a2` =
+/// the two addresses, `v0`/`t8` = the two old words.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80051994(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[A3] = li(PLAYER_TABLE);
+    g[T7] = sll(g[A1], 2);
+    g[T6] = sll(g[A0], 2);
+    g[A2] = addu(g[A3], g[T7]);
+    g[T8] = lw(m, g[A2], 0);
+    g[V1] = addu(g[A3], g[T6]);
+    g[V0] = lw(m, g[V1], 0);
+    sw(m, g[V1], 0, g[T8]);
+    sw(m, g[A2], 0, g[V0]);
+}
+
+/// The four words at `0x8011B1BC` that [`func_80051FF4`] and
+/// [`func_800520C8`] read, in `t6`..`t9`.
+const FOUR: [(usize, i32); 4] = [(T6, -0x4E44), (T7, -0x4E40), (T8, -0x4E3C), (T9, -0x4E38)];
+
+/// `func_80051FF4()`: the index of the first zero among the four words at
+/// `0x8011B1BC`, or 4. Leaves the words read in `t6`..`t9` and the next
+/// register of the four `= 0x80120000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80051FF4(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[T6] = li(0x8012_0000);
+    for (k, &(r, off)) in FOUR.iter().enumerate() {
+        g[r] = lw(&mem, g[r], off);
+        if let Some(&(next, _)) = FOUR.get(k + 1) {
+            g[next] = li(0x8012_0000);
+        }
+        if g[r] == 0 {
+            g[V0] = k as u64;
+            return;
+        }
+    }
+    g[V0] = 4;
+}
+
+/// `func_800520C8(x)`: the index of the first of the four words at
+/// `0x8011B1BC` equal to `x` (full 64-bit compare with the sign-extended
+/// word), or -1. Leaves the same registers as [`func_80051FF4`].
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800520C8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[T6] = li(0x8012_0000);
+    for (k, &(r, off)) in FOUR.iter().enumerate() {
+        g[r] = lw(&mem, g[r], off);
+        if let Some(&(next, _)) = FOUR.get(k + 1) {
+            g[next] = li(0x8012_0000);
+        }
+        if g[A0] == g[r] {
+            g[V0] = k as u64;
+            return;
+        }
+    }
+    g[V0] = u64::MAX;
+}
+
 /// Where [`func_80063344`] gets each type's pair (indexed by type - 1).
 #[derive(Clone, Copy)]
 enum PairSource {
