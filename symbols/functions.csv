@@ -600,40 +600,40 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80039914,func_80039914,ours,0,,rust_verified,unit_diff,high,copy save record b to current record a (0x2C bytes) (game::misc)
 0x80039984,func_80039984,ours,0,,rust_verified,unit_diff,high,copy current record b to save record a (0x2C bytes) (game::misc)
 0x800399F0,func_800399F0,ours,21,,recomp,,,
-0x80039A30,framebuffers_init,ours,0,video,recomp,,med,"3 framebuffers from the top of RDRAM at 0x80114530..38: stride w*240*bpp + 2*(4*w) (8 MB: 640, 4 bpp)"
+0x80039A30,framebuffers_init,ours,0,video,rust_verified,unit_diff,high,framebuffers_init: three fb addresses from osMemSize at 0x80114530 (game::misc)
 0x80039B70,func_80039B70,ours,16,,recomp,,,
-0x80039CD8,func_80039CD8,ours,0,,recomp,,,
+0x80039CD8,func_80039CD8,ours,0,,rust_verified,unit_diff,high,save/restore three words of the block at 0x80114488 (game::misc)
 0x80039D34,func_80039D34,ours,17,,recomp,,,
 0x80039EC0,func_80039EC0,ours,17,,recomp,,,
 0x8003A440,func_8003A440,ours,18,,recomp,,,
 0x8003A478,func_8003A478,ours,18,,recomp,,,
 0x8003A4A0,func_8003A4A0,ours,0,,recomp,,,
-0x8003A4E8,func_8003A4E8,ours,0,,recomp,,,
-0x8003A50C,func_8003A50C,ours,0,,recomp,,,
-0x8003A568,func_8003A568,ours,0,,recomp,,,
+0x8003A4E8,func_8003A4E8,ours,0,,rust_verified,unit_diff,high,spline point i halfword +0x40 (game::misc)
+0x8003A50C,func_8003A50C,ours,0,,rust_verified,unit_diff,high,"first point from 'from' with +0x40 == id, else -1 (game::misc)"
+0x8003A568,func_8003A568,ours,0,,rust_verified,unit_diff,high,"walker point index, or point halfword +0x42 by path bits (QUIRK) (game::misc)"
 0x8003A5D0,func_8003A5D0,ours,1,,recomp,,,
 0x8003ABA0,func_8003ABA0,ours,0,,rust_verified,unit_diff,high,"spline walker step, forward/backward, fork choice and path bits; do_break unreachable (game::misc)"
 0x8003AE64,func_8003AE64,ours,2,,recomp,,,
 0x8003B02C,func_8003B02C,ours,3,,recomp,,,
 0x8003B184,func_8003B184,ours,4,,recomp,,,
 0x8003B1F0,func_8003B1F0,ours,4,,recomp,,,
-0x8003B250,func_8003B250,ours,0,,recomp,,,
-0x8003B300,func_8003B300,ours,0,,recomp,,,
+0x8003B250,func_8003B250,ours,0,,rust_verified,unit_diff,high,start spline walker at p (first successors) (game::misc)
+0x8003B300,func_8003B300,ours,0,,rust_verified,unit_diff,high,four words at 0x80114540..4C (game::misc)
 0x8003B324,func_8003B324,ours,0,,recomp,,,
 0x8003B860,func_8003B860,ours,0,,recomp,,,
 0x8003BAB0,func_8003BAB0,ours,1,,recomp,,,
 0x8003D110,func_8003D110,ours,0,,recomp,,,
-0x8003D370,func_8003D370,ours,0,,recomp,,,
+0x8003D370,func_8003D370,ours,0,,rust_verified,unit_diff,high,"DL gSPTexture, combine, othermode; optional two by [0x800A4960] (game::misc)"
 0x8003D444,func_8003D444,ours,1,,recomp,,,
-0x8003D488,func_8003D488,ours,0,,recomp,,,
+0x8003D488,func_8003D488,ours,0,,rust_verified,unit_diff,high,[0x800A48D4] = v & 0xFFFF (game::misc)
 0x8003D49C,func_8003D49C,ours,0,,recomp,,,
 0x8003D4F4,func_8003D4F4,ours,2,,recomp,,,
 0x8003E0A0,func_8003E0A0,ours,0,,recomp,,,
 0x8003E18C,func_8003E18C,ours,1,,recomp,,,
-0x8003E1D0,func_8003E1D0,ours,0,,recomp,,,
+0x8003E1D0,func_8003E1D0,ours,0,,rust_verified,unit_diff,high,clear 0x800A4984/70/78 (game::misc)
 0x8003E1EC,func_8003E1EC,ours,6,,recomp,,,
 0x8003E2B0,func_8003E2B0,ours,3,,recomp,,,
-0x8003E54C,func_8003E54C,ours,0,,recomp,,,
+0x8003E54C,func_8003E54C,ours,0,,rust_verified,unit_diff,high,"append (x, y, b) to 190-entry list (game::misc)"
 0x8003E59C,func_8003E59C,ours,3,,recomp,,,
 0x8003E870,func_8003E870,ours,3,,recomp,,,
 0x8003E920,func_8003E920,ours,3,,recomp,,,

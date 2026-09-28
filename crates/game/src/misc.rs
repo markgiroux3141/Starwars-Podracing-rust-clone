@@ -6,7 +6,7 @@
 
 use crate::imports;
 use n64mem::Mem;
-use crate::recomp::{addu, call, div, enter, fpu, lb, lbu, ld, lh, lhu, li, lw, multu, reg::*, s32, sb, sh, sll, sllv, slt, sltu, sra, subu, sw, RecompContext};
+use crate::recomp::{addu, call, div, enter, fpu, lb, lbu, ld, lh, lhu, li, lw, multu, reg::*, s32, sb, sh, sll, sllv, slt, sltu, sra, srav, subu, sw, RecompContext};
 
 /// `func_80005AFC`: decrement `[0x8009A29C]` if it is positive (signed).
 ///
@@ -4269,6 +4269,216 @@ pub unsafe extern "C" fn func_80039984(rdram: *mut u8, ctx: *mut RecompContext) 
     copy_words(&mut mem, g, (T2, T9, T5), Some(T5));
 }
 
+/// `func_80039A30()` = `framebuffers_init`: the three framebuffer addresses
+/// at `0x80114530..0x80114538` (NOTES.md, "Asset heap"): with `osMemSize`
+/// (`[0x80000318]`) at least 8 MB (unsigned, of the sign-extended word) the
+/// width is 640, 4 bytes a pixel and an extra `x = 2 * 4 * 640`, otherwise
+/// 320, 2 bytes and `x = 0`; `fb[k - 1] = (osMemSize | 0x80000000) - k *
+/// (w * 240 * bpp + x) + x` for `k = 1..3`. Each is stored without the
+/// final `+ x`, read back and stored again with it.
+///
+/// The compiler repeats the size test before every choice, so `at` always
+/// ends as it. Leaves `v0 = t3 = 3`, `v1` = osMemSize, `t1 = 0x8011453C`,
+/// `t2` = the end of RDRAM, `t4 = 0x800000`, `t5 = 0xF0`, `a0`/`a1` = bpp
+/// and width, `a2`/`a3` = 640 and 4 with 8 MB, `t0` = `x / 2`, and the
+/// arithmetic in `t6`..`t9`. `s0` is saved and restored (sign-extended).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80039A30(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V1] = lw(m, li(0x8000_0000), 0x318);
+    g[SP] = addu(g[SP], (-8i64) as u64);
+    sw(m, g[SP], 4, g[S0]);
+    g[AT] = li(0x8000_0000);
+    g[T1] = li(0x8011_4530);
+    g[S0] = 3;
+    g[V0] = 0;
+    g[T5] = 0xF0;
+    g[T4] = li(0x80_0000);
+    g[T2] = g[V1] | g[AT];
+    g[AT] = sltu(g[V1], g[T4]);
+    let big = g[AT] == 0;
+    // x / 2 = 4 * 640 (8 MB only), through a3 and a2.
+    let half_extra = |g: &mut [u64; 32]| {
+        g[A2] = 0x280;
+        g[A3] = 4;
+        g[T0] = multu(g[A3], g[A2]).0;
+    };
+    loop {
+        g[A0] = if big { 4 } else { 2 };
+        g[A1] = if big { 0x280 } else { 0x140 };
+        g[T0] = 0;
+        if big {
+            half_extra(g);
+        }
+        g[T7] = multu(g[A1], g[T5]).0;
+        g[T6] = sll(g[T0], 1);
+        g[T3] = addu(g[V0], 1);
+        g[V0] = g[T3];
+        g[T0] = 0;
+        g[T8] = multu(g[T7], g[A0]).0;
+        g[T9] = addu(g[T6], g[T8]);
+        g[T7] = multu(g[T9], g[T3]).0;
+        g[T6] = subu(g[T2], g[T7]);
+        sw(m, g[T1], 0, g[T6]);
+        if big {
+            half_extra(g);
+        }
+        g[T8] = lw(m, g[T1], 0);
+        g[T9] = sll(g[T0], 1);
+        g[T1] = addu(g[T1], 4);
+        g[T7] = addu(g[T8], g[T9]);
+        sw(m, g[T1], -4, g[T7]);
+        if g[T3] == g[S0] {
+            break;
+        }
+    }
+    g[S0] = lw(m, g[SP], 4);
+    g[SP] = addu(g[SP], 8);
+}
+
+/// `func_80039CD8(restore)`: save or restore three framebuffer-related
+/// words (**guess**) in the block at `0x80114488`. `restore == 0` (64-bit)
+/// saves: `+0x1C = [0x8011453C]`, `+0x2C = [0x80114504]`, `+0x40 =
+/// [0x80114518]`. Otherwise, if `+0x1C` is nonzero, `[0x8011453C] = +0x1C`
+/// and `+0x1C = 0`. Leaves `v0` = the saved word (restoring) or
+/// `0x801144D8`, `v1 = 0x80114488`, `at = 0x80110000` (restoring), and
+/// `t6`..`t8` the words saved.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80039CD8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    if g[A0] == 0 {
+        g[V0] = li(0x8011_44D8);
+        g[T6] = lw(m, li(0x8011_0000), 0x453C);
+        g[T7] = lw(m, g[V0], 0x2C);
+        g[T8] = lw(m, g[V0], 0x40);
+        g[V1] = li(0x8011_4488);
+        sw(m, g[V1], 0x1C, g[T6]);
+        sw(m, g[V1], 0x2C, g[T7]);
+        sw(m, g[V1], 0x40, g[T8]);
+    } else {
+        g[V1] = li(0x8011_4488);
+        g[V0] = lw(m, g[V1], 0x1C);
+        g[AT] = li(0x8011_0000);
+        if g[V0] != 0 {
+            sw(m, g[AT], 0x453C, g[V0]);
+            sw(m, g[V1], 0x1C, 0);
+        }
+    }
+}
+
+/// `84 * i` (0x54, a spline point) as the code computes it into `t`: `((i
+/// << 2) + i) << 2`, `+ i`, `<< 2`.
+fn point_offset(g: &mut [u64; 32], i: usize, t: usize) {
+    g[t] = sll(g[i], 2);
+    g[t] = addu(g[t], g[i]);
+    g[t] = sll(g[t], 2);
+    g[t] = addu(g[t], g[i]);
+    g[t] = sll(g[t], 2);
+}
+
+/// `func_8003A4E8(spline, i)`: the first of point `i`'s ten halfwords at
+/// `+0x40` (usually the point's own index; NOTES.md, "Splines"), signed.
+/// Leaves `t6` = the points, `t7 = 84 * i`, `t8` = the point.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003A4E8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    point_offset(g, A1, T7);
+    g[T6] = lw(&mem, g[A0], 0xC);
+    g[T8] = addu(g[T6], g[T7]);
+    g[V0] = lh(&mem, g[T8], 0x40);
+}
+
+/// `func_8003A50C(spline, id, from)`: the first point `i` in `from..count`
+/// (signed; `count = [spline + 4]`) whose halfword `+0x40` equals `id`
+/// (full 64-bit compare with the sign-extended halfword), else -1. Leaves
+/// `v1` = the last index tried, `a2` = its point (or `from` if none was
+/// tried), `t6` = the points, `t7 = 84 * from` (`5 * from` if none), `t8`
+/// = the last halfword, `at` = the last bound test.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003A50C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let m = &mem;
+    let g = &mut ctx.gpr;
+    g[V0] = lw(m, g[A0], 4);
+    g[T7] = sll(g[A2], 2);
+    g[T7] = addu(g[T7], g[A2]);
+    g[AT] = slt(g[A2], g[V0]);
+    g[V1] = g[A2];
+    if g[AT] != 0 {
+        g[T6] = lw(m, g[A0], 0xC);
+        g[T7] = sll(g[T7], 2);
+        g[T7] = addu(g[T7], g[A2]);
+        g[T7] = sll(g[T7], 2);
+        g[A2] = addu(g[T6], g[T7]);
+        loop {
+            g[T8] = lh(m, g[A2], 0x40);
+            if g[A1] == g[T8] {
+                g[V0] = g[V1];
+                return;
+            }
+            g[V1] = addu(g[V1], 1);
+            g[AT] = slt(g[V1], g[V0]);
+            g[A2] = addu(g[A2], 0x54);
+            if g[AT] == 0 {
+                break;
+            }
+        }
+    }
+    g[V0] = u64::MAX;
+}
+
+/// `func_8003A568(w, k)`: for the spline walker `w` ([`func_8003ABA0`]):
+/// with no path bits (`+0x2C == 0`), the point index `w[+0x10 + 4k]`;
+/// otherwise the halfword `+0x42 + 2 * j` of that point (of spline `[w]`),
+/// where `j` = the path bits shifted right (arithmetic) by `k` (low 5
+/// bits), or the bits themselves for `k == 0`.
+///
+/// QUIRK: `j` is the whole shifted bit field, not one bit, so it can reach
+/// far past the point's ten halfwords. Domain: that halfword in RDRAM.
+/// Leaves `t6 = t8 = 4k`, `t9 = w + 4k`, and on the bits path `v1` = the
+/// point index, `a2 = j`, `t0` = the spline, `t1` = its points, `t2 = 84 *
+/// index`, `t3` = the point, `t4 = 2j`, `t5` = the address; `t7 = t9`
+/// otherwise.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003A568(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let m = &mem;
+    let g = &mut ctx.gpr;
+    g[V0] = lw(m, g[A0], 0x2C);
+    g[T8] = sll(g[A1], 2);
+    g[T6] = sll(g[A1], 2);
+    g[T9] = addu(g[A0], g[T8]);
+    if g[V0] == 0 {
+        g[T7] = addu(g[A0], g[T6]);
+        g[V0] = lw(m, g[T7], 0x10);
+        return;
+    }
+    g[V1] = lw(m, g[T9], 0x10);
+    g[A2] = if g[A1] != 0 { srav(g[V0], g[A1]) } else { g[V0] };
+    g[T0] = lw(m, g[A0], 0);
+    g[T1] = lw(m, g[T0], 0xC);
+    point_offset(g, V1, T2);
+    g[T4] = sll(g[A2], 1);
+    g[T3] = addu(g[T1], g[T2]);
+    g[T5] = addu(g[T3], g[T4]);
+    g[V0] = lh(m, g[T5], 0x42);
+}
+
 /// `func_8003ABA0(spline, dir, w)`: step the spline walker `w` one point,
 /// forward if `(s16) dir == 1`, otherwise backward. `spline` is a loaded
 /// spline header (`+0` the flag halfword F, `+0xC` the points; NOTES.md,
@@ -4480,6 +4690,198 @@ pub unsafe extern "C" fn func_8003ABA0(rdram: *mut u8, ctx: *mut RecompContext) 
         }
     }
     g[SP] = addu(g[SP], 8);
+}
+
+/// `func_8003B250(w, p)`: start the spline walker `w` ([`func_8003ABA0`]) at
+/// point `p`: all four indices `+0x10..+0x1C = p`, then `+0x14` = `p`'s
+/// first successor if it has any. With the spline flag (`[spline]`, `spline
+/// = [w]`) clear, `+0x18` and `+0x1C` follow the first successors two and
+/// three steps on, as far as they exist. The points are re-read from
+/// `[spline + 0xC]` at each step; the multiplies keep the low 32 bits.
+///
+/// Leaves `a2 = 0x54`, `v0` = the spline, `v1` = the points or the second
+/// point, `a1` = `p` or the third point, and the loads in `t0`..`t9`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003B250(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[A2] = 0x54;
+    g[T6] = multu(g[A1], g[A2]).0;
+    g[V0] = lw(m, g[A0], 0);
+    for off in [0x10, 0x14, 0x18, 0x1C] {
+        sw(m, g[A0], off, g[A1]);
+    }
+    g[V1] = lw(m, g[V0], 0xC);
+    g[T7] = addu(g[V1], g[T6]);
+    g[T8] = lh(m, g[T7], 0);
+    if g[T8] == 0 {
+        return;
+    }
+    g[T0] = multu(g[A1], g[A2]).0;
+    g[T1] = addu(g[V1], g[T0]);
+    g[T2] = lh(m, g[T1], 4);
+    sw(m, g[A0], 0x14, g[T2]);
+    g[T3] = lh(m, g[V0], 0);
+    if g[T3] != 0 {
+        return;
+    }
+    g[T6] = multu(g[T2], g[A2]).0;
+    g[T4] = lw(m, g[V0], 0xC);
+    g[V1] = addu(g[T4], g[T6]);
+    g[T7] = lh(m, g[V1], 0);
+    if g[T7] == 0 {
+        return;
+    }
+    g[T8] = lh(m, g[V1], 4);
+    g[T1] = multu(g[T8], g[A2]).0;
+    sw(m, g[A0], 0x18, g[T8]);
+    g[T9] = lw(m, g[V0], 0xC);
+    g[A1] = addu(g[T9], g[T1]);
+    g[T2] = lh(m, g[A1], 0);
+    if g[T2] != 0 {
+        g[T3] = lh(m, g[A1], 4);
+        sw(m, g[A0], 0x1C, g[T3]);
+    }
+}
+
+/// `func_8003B300(a, b, c, d)`: `[0x80114548] = a`, `[0x8011454C] = c`,
+/// `[0x80114540] = b`, `[0x80114544] = d`, in that order. Leaves `at =
+/// 0x80110000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003B300(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[AT] = li(0x8011_0000);
+    for (off, r) in [(0x4548, A0), (0x454C, A2), (0x4540, A1), (0x4544, A3)] {
+        sw(&mut mem, g[AT], off, g[r]);
+    }
+}
+
+/// Append a command to the display list whose pointer is at `[a1]`: load it
+/// into `v1`, store `v1 + 8` (through `next`) back, then store `words`
+/// (offset, register) in the compiler's order.
+fn dl_append(m: &mut Mem, g: &mut [u64; 32], next: usize, words: [(i32, usize); 2]) {
+    g[V1] = lw(m, g[A1], 0);
+    g[next] = addu(g[V1], 8);
+    sw(m, g[A1], 0, g[next]);
+    for (off, r) in words {
+        sw(m, g[V1], off, g[r]);
+    }
+}
+
+/// `func_8003D370()`: append render state to the display list at
+/// `[0x801217B0]`: `gSPTexture` (`0xD7000000`, `0x80008000`: scale 0x8000,
+/// off), `gDPSetCombine` (`0xFCFFFFFF`, `0xFFFE793C`) and a
+/// `G_SETOTHERMODE_L` (`0xE2001D00`, 0). Then, by the flags word
+/// `[0x800A4960]`: bit 0 adds `gDPSetRenderMode` (`0xE200001C`,
+/// `0x0F0A4000`), and bit 2 (the word read again) adds `0xE2001E01`, 0.
+///
+/// Leaves `a1 = 0x801217B0`, `v1` = the last command, `v0` = the flags,
+/// `t4`/`t8` = the tested bits, and the words and pointers in `t0`..`t9`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003D370(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[A1] = li(0x8012_17B0);
+    g[T8] = li(0x8000_8000);
+    g[T7] = li(0xD700_0000);
+    dl_append(m, g, T6, [(0, T7), (4, T8)]);
+    g[T0] = li(0xFCFF_FFFF);
+    g[T1] = li(0xFFFE_793C);
+    dl_append(m, g, T9, [(0, T0), (4, T1)]);
+    g[T3] = li(0xE200_1D00);
+    g[V1] = lw(m, g[A1], 0);
+    g[T2] = addu(g[V1], 8);
+    sw(m, g[A1], 0, g[T2]);
+    sw(m, g[V1], 4, 0);
+    sw(m, g[V1], 0, g[T3]);
+    g[V0] = lw(m, li(0x800A_0000), 0x4960);
+    g[T6] = li(0xE200_001C);
+    g[T4] = g[V0] & 1;
+    g[T7] = li(0x0F0A_0000);
+    if g[T4] != 0 {
+        g[T7] |= 0x4000;
+        dl_append(m, g, T5, [(4, T7), (0, T6)]);
+        g[V0] = lw(m, li(0x800A_0000), 0x4960);
+    }
+    g[T8] = g[V0] & 4;
+    if g[T8] != 0 {
+        g[T0] = li(0xE200_1E01);
+        g[V1] = lw(m, g[A1], 0);
+        g[T9] = addu(g[V1], 8);
+        sw(m, g[A1], 0, g[T9]);
+        sw(m, g[V1], 4, 0);
+        sw(m, g[V1], 0, g[T0]);
+    }
+}
+
+/// `func_8003D488(v)`: `[0x800A48D4] = v & 0xFFFF`, spilling `v` to its
+/// slot `[sp]`. Leaves `t7 = v & 0xFFFF`, `at = 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003D488(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T7] = g[A0] & 0xFFFF;
+    g[AT] = li(0x800A_0000);
+    sw(m, g[SP], 0, g[A0]);
+    sw(m, g[AT], 0x48D4, g[T7]);
+}
+
+/// `func_8003E1D0()`: `[0x800A4984] = [0x800A4970] = [0x800A4978] = 0`
+/// (the first is [`func_8003E54C`]'s count). Leaves `at = 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003E1D0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[AT] = li(0x800A_0000);
+    for off in [0x4984, 0x4970, 0x4978] {
+        sw(&mut mem, g[AT], off, 0);
+    }
+}
+
+/// `func_8003E54C(b, x, y)`: append to a list of up to 190 entries: `n =
+/// [0x800A4984]`; if `n < 190` (signed), the halfwords `x`, `y` at
+/// `0x80118958 + 4n`, the byte `b` at `0x80118C50 + n`, and `n + 1`. Spills
+/// `b` to its slot `[sp]`. Leaves `a3 = 0x800A4984`, `v0 = n`, `t6 = b &
+/// 0xFF`, `t7 = 4n`, `at` = the bound test or `0x80120000 + n`, and `t8`,
+/// `v1`, `t9` from the append.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003E54C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[A3] = li(0x800A_4984);
+    g[V0] = lw(m, g[A3], 0);
+    sw(m, g[SP], 0, g[A0]);
+    g[T6] = g[A0] & 0xFF;
+    g[AT] = slt(g[V0], 0xBE);
+    g[T7] = sll(g[V0], 2);
+    if g[AT] == 0 {
+        return;
+    }
+    g[T8] = li(0x8011_8958);
+    g[V1] = addu(g[T7], g[T8]);
+    sh(m, g[V1], 0, g[A1]);
+    sh(m, g[V1], 2, g[A2]);
+    g[AT] = addu(li(0x8012_0000), g[V0]);
+    sb(m, g[AT], -0x73B0, g[T6]);
+    g[T9] = addu(g[V0], 1);
+    sw(m, g[A3], 0, g[T9]);
 }
 
 /// Where [`func_80063344`] gets each type's pair (indexed by type - 1).
