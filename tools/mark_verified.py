@@ -21,7 +21,7 @@ for arg in sys.argv[2:]:
     todo[f'0x{int(addr, 16):08X}'] = (name, notes)
 
 p = 'symbols/functions.csv'
-rows = list(csv.DictReader(open(p, newline='')))
+rows = list(csv.DictReader(open(p, encoding='utf-8', newline='')))
 fields = list(rows[0].keys())
 for r in rows:
     key = f"0x{int(r['vram'], 16):08X}"
@@ -37,4 +37,4 @@ out = io.StringIO()
 w = csv.DictWriter(out, fieldnames=fields, lineterminator='\n')
 w.writeheader()
 w.writerows(rows)
-open(p, 'w', newline='').write(out.getvalue())
+open(p, 'w', encoding='utf-8', newline='').write(out.getvalue())

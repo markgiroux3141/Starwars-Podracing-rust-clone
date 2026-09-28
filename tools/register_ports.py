@@ -14,7 +14,7 @@ mod = sys.argv[1]
 new = [a.split(':', 1) for a in sys.argv[2:]]
 
 p = 'crates/game/src/lib.rs'
-s = open(p).read()
+s = open(p, encoding='utf-8').read()
 start = s.index('pub const PORTED: &[Ported] = &[\n') + len('pub const PORTED: &[Ported] = &[\n')
 end = s.index('];', start)
 lines = [l for l in s[start:end].splitlines() if l.strip()]
@@ -24,13 +24,13 @@ for a, _ in new:
     lines.append(f'    Ported {{ vram: 0x{a[:4]}_{a[4:]}, name: "func_{a}", func: {mod}::func_{a} }},')
 lines.sort(key=lambda l: int(re.search(r'vram: 0x([0-9A-F_]+)', l).group(1).replace('_', ''), 16))
 s = s[:start] + '\n'.join(lines) + '\n' + s[end:]
-open(p, 'w', newline='\n').write(s)
+open(p, 'w', encoding='utf-8', newline='\n').write(s)
 
 p = 'crates/oracle/functions.txt'
-s = open(p).read()
+s = open(p, encoding='utf-8').read()
 head, body = s.split('\n\n', 1)
 entries = [l for l in body.splitlines() if l.strip()]
 for a, what in new:
     entries.append(f'func_{a}  # {what} ({mod}::func_{a})')
 entries.sort(key=lambda l: int(l.split()[0][5:], 16))
-open(p, 'w', newline='\n').write(head + '\n\n' + '\n'.join(entries) + '\n')
+open(p, 'w', encoding='utf-8', newline='\n').write(head + '\n\n' + '\n'.join(entries) + '\n')
