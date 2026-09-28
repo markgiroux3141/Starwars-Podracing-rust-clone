@@ -1,0 +1,13 @@
+[package]
+name = "oracle"
+version = "0.1.0"
+description = "Test-only: N64Recomp-generated C for the original game, built with `cc` and exposed over FFI"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+n64mem.workspace = true
+
+[build-dependencies]
+cc = "1"

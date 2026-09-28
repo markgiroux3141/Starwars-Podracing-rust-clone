@@ -1,0 +1,40 @@
+# ROM and anything derived from it — never commit (SPEC §8, §9)
+*.z64
+*.v64
+*.n64
+*.rom
+/baserom.*
+/rom/
+/extracted/
+/snapshots/
+/dumps/
+/replays/
+
+# Upstream checkouts and generated recomp output
+/scaffold/
+/third_party/
+/generated/
+*.sha1
+
+# Build output
+/target/
+/build/
+/out/
+*.pdb
+*.obj
+*.lib
+*.exp
+*.ilk
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Editors / OS
+.vs/
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+.DS_Store

@@ -1,0 +1,10 @@
+[package]
+name = "racer-rom"
+version = "0.1.0"
+description = "ROM verification, byte-order conversion and header parsing for Star Wars Episode I: Racer (N64, USA)"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+sha1.workspace = true
