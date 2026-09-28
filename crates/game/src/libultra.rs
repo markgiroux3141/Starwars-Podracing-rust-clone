@@ -1,12 +1,15 @@
-//! libultra's `sinf` and `cosf` (NOTES.md, "The OS boundary"): single
-//! precision in and out, double precision inside, with the polynomial and
-//! the reduction constants read from their tables in the data segment. The
-//! game's own maths routines: ports never substitute `std` (SPEC §5.4).
+//! Pure libultra functions (NOTES.md, "The OS boundary"): `sinf` and
+//! `cosf` (single precision in and out, double precision inside, with the
+//! constants read from their tables in the data segment; the game's own
+//! maths, so ports never substitute `std`, SPEC §5.4), and the 64-bit
+//! helpers of `ll.c`.
 
 // Ports keep N64Recomp's names (func_8008A8C0), capitals included.
 #![allow(non_snake_case)]
 
-use crate::recomp::{enter, fpu, ld, li, lw, reg::*, s32, sra, slt, sw, RecompContext};
+use crate::imports;
+use crate::recomp::{addu, ddiv, ddivu, dmultu, enter, fpu, ld, lh, li, lw, reg::*, s32, sd, slt, sra, sw, RecompContext};
+use n64mem::Mem;
 
 /// `func_8008A8C0(x)` = `sinf`: for `xpt = (bits(x) >> 22) & 0x1FF`:
 /// - `xpt < 230` (tiny): `x` itself.
@@ -233,4 +236,238 @@ pub unsafe extern "C" fn func_8008A750(rdram: *mut u8, ctx: *mut RecompContext) 
         f[10].set_d(f[6].d() + f[2].d());
         f[0].set_fl(fpu::cvt_s_d(f[10].d(), fpu::NEAREST));
     }
+}
+
+/// The argument handling of libultra's `ll.c` helpers ([`func_8008AAE0`]
+/// .. [`func_8008AD74`]): the two 64-bit arguments arrive as register
+/// pairs, `a0:a1` and `a2:a3` (high word first), are spilled to their slots
+/// `[sp]..[sp + 0xC]` and read back as doublewords, `t6` = the first and
+/// `t7` = the second (`t7` loaded first).
+///
+/// Domain (all of them): canonical `sp` with the slots in RDRAM.
+fn ll_args(m: &mut Mem, g: &mut [u64; 32], base: i32) {
+    for (k, r) in [A0, A1, A2, A3].into_iter().enumerate() {
+        sw(m, g[SP], base + 4 * k as i32, g[r]);
+    }
+    g[T7] = ld(m, g[SP], base + 8);
+    g[T6] = ld(m, g[SP], base);
+}
+
+/// The 64-bit result in `v0` returned as the pair `v0:v1` (high, low),
+/// each sign-extended.
+fn ll_result(g: &mut [u64; 32]) {
+    g[V1] = g[V0] << 32;
+    g[V1] = ((g[V1] as i64) >> 32) as u64;
+    g[V0] = ((g[V0] as i64) >> 32) as u64;
+}
+
+/// IDO's check after a 64-bit divide: `break 7` for a zero divisor (never
+/// reached: the host's divide faults first in the C, and [`ddivu`]
+/// asserts). With `signed`, also `break 6` for `INT64_MIN / -1`, which
+/// recomp.h's `DDIV` computes without a fault, so the C reaches it and the
+/// runtime traps. Leaves `at = 1` (or `1 << 63` if the divisor is -1).
+unsafe fn ll_divide_checks(g: &mut [u64; 32], zero: u32, overflow: Option<u32>) {
+    if g[T7] == 0 {
+        imports::runtime::do_break(zero);
+    }
+    let Some(overflow) = overflow else { return };
+    g[AT] = u64::MAX;
+    let minus_one = g[T7] == g[AT];
+    g[AT] = 1;
+    if minus_one {
+        g[AT] <<= 63;
+        if g[T6] == g[AT] {
+            imports::runtime::do_break(overflow);
+        }
+    }
+}
+
+/// `func_8008AAE0(a, n)` = `__ull_rshift`: `a >> (n & 63)`, logical.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8008AAE0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    ll_args(&mut mem, g, 0);
+    g[V0] = g[T6] >> (g[T7] & 63);
+    ll_result(g);
+}
+
+/// `func_8008AB0C(a, b)` = `__ull_rem`: `a % b`, unsigned. Domain: `b !=
+/// 0` (see [`ll_divide_checks`]).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8008AB0C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    ll_args(&mut mem, g, 0);
+    let (_, hi) = ddivu(g[T6], g[T7]);
+    ll_divide_checks(g, 0x8008_AB30, None);
+    g[V0] = hi;
+    ll_result(g);
+}
+
+/// `func_8008AB48(a, b)` = `__ull_div`: `a / b`, unsigned. Domain: `b !=
+/// 0`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8008AB48(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    ll_args(&mut mem, g, 0);
+    let (lo, _) = ddivu(g[T6], g[T7]);
+    ll_divide_checks(g, 0x8008_AB6C, None);
+    g[V0] = lo;
+    ll_result(g);
+}
+
+/// `func_8008AB84(a, n)` = `__ll_lshift`: `a << (n & 63)`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8008AB84(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    ll_args(&mut mem, g, 0);
+    g[V0] = g[T6] << (g[T7] & 63);
+    ll_result(g);
+}
+
+/// `func_8008ABB0(a, b)` = `__ll_rem`: `a % b` computed **unsigned**, as
+/// libultra's `unsigned long long % long long` does (QUIRK of the source,
+/// not of the port: `-7 % 2` is not -1). Domain: `b != 0`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8008ABB0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    ll_args(&mut mem, g, 0);
+    let (_, hi) = ddivu(g[T6], g[T7]);
+    ll_divide_checks(g, 0x8008_ABD4, None);
+    g[V0] = hi;
+    ll_result(g);
+}
+
+/// `func_8008ABEC(a, b)` = `__ll_div`: `a / b`, signed, truncating. Domain:
+/// `b != 0`; `INT64_MIN / -1` reaches `do_break` ([`ll_divide_checks`]).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8008ABEC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    ll_args(&mut mem, g, 0);
+    let (lo, _) = ddiv(g[T6], g[T7]);
+    ll_divide_checks(g, 0x8008_AC14, Some(0x8008_AC30));
+    g[V0] = lo;
+    ll_result(g);
+}
+
+/// `func_8008AC48(a, b)` = `__ll_mul`: the low 64 bits of `a * b`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8008AC48(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    ll_args(&mut mem, g, 0);
+    let (lo, _) = dmultu(g[T6], g[T7]);
+    g[V0] = lo;
+    ll_result(g);
+}
+
+/// `func_8008AC78(&quot, &rem, a, d)` = `__ull_divremi`: `*quot = a / d`
+/// and `*rem = a % d`, unsigned 64-bit, with `a` in `a2:a3` and `d` the
+/// fifth argument's low halfword (`[sp + 0x12]`). QUIRK: the halfword is
+/// loaded with `lh`, so a divisor with bit 15 set becomes a huge 64-bit
+/// one. The dividend and divisor are read again for the remainder.
+/// Domain: `d != 0`. Leaves `t6`..`t9`, `t0`..`t5` as the C.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8008AC78(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T7] = lh(m, g[SP], 0x12);
+    sw(m, g[SP], 8, g[A2]);
+    sw(m, g[SP], 0xC, g[A3]);
+    g[T6] = ld(m, g[SP], 8);
+    g[T8] = g[T7];
+    g[T9] = g[T8];
+    let (lo, _) = ddivu(g[T6], g[T9]);
+    if g[T9] == 0 {
+        imports::runtime::do_break(0x8008_AC9C);
+    }
+    g[T0] = lo;
+    sd(m, g[A0], 0, g[T0]);
+    g[T2] = lh(m, g[SP], 0x12);
+    g[T1] = ld(m, g[SP], 8);
+    g[T3] = g[T2];
+    g[T4] = g[T3];
+    let (_, hi) = ddivu(g[T1], g[T4]);
+    if g[T4] == 0 {
+        imports::runtime::do_break(0x8008_ACC4);
+    }
+    g[T5] = hi;
+    sd(m, g[A1], 0, g[T5]);
+}
+
+/// `func_8008ACD8(a, b)` = `__ll_mod`: the signed remainder moved to the
+/// divisor's sign (`rem + b` when `rem` and `b` have opposite signs), so
+/// `-7 mod 2 = 1`. It works in an 8-byte frame, the remainder stored and
+/// re-read there, and returns it from the frame's two words. Domain: `b !=
+/// 0`; `INT64_MIN mod -1` reaches `do_break`.
+///
+/// Leaves `t6`/`t7` = the arguments, `t8` = the remainder, `t9`..`t3` as
+/// the path read them, `at` from the checks, `sp` back sign-extended.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8008ACD8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-8i64) as u64);
+    ll_args(m, g, 8);
+    let (_, hi) = ddiv(g[T6], g[T7]);
+    ll_divide_checks(g, 0x8008_AD04, Some(0x8008_AD20));
+    g[T8] = hi;
+    sd(m, g[SP], 0, g[T8]);
+    let adjust = if (g[T8] as i64) < 0 && (g[T7] as i64) > 0 {
+        true
+    } else {
+        g[T9] = ld(m, g[SP], 0);
+        if (g[T9] as i64) > 0 {
+            g[T0] = ld(m, g[SP], 0x10);
+            (g[T0] as i64) < 0
+        } else {
+            false
+        }
+    };
+    if adjust {
+        g[T1] = ld(m, g[SP], 0);
+        g[T2] = ld(m, g[SP], 0x10);
+        g[T3] = g[T1].wrapping_add(g[T2]);
+        sd(m, g[SP], 0, g[T3]);
+    }
+    g[V0] = lw(m, g[SP], 0);
+    g[V1] = lw(m, g[SP], 4);
+    g[SP] = addu(g[SP], 8);
+}
+
+/// `func_8008AD74(a, n)` = `__ll_rshift`: `a >> (n & 63)`, arithmetic.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8008AD74(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    ll_args(&mut mem, g, 0);
+    g[V0] = ((g[T6] as i64) >> (g[T7] & 63)) as u64;
+    ll_result(g);
 }

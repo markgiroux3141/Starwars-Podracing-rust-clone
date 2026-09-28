@@ -1170,16 +1170,16 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8008A710,func_8008A710,ours,7,,recomp,,,
 0x8008A750,cosf,libultra,0,,rust_verified,unit_diff,high,"libultra cosf, confirmed (model vs std cos within 2e-6); constants at 0x800ADDD0 (game::libultra)"
 0x8008A8C0,sinf,libultra,0,,rust_verified,unit_diff,high,"libultra sinf, confirmed (model vs std sin within 2e-6); constants at 0x800ADE20 (game::libultra)"
-0x8008AAE0,func_8008AAE0,ours,0,,recomp,,,
-0x8008AB0C,func_8008AB0C,ours,0,,recomp,,,
-0x8008AB48,__ull_div,libultra,0,,recomp,,high,pure 64-bit helper; break 7 on zero
-0x8008AB84,__ll_lshift,libultra,0,,recomp,,high,pure 64-bit helper
-0x8008ABB0,func_8008ABB0,ours,0,,recomp,,,
-0x8008ABEC,func_8008ABEC,ours,0,,recomp,,,
-0x8008AC48,__ll_mul,libultra,0,,recomp,,high,pure 64-bit helper
-0x8008AC78,func_8008AC78,ours,0,,recomp,,,
-0x8008ACD8,func_8008ACD8,ours,0,,recomp,,,
-0x8008AD74,func_8008AD74,ours,0,,recomp,,,
+0x8008AAE0,__ull_rshift,libultra,0,,rust_verified,unit_diff,high,"ll.c, shape-confirmed (game::libultra)"
+0x8008AB0C,__ull_rem,libultra,0,,rust_verified,unit_diff,high,ll.c (game::libultra)
+0x8008AB48,__ull_div,libultra,0,,rust_verified,unit_diff,high,ll.c; break 7 unreachable (host divide faults first) (game::libultra)
+0x8008AB84,__ll_lshift,libultra,0,,rust_verified,unit_diff,high,ll.c (game::libultra)
+0x8008ABB0,__ll_rem,libultra,0,,rust_verified,unit_diff,high,ll.c; unsigned remainder as in the source (game::libultra)
+0x8008ABEC,__ll_div,libultra,0,,rust_verified,unit_diff,high,ll.c; INT64_MIN/-1 reaches do_break (game::libultra)
+0x8008AC48,__ll_mul,libultra,0,,rust_verified,unit_diff,high,ll.c (game::libultra)
+0x8008AC78,__ull_divremi,libultra,0,,rust_verified,unit_diff,high,ll.c; QUIRK lh divisor (game::libultra)
+0x8008ACD8,__ll_mod,libultra,0,,rust_verified,unit_diff,high,ll.c; INT64_MIN mod -1 reaches do_break (game::libultra)
+0x8008AD74,__ll_rshift,libultra,0,,rust_verified,unit_diff,high,ll.c (game::libultra)
 0x8008ADA0,osAiGetLength,libultra,0,,recomp,,high,AI_LEN_REG 0xA450000C
 0x8008ADB0,func_8008ADB0,ours,1,,recomp,,,
 0x8008AE30,func_8008AE30,ours,1,,recomp,,,
