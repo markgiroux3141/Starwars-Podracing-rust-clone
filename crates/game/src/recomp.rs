@@ -146,6 +146,19 @@ pub fn lw(mem: &Mem, base: u64, offset: i32) -> u64 {
     s32(mem.read_u32((base as u32).wrapping_add(offset as u32)))
 }
 
+/// `lh`: the sign-extended halfword at `base + offset` (`MEM_H`; same
+/// canonical-`base` caveat as [`lw`]).
+#[inline]
+pub fn lh(mem: &Mem, base: u64, offset: i32) -> u64 {
+    mem.read_i16((base as u32).wrapping_add(offset as u32)) as i64 as u64
+}
+
+/// `lbu`: the zero-extended byte at `base + offset` (`MEM_BU`).
+#[inline]
+pub fn lbu(mem: &Mem, base: u64, offset: i32) -> u64 {
+    u64::from(mem.read_u8((base as u32).wrapping_add(offset as u32)))
+}
+
 /// `sw`: store the low word of `value` at `base + offset`.
 #[inline]
 pub fn sw(mem: &mut Mem, base: u64, offset: i32, value: u64) {

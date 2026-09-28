@@ -7,7 +7,7 @@
 #![allow(non_snake_case)]
 
 use crate::imports;
-use crate::recomp::{addu, call, enter, li, lw, reg::*, s32, sll, subu, sw, RecompContext};
+use crate::recomp::{addu, call, enter, lbu, lh, li, lw, reg::*, s32, sll, subu, sw, RecompContext};
 
 /// Texture block in the ROM: `u32 count`, then (pixels, palette) offset pairs.
 pub const TEXTURE_BLOCK: u32 = 0x0102_ABB0;
@@ -547,4 +547,279 @@ fn relocate(m: &mut n64mem::Mem, ctx: &mut RecompContext) {
             break;
         }
     }
+}
+
+/// Sprite block in the ROM: `u32 count`, then one offset per sprite (and one
+/// for the end of the last).
+pub const SPRITE_BLOCK: u32 = 0x0133_07F0;
+
+/// `func_8002FF38` (sprite_load): load sprite `index` to the heap cursor and
+/// return a pointer to its header, or 0.
+///
+/// In order:
+/// 1. Reads the block's count with `rom_read_small`. `index < 0` or
+///    `>= count` (signed 64-bit, after that call restored `s0` from its low
+///    word, so in effect the sign-extended low word of `a0`): returns 0.
+/// 2. Reads the entry's offset and the next one, then the 0x14-byte header
+///    to the cursor as it is (not aligned).
+/// 3. If the format byte `+4` is 2 (CI) and the palette offset `+8` is 0, sets
+///    the cursor back to the header and returns it. QUIRK: the header isn't
+///    reserved, so the next allocation overwrites it. No USA sprite does this.
+/// 4. Reads `(s16) +0xC` 8-byte page entries to header + 0x14 and stores that
+///    address in `+0x10`. A count of 0 or less reads nothing.
+/// 5. Counts `s1` up to the page count and zeroes it again (dead loop).
+/// 6. If `+8` is nonzero, reads the palette, from `+8` up to page 0's offset,
+///    to the next 16-byte boundary and stores its address in `+8`.
+/// 7. Reads each page, from its offset up to the next page's (the last up to
+///    the next sprite's), to the next 16-byte boundary after the previous
+///    part, and stores its address in the entry's `+4`. The page count is
+///    re-read from the header after each page.
+/// 8. Sets the cursor to the end of the last part read, rounded up to 16, and
+///    returns the header.
+///
+/// QUIRK: there is no space check, so a sprite near the heap end is written
+/// past it. QUIRK: with a palette and a page count of 0 or less, page 0's
+/// offset is read from a table that wasn't loaded (whatever is at header +
+/// 0x18). QUIRK: a negative page count moves the cursor below the header's
+/// end (`+ 8 * count` is added unchecked).
+///
+/// Domain: canonical `sp` and a word-aligned cursor (`rom_read_small` stores
+/// words); the 0x70-byte frame in RDRAM; and the callees'.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002FF38(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x70i64) as u64);
+    sw(m, g[SP], 0x34, g[RA]);
+    sw(m, g[SP], 0x18, g[S0]);
+    g[S0] = g[A0];
+    sw(m, g[SP], 0x30, g[S6]);
+    sw(m, g[SP], 0x2C, g[S5]);
+    sw(m, g[SP], 0x28, g[S4]);
+    sw(m, g[SP], 0x24, g[S3]);
+    sw(m, g[SP], 0x20, g[S2]);
+    sw(m, g[SP], 0x1C, g[S1]);
+    call(imports::func_8002FAFC, m, ctx); // heap_cursor
+
+    let g = &mut ctx.gpr;
+    g[S6] = li(SPRITE_BLOCK);
+    g[S2] = g[V0];
+    g[A0] = g[S6];
+    g[A1] = addu(g[SP], 0x58);
+    g[A2] = 4;
+    call(imports::func_80011D60, m, ctx); // rom_read_small(count)
+
+    let g = &mut ctx.gpr;
+    // bltz s0 / (delay) lw t6, 0x58(sp); slt at, s0, t6 / bnez / (delay) sll t7, s0, 2
+    g[T6] = lw(m, g[SP], 0x58);
+    let mut in_range = false;
+    if (g[S0] as i64) >= 0 {
+        g[AT] = u64::from((g[S0] as i64) < (g[T6] as i64));
+        g[T7] = sll(g[S0], 2);
+        in_range = g[AT] != 0;
+    }
+    if in_range {
+        sprite_body(m, ctx);
+        let g = &mut ctx.gpr;
+        g[V0] = g[S4];
+    } else {
+        ctx.gpr[V0] = 0;
+    }
+
+    // L_80030108: epilogue
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x34);
+    g[S0] = lw(m, g[SP], 0x18);
+    g[S1] = lw(m, g[SP], 0x1C);
+    g[S2] = lw(m, g[SP], 0x20);
+    g[S3] = lw(m, g[SP], 0x24);
+    g[S4] = lw(m, g[SP], 0x28);
+    g[S5] = lw(m, g[SP], 0x2C);
+    g[S6] = lw(m, g[SP], 0x30);
+    g[SP] = addu(g[SP], 0x70);
+}
+
+/// `func_8002FF38` from `L_8002FF9C` (index in range) up to the final
+/// `move v0, s4`: `s2` is the placement cursor, `s4` the header.
+fn sprite_body(m: &mut n64mem::Mem, ctx: &mut RecompContext) {
+    let g = &mut ctx.gpr;
+    g[A0] = addu(g[S6], g[T7]);
+    g[A0] = addu(g[A0], 4);
+    g[A1] = addu(g[SP], 0x50);
+    g[A2] = 8;
+    call(imports::func_80011D60, m, ctx); // rom_read_small(offset, next offset)
+
+    let g = &mut ctx.gpr;
+    g[T0] = lw(m, g[SP], 0x50);
+    g[A1] = g[S2];
+    g[A2] = 0x14;
+    g[A0] = addu(g[S6], g[T0]);
+    call(imports::func_80011D60, m, ctx); // rom_read_small(header -> cursor)
+
+    let g = &mut ctx.gpr;
+    g[T8] = lbu(m, g[S2], 4);
+    g[AT] = 2;
+    g[S4] = g[S2];
+    g[T0] = lw(m, g[SP], 0x50); // bne delay slot
+    if g[T8] == g[AT] {
+        g[T9] = lw(m, g[S2], 8);
+        if g[T9] == 0 {
+            // CI without a palette: straight to L_800300FC.
+            set_cursor_to_s2(m, ctx);
+            return;
+        }
+    }
+
+    // L_8002FFE4: the page table
+    g[S3] = lh(m, g[S4], 0xC);
+    g[S2] = addu(g[S2], 0x14);
+    g[T0] = addu(g[T0], 0x14);
+    g[A2] = sll(g[S3], 3);
+    g[S3] = g[A2];
+    g[A0] = addu(g[S6], g[T0]);
+    g[A1] = g[S2];
+    call(imports::func_80011D60, m, ctx); // rom_read_small(page table -> header + 0x14)
+
+    let g = &mut ctx.gpr;
+    g[V0] = lh(m, g[S4], 0xC);
+    sw(m, g[S4], 0x10, g[S2]);
+    g[S1] = 0;
+    g[S5] = li(0xFFFF_FFF0); // blez delay slot
+    if (g[V0] as i64) > 0 {
+        // Counts s1 up to the page count, then drops it.
+        g[S1] = addu(g[S1], 1);
+        loop {
+            g[AT] = u64::from((g[S1] as i64) < (g[V0] as i64));
+            if g[AT] == 0 {
+                break;
+            }
+            g[S1] = addu(g[S1], 1); // bnel delay slot
+        }
+        g[S1] = 0;
+    }
+
+    // L_8003002C: the palette
+    g[V1] = lw(m, g[S4], 8);
+    g[T2] = lw(m, g[SP], 0x50);
+    g[T0] = addu(g[T2], g[V1]); // beqz delay slot
+    if g[V1] != 0 {
+        g[T3] = lw(m, g[S4], 0x10);
+        g[S2] = addu(g[S2], g[S3]);
+        g[S2] = addu(g[S2], 0xF);
+        g[T4] = lw(m, g[T3], 4); // page 0's offset
+        g[S2] &= g[S5];
+        g[A1] = g[S2];
+        g[S3] = subu(g[T4], g[V1]);
+        g[A2] = g[S3];
+        g[A0] = addu(g[S6], g[T0]);
+        call(imports::func_80011D60, m, ctx); // rom_read_small(palette)
+
+        let g = &mut ctx.gpr;
+        sw(m, g[S4], 8, g[S2]);
+        g[V0] = lh(m, g[S4], 0xC);
+    }
+
+    // L_8003006C: the pages
+    let g = &mut ctx.gpr;
+    g[S2] = addu(g[S2], g[S3]);
+    g[S5] = li(0xFFFF_FFF0);
+    g[S2] = addu(g[S2], 0xF);
+    g[S2] &= g[S5]; // blez delay slot
+    if (g[V0] as i64) > 0 {
+        g[S0] = 0;
+        loop {
+            let g = &mut ctx.gpr;
+            g[T5] = addu(g[S1], 1);
+            g[T6] = lw(m, g[SP], 0x54); // bne delay slot: the next sprite's offset
+            if g[T5] == g[V0] {
+                // Last page: up to the end of the sprite.
+                g[T7] = lw(m, g[SP], 0x50);
+                g[T8] = lw(m, g[S4], 0x10);
+                g[A3] = subu(g[T6], g[T7]);
+                g[V1] = addu(g[T8], g[S0]); // b delay slot
+            } else {
+                g[T9] = lw(m, g[S4], 0x10);
+                g[V1] = addu(g[T9], g[S0]);
+                g[A3] = lw(m, g[V1], 0xC); // the next page's offset
+            }
+            // L_800300B0
+            g[V0] = lw(m, g[V1], 4);
+            g[T1] = lw(m, g[SP], 0x50);
+            g[A1] = g[S2];
+            g[S3] = subu(g[A3], g[V0]);
+            g[T0] = addu(g[V0], g[T1]);
+            g[A0] = addu(g[S6], g[T0]);
+            g[A2] = g[S3];
+            call(imports::func_80011D60, m, ctx); // rom_read_small(page)
+
+            let g = &mut ctx.gpr;
+            g[T2] = lw(m, g[S4], 0x10);
+            g[S1] = addu(g[S1], 1);
+            g[T3] = addu(g[T2], g[S0]);
+            sw(m, g[T3], 4, g[S2]);
+            g[V0] = lh(m, g[S4], 0xC);
+            g[S2] = addu(g[S2], g[S3]);
+            g[S2] = addu(g[S2], 0xF);
+            g[AT] = u64::from((g[S1] as i64) < (g[V0] as i64));
+            g[S0] = addu(g[S0], 8);
+            g[S2] &= g[S5]; // bnez delay slot
+            if g[AT] == 0 {
+                break;
+            }
+        }
+    }
+    set_cursor_to_s2(m, ctx);
+}
+
+/// `L_800300FC`: `heap_set_cursor(s2)`.
+fn set_cursor_to_s2(m: &mut n64mem::Mem, ctx: &mut RecompContext) {
+    ctx.gpr[A0] = ctx.gpr[S2];
+    call(imports::func_8002FAC4, m, ctx);
+}
+
+/// `func_80030130`: `sprite_load(a1)`, returning its result. `a0` is only
+/// spilled to its argument slot. Nothing in the code or data refers to this
+/// function (it was found between two others), so it may be dead.
+///
+/// Domain: canonical `sp`, the 0x18-byte frame and `a0`'s argument slot in
+/// RDRAM, and [`func_8002FF38`]'s.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80030130(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    sw(m, g[SP], 0x18, g[A0]);
+    g[A0] = g[A1];
+    call(imports::func_8002FF38, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x18);
+}
+
+/// `func_80030154`: `sprite_load(a0)`, returning its result, through a
+/// stack frame. The game calls sprite_load through this (about 100 call
+/// sites).
+///
+/// Domain: canonical `sp`, the 0x18-byte frame in RDRAM, and
+/// [`func_8002FF38`]'s.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80030154(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    call(imports::func_8002FF38, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x18);
 }

@@ -16,6 +16,7 @@ recomp_imports! {
     func_8002FAFC, // heap_cursor
     func_8002FC58, // heap_free
     func_8002FC80, // heap_check
+    func_8002FF38, // sprite_load
     func_80030328, // texture_read
     func_800304AC, // texture_get
     func_800827C0, // model_load's error path (not yet understood)
