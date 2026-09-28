@@ -2253,3 +2253,146 @@ pub unsafe extern "C" fn func_80017F28(_rdram: *mut u8, ctx: *mut RecompContext)
     }
     g[V0] = 0;
 }
+
+/// `func_80018114(o, v)`: `[o + 0x168] = v` ([`set_word`]).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80018114(rdram: *mut u8, ctx: *mut RecompContext) {
+    set_word(rdram, ctx, 0x168)
+}
+
+/// `func_8001811C(o, k, v)`: store `v` in the field of `o` that `k` selects
+/// (64-bit compares): 4 → `+0x15C`, 3 → `+0x164`, 6 → `+0x158`, 5 →
+/// `+0x160`; anything else, nothing. [`func_80018164`] is the getter.
+/// Leaves `at = 5`.
+///
+/// Domain: for a selecting `k`, canonical `o` with the field in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8001811C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    for (k, off) in [(4, 0x15C), (3, 0x164), (6, 0x158), (5, 0x160)] {
+        g[AT] = k;
+        if g[A1] == g[AT] {
+            sw(m, g[A0], off, g[A2]);
+        }
+    }
+}
+
+/// `func_80018164(o, k)`: the field of `o` that `k` selects, as for
+/// [`func_8001811C`], or -1. Leaves `at` = the constant that matched, else 5.
+///
+/// Domain: for a selecting `k`, canonical `o` with the field in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80018164(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    for (k, off) in [(4, 0x15C), (3, 0x164), (6, 0x158)] {
+        g[AT] = k;
+        if g[A1] == g[AT] {
+            g[V0] = lw(&mem, g[A0], off);
+            return;
+        }
+    }
+    g[AT] = 5;
+    g[V0] = if g[A1] == g[AT] { lw(&mem, g[A0], 0x160) } else { u64::MAX };
+}
+
+/// `func_800182FC(o, k)`: `[o + 8]` for `k == 0`, `[o + 4]` for `k == 2`
+/// (64-bit), else 0. Leaves `at = 2`.
+///
+/// Domain: for `k` 0 or 2, canonical `o` with the field in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800182FC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[AT] = 2;
+    g[V0] = if g[A1] == 0 {
+        lw(&mem, g[A0], 8)
+    } else if g[A1] == g[AT] {
+        lw(&mem, g[A0], 4)
+    } else {
+        0
+    };
+}
+
+/// `func_800183A8(o)`: `[o + 4]` ([`get_word`]).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800183A8(rdram: *mut u8, ctx: *mut RecompContext) {
+    get_word(rdram, ctx, 4)
+}
+
+/// `func_800183B0(o, v)`: `[o + 4] = v` ([`set_word`]).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800183B0(rdram: *mut u8, ctx: *mut RecompContext) {
+    set_word(rdram, ctx, 4)
+}
+
+/// `func_80018440`: returns at once.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80018440(_rdram: *mut u8, _ctx: *mut RecompContext) {}
+
+/// `func_80018448`: returns at once.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80018448(_rdram: *mut u8, _ctx: *mut RecompContext) {}
+
+/// `func_80018450`: an empty function of two arguments; spills `a0` and
+/// `a1` to `[sp]` and `[sp + 4]`.
+///
+/// Domain: canonical `sp` with `[sp]..[sp + 8]` in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80018450(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &ctx.gpr;
+    sw(&mut mem, g[SP], 0, g[A0]);
+    sw(&mut mem, g[SP], 4, g[A1]);
+}
+
+/// `func_80018460`: returns at once.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80018460(_rdram: *mut u8, _ctx: *mut RecompContext) {}
+
+/// `func_80018470()`: `[0x800A21AC] = 5`. Leaves `t6 = 5`, `at = 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80018470(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[T6] = 5;
+    g[AT] = li(0x800A_0000);
+    sw(&mut mem, g[AT], 0x21AC, g[T6]);
+}
+
+/// `func_8001F464()`: 1 if bit 1 of `[0x80113688]` is set, else 0. Leaves
+/// `t6` = the word, `t7` = the bit.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8001F464(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[T6] = lw(&mem, li(0x8011_0000), 0x3688);
+    g[T7] = g[T6] & 2;
+    g[V0] = u64::from(g[T7] != 0);
+}

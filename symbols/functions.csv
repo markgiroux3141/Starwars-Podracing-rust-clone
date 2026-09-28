@@ -334,20 +334,20 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80017FD0,func_80017FD0,ours,1,,recomp,,,
 0x80018084,func_80018084,ours,0,,recomp,,,
 0x800180C8,func_800180C8,ours,0,,recomp,,,
-0x80018114,func_80018114,ours,0,,recomp,,,
-0x8001811C,func_8001811C,ours,0,,recomp,,,
-0x80018164,func_80018164,ours,0,,recomp,,,
+0x80018114,func_80018114,ours,0,,rust_verified,unit_diff,high,[o+0x168] = v (game::misc)
+0x8001811C,func_8001811C,ours,0,,rust_verified,unit_diff,high,set field by selector 4/3/6/5 -> +0x15C/+0x164/+0x158/+0x160 (game::misc)
+0x80018164,func_80018164,ours,0,,rust_verified,unit_diff,high,"get field by selector, else -1 (game::misc)"
 0x800181BC,func_800181BC,ours,1,,recomp,,,
-0x800182FC,func_800182FC,ours,0,,recomp,,,
+0x800182FC,func_800182FC,ours,0,,rust_verified,unit_diff,high,"k 0 -> [o+8], 2 -> [o+4], else 0 (game::misc)"
 0x80018324,func_80018324,ours,0,,recomp,,,
-0x800183A8,func_800183A8,ours,0,,recomp,,,
-0x800183B0,func_800183B0,ours,0,,recomp,,,
+0x800183A8,func_800183A8,ours,0,,rust_verified,unit_diff,high,[o+4] (game::misc)
+0x800183B0,func_800183B0,ours,0,,rust_verified,unit_diff,high,[o+4] = v (game::misc)
 0x800183C0,func_800183C0,ours,0,,recomp,,,
-0x80018440,func_80018440,ours,0,,recomp,,,
-0x80018448,func_80018448,ours,0,,recomp,,,
-0x80018450,func_80018450,ours,0,,recomp,,,
-0x80018460,func_80018460,ours,0,,recomp,,,
-0x80018470,func_80018470,ours,0,,recomp,,,
+0x80018440,func_80018440,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
+0x80018448,func_80018448,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
+0x80018450,func_80018450,ours,0,,rust_verified,unit_diff,high,empty; spills a0 a1 (game::misc)
+0x80018460,func_80018460,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
+0x80018470,func_80018470,ours,0,,rust_verified,unit_diff,high,[0x800A21AC] = 5 (game::misc)
 0x80018480,func_80018480,ours,5,,recomp,,,
 0x80019B80,func_80019B80,ours,20,,recomp,,,
 0x80019BB4,func_80019BB4,ours,25,,recomp,,,
@@ -359,7 +359,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8001DD48,func_8001DD48,ours,26,,recomp,,,
 0x8001DDA8,func_8001DDA8,ours,25,,recomp,,,
 0x8001E6C0,func_8001E6C0,ours,22,,recomp,,,
-0x8001F464,func_8001F464,ours,0,,recomp,,,
+0x8001F464,func_8001F464,ours,0,,rust_verified,unit_diff,high,bit 1 of [0x80113688] (game::misc)
 0x8001F48C,func_8001F48C,ours,20,,recomp,,,
 0x8001F5AC,func_8001F5AC,ours,26,,recomp,,,
 0x80020030,func_80020030,ours,26,,recomp,,,
