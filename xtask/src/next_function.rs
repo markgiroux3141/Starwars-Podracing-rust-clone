@@ -45,6 +45,9 @@ struct Func {
     ignored: bool,
     uses_float: bool,
     reads_fcr31: bool,
+    /// Masks FCR31 with 0x78 (IDO's float-to-unsigned idiom tests the
+    /// V/Z/O/U flags): N64Recomp reads them as 0 (NOTES.md, "Floats").
+    tests_fcr31_flags: bool,
     generated: bool,
     double: Option<Double>,
 }
@@ -166,6 +169,7 @@ fn load(root: &Path) -> Result<BTreeMap<u32, Func>> {
                 ignored: ignored.contains(&format!("func_{vram:08X}")) || ignored.contains(&name),
                 uses_float: c.as_deref().is_some_and(|c| c.contains("ctx->f")),
                 reads_fcr31: c.as_deref().is_some_and(|c| c.contains("get_cop1_cs")),
+                tests_fcr31_flags: c.as_deref().is_some_and(|c| c.contains("get_cop1_cs") && c.contains("& 0X78")),
                 generated: c.is_some(),
                 double: doubled.remove(&format!("func_{vram:08X}")).or_else(|| doubled.remove(&name)),
                 name,
@@ -206,8 +210,10 @@ fn flags(funcs: &BTreeMap<u32, Func>, f: &Func) -> String {
     if f.uses_float {
         v.push("float");
     }
-    if f.reads_fcr31 {
-        v.push("reads FCR31: oracle has rounding bits only, check for flag tests");
+    if f.tests_fcr31_flags {
+        v.push("tests FCR31 flags: the oracle reads 0 (unlike hardware for inputs in [2^31, 2^32))");
+    } else if f.reads_fcr31 {
+        v.push("reads FCR31 (rounding bits only in the oracle)");
     }
     if f.in_os_range() {
         v.push("OS range?");
