@@ -6071,3 +6071,255 @@ pub unsafe extern "C" fn func_8007F22C(rdram: *mut u8, ctx: *mut RecompContext) 
 pub unsafe extern "C" fn func_8007F23C(rdram: *mut u8, ctx: *mut RecompContext) {
     clear_out(rdram, ctx);
 }
+
+/// `func_800811CC()`: `[0x800A6758] = 1`. Leaves `t6 = 1`, `at =
+/// 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800811CC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[T6] = 1;
+    g[AT] = li(0x800A_0000);
+    sw(&mut mem, g[AT], 0x6758, g[T6]);
+}
+
+/// `func_80081260()`: `[0x800A675C] = 0`. Leaves `at = 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80081260(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[AT] = li(0x800A_0000);
+    sw(&mut mem, g[AT], 0x675C, 0);
+}
+
+/// `func_80081530(a, b, n)`: 1 if the first `n` bytes at `a` and `b` are
+/// equal (or `n <= 0`, signed), else 0. The compiler compares `n & 3`
+/// single bytes, then four at a time; it stops at the first difference.
+///
+/// Leaves `v1`/`a3` at the bytes compared last, `t0 = t1 = n & 3`, and the
+/// last bytes loaded in `t2`..`t9`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80081530(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let m = &mem;
+    let g = &mut ctx.gpr;
+    g[V0] = 0;
+    if (g[A2] as i64) <= 0 {
+        g[V0] = 1;
+        return;
+    }
+    g[T1] = g[A2] & 3;
+    g[T0] = g[T1];
+    let mut done = false;
+    if g[T1] != 0 {
+        g[V1] = addu(g[A0], 0);
+        g[A3] = addu(g[A1], 0);
+        loop {
+            g[T6] = lbu(m, g[V1], 0);
+            g[T7] = lbu(m, g[A3], 0);
+            g[V0] = addu(g[V0], 1);
+            g[V1] = addu(g[V1], 1);
+            if g[T6] != g[T7] {
+                g[V0] = 0;
+                return;
+            }
+            g[A3] = addu(g[A3], 1);
+            if g[T0] == g[V0] {
+                break;
+            }
+        }
+        if g[V0] == g[A2] {
+            g[V1] = addu(g[A0], g[V0]);
+            done = true;
+        }
+    }
+    if !done {
+        g[V1] = addu(g[A0], g[V0]);
+        g[A3] = addu(g[A1], g[V0]);
+        'quads: loop {
+            for (k, (x, y)) in [(T8, T9), (T2, T3), (T4, T5), (T6, T7)].into_iter().enumerate() {
+                g[x] = lbu(m, g[V1], k as i32);
+                g[y] = lbu(m, g[A3], k as i32);
+                if k == 0 {
+                    g[V0] = addu(g[V0], 4);
+                }
+                if k == 3 {
+                    g[V1] = addu(g[V1], 4);
+                }
+                if g[x] != g[y] {
+                    g[V0] = 0;
+                    return;
+                }
+            }
+            g[A3] = addu(g[A3], 4);
+            if g[V0] == g[A2] {
+                break 'quads;
+            }
+        }
+    }
+    g[V0] = 1;
+}
+
+/// `func_800815FC(a, b)` = `strcmp` (-1, 0 or 1): compare the NUL-terminated
+/// byte strings (unsigned bytes) to the first difference or end; a string
+/// that ends first is less. Leaves `a0`/`a1` at the last bytes compared,
+/// `v1` the last byte of `b`, `at` the last test, `t6` = `b`'s byte when
+/// `a` ended.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800815FC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let m = &mem;
+    let g = &mut ctx.gpr;
+    g[V0] = lbu(m, g[A0], 0);
+    if g[V0] != 0 {
+        g[V1] = lbu(m, g[A1], 0);
+        loop {
+            g[AT] = slt(g[V0], g[V1]);
+            if g[V1] == 0 {
+                g[V0] = 1;
+                return;
+            }
+            if g[AT] != 0 {
+                g[V0] = u64::MAX;
+                return;
+            }
+            g[AT] = slt(g[V1], g[V0]);
+            if g[AT] != 0 {
+                g[V0] = 1;
+                return;
+            }
+            g[V0] = lbu(m, g[A0], 1);
+            g[A0] = addu(g[A0], 1);
+            g[A1] = addu(g[A1], 1);
+            if g[V0] == 0 {
+                break;
+            }
+            g[V1] = lbu(m, g[A1], 0);
+        }
+    }
+    // `a` ended: equal if `b` did too.
+    g[T6] = lbu(m, g[A1], 0);
+    g[V0] = if g[T6] == 0 { 0 } else { u64::MAX };
+}
+
+/// `func_800834DC(a0, a1, a2, a3)`: an empty function that spills all four
+/// arguments to their slots `[sp]..[sp + 0xC]`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800834DC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    for (k, r) in [A0, A1, A2, A3].into_iter().enumerate() {
+        sw(&mut mem, g[SP], 4 * k as i32, g[r]);
+    }
+}
+
+/// `func_80084C30(type)`: fill the `OSTask` at `[0x801488C0]` (read again
+/// before every field): `ucode_boot` (`+8`) = rspboot at `0x80097FF0`,
+/// `ucode_boot_size` (`+0xC`) = `0xD0` (NOTES.md, "Code segment"),
+/// `output_buff` (`+0x28`) and its size (`+0x2C`) from `[0x800DB894]` and
+/// `[0x800DB898]`; if `(s16) type == 5`, `ucode` (`+0x10`) = the F3DEX2
+/// text at `0x800980C0` and `ucode_data` (`+0x18`) = `0x800AE1D0`; and
+/// `data_ptr` (`+0x30`) = `[0x801217B4]`. Spills `type` to its slot
+/// `[sp]`.
+///
+/// Leaves `v0 = 0x801488C0`, `v1 = 0x80097FF0`, `at = 5`, `t0` = the data
+/// pointer, and the pointers and values in `t1`..`t9`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80084C30(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V0] = li(0x8014_88C0);
+    g[T8] = lw(m, g[V0], 0);
+    g[V1] = li(0x8009_7FF0);
+    sw(m, g[SP], 0, g[A0]);
+    sw(m, g[T8], 8, g[V1]);
+    g[T1] = lw(m, g[V0], 0);
+    g[T9] = li(0x8009_80C0);
+    g[T0] = subu(g[T9], g[V1]);
+    sw(m, g[T1], 0xC, g[T0]);
+    g[T2] = lw(m, li(0x800E_0000), -0x476C);
+    g[T3] = lw(m, g[V0], 0);
+    g[T6] = sll(g[A0], 16);
+    sw(m, g[T3], 0x28, g[T2]);
+    g[T5] = lw(m, g[V0], 0);
+    g[T4] = lw(m, li(0x800E_0000), -0x4768);
+    g[T7] = sra(g[T6], 16);
+    g[AT] = 5;
+    sw(m, g[T5], 0x2C, g[T4]);
+    if g[T7] == g[AT] {
+        g[T7] = lw(m, g[V0], 0);
+        g[T6] = li(0x8009_80C0);
+        sw(m, g[T7], 0x10, g[T6]);
+        g[T9] = lw(m, g[V0], 0);
+        g[T8] = li(0x800A_E1D0);
+        sw(m, g[T9], 0x18, g[T8]);
+    }
+    g[T0] = lw(m, li(0x8012_0000), 0x17B4);
+    g[T1] = lw(m, g[V0], 0);
+    sw(m, g[T1], 0x30, g[T0]);
+}
+
+/// `func_8008635C(i, v)`: record `i` of the 0x170-byte records at
+/// `0x80120DF0`: bit 0 of `+0` set if `v >= 0` (signed 64-bit), cleared
+/// otherwise, and `+4 = v`. Leaves `v0` = the record, `t0` or `t6` = its
+/// offset, `t1`/`t7` = the base, the flags in `t2`/`t3` or `t8`/`t9`, `at
+/// = -2` when clearing.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8008635C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    // ((((i << 2) - i) << 3) - i) << 4 = 0x170 * i, through `t`.
+    let record = |g: &mut [u64; 32], t: usize, base: usize| {
+        g[t] = subu(g[t], g[A0]);
+        g[t] = sll(g[t], 3);
+        g[t] = subu(g[t], g[A0]);
+        g[base] = li(0x8012_0DF0);
+        g[t] = sll(g[t], 4);
+        g[V0] = addu(g[t], g[base]);
+    };
+    g[T0] = sll(g[A0], 2);
+    if (g[A1] as i64) >= 0 {
+        record(g, T0, T1);
+        g[T2] = lw(m, g[V0], 0);
+        g[T3] = g[T2] | 1;
+        sw(m, g[V0], 0, g[T3]);
+    } else {
+        g[T6] = sll(g[A0], 2);
+        record(g, T6, T7);
+        g[T8] = lw(m, g[V0], 0);
+        g[AT] = (-2i64) as u64;
+        g[T9] = g[T8] & g[AT];
+        sw(m, g[V0], 0, g[T9]);
+    }
+    sw(m, g[V0], 4, g[A1]);
+}
+
+/// `func_80086CC8(a, b, c)`: the halfwords `a`, `b`, `c` at `0x801488B8`.
+/// Leaves `v0 = 0x801488B8`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80086CC8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[V0] = li(0x8014_88B8);
+    for (k, r) in [A0, A1, A2].into_iter().enumerate() {
+        sh(&mut mem, g[V0], 2 * k as i32, g[r]);
+    }
+}

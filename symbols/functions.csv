@@ -1026,14 +1026,14 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80080D08,func_80080D08,ours,0,,recomp,,,
 0x80080DB4,func_80080DB4,ours,4,,recomp,,,
 0x800811C0,func_800811C0,ours,0,,recomp,,,
-0x800811CC,func_800811CC,ours,0,,recomp,,,
+0x800811CC,func_800811CC,ours,0,,rust_verified,unit_diff,high,[0x800A6758] = 1 (game::misc)
 0x800811DC,func_800811DC,ours,1,,recomp,,,
-0x80081260,func_80081260,ours,0,,recomp,,,
+0x80081260,func_80081260,ours,0,,rust_verified,unit_diff,high,[0x800A675C] = 0 (game::misc)
 0x8008126C,func_8008126C,ours,2,,recomp,,,
 0x800812E8,func_800812E8,ours,3,,recomp,,,
 0x80081360,func_80081360,ours,3,,recomp,,,
-0x80081530,func_80081530,ours,0,,recomp,,,
-0x800815FC,func_800815FC,ours,0,,recomp,,,
+0x80081530,func_80081530,ours,0,,rust_verified,unit_diff,high,"1 if the first n bytes are equal (n <= 0 too), else 0 (game::misc)"
+0x800815FC,strcmp,ours,0,,rust_verified,unit_diff,high,byte strcmp returning -1/0/1 (game::misc)
 0x80081680,func_80081680,ours,0,,recomp,,,
 0x80081700,func_80081700,ours,0,,recomp,,,
 0x80081730,func_80081730,ours,0,,recomp,,,
@@ -1059,7 +1059,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80083134,func_80083134,ours,2,,recomp,,,
 0x80083190,func_80083190,ours,1,,recomp,,,
 0x800833B4,func_800833B4,ours,1,,recomp,,,
-0x800834DC,func_800834DC,ours,0,,recomp,,,
+0x800834DC,func_800834DC,ours,0,,rust_verified,unit_diff,high,"empty, spills a0..a3 (game::misc)"
 0x800834F0,func_800834F0,ours,2,,recomp,,,
 0x80083D80,func_80083D80,ours,1,,recomp,,,
 0x80083EFC,func_80083EFC,ours,4,,recomp,,,
@@ -1069,7 +1069,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800845A0,func_800845A0,ours,7,,recomp,,,
 0x80084A3C,func_80084A3C,ours,8,,recomp,,,
 0x80084BDC,func_80084BDC,ours,2,,recomp,,,
-0x80084C30,func_80084C30,ours,0,,recomp,,,
+0x80084C30,func_80084C30,ours,0,,rust_verified,unit_diff,high,"fill the RSP graphics OSTask at [0x801488C0] (rspboot, F3DEX2 for type 5) (game::misc)"
 0x80084CC4,func_80084CC4,ours,2,,recomp,,,
 0x80084D44,func_80084D44,ours,15,,recomp,,,
 0x80084EB8,func_80084EB8,ours,2,,recomp,,,
@@ -1083,7 +1083,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80085FB0,func_80085FB0,ours,3,,recomp,,,
 0x80086178,func_80086178,ours,0,,recomp,,,
 0x800862D8,func_800862D8,ours,4,,recomp,,,
-0x8008635C,func_8008635C,ours,0,,recomp,,,
+0x8008635C,func_8008635C,ours,0,,rust_verified,unit_diff,high,"record i at 0x80120DF0 (0x170 bytes): bit 0 by v >= 0, +4 = v (game::misc)"
 0x800863C8,func_800863C8,ours,4,,recomp,,,
 0x800865E8,func_800865E8,ours,5,,recomp,,,
 0x80086730,func_80086730,ours,1,,recomp,,,
@@ -1092,7 +1092,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80086A20,func_80086A20,ours,1,,recomp,,,
 0x80086B8C,func_80086B8C,ours,1,,recomp,,,
 0x80086CA0,func_80086CA0,ours,1,,recomp,,,
-0x80086CC8,func_80086CC8,ours,0,,recomp,,,
+0x80086CC8,func_80086CC8,ours,0,,rust_verified,unit_diff,high,three halfwords at 0x801488B8 (game::misc)
 0x80086CE0,func_80086CE0,ours,8,,recomp,,,
 0x80086EB4,func_80086EB4,ours,2,,recomp,,,
 0x80087080,func_80087080,ours,5,,recomp,,,
