@@ -4,7 +4,7 @@
 // Ports keep N64Recomp's names (func_80005AFC), capitals included.
 #![allow(non_snake_case)]
 
-use crate::recomp::{addu, div, enter, fpu, lbu, lh, li, lw, multu, reg::*, s32, sb, sh, sll, slt, sltu, sra, subu, sw, RecompContext};
+use crate::recomp::{addu, div, enter, fpu, lbu, lh, li, lw, multu, reg::*, s32, sb, sh, sll, sllv, slt, sltu, sra, subu, sw, RecompContext};
 
 /// `func_80005AFC`: decrement `[0x8009A29C]` if it is positive (signed).
 ///
@@ -1225,4 +1225,384 @@ pub unsafe extern "C" fn func_8000787C(rdram: *mut u8, ctx: *mut RecompContext) 
     f[8].set_u32l(fpu::trunc_w_s(f[6].fl()));
     g[T8] = s32(f[8].u32l());
     sw(m, g[AT], -0x5CD8, g[T8]);
+}
+
+/// `func_8000C530`: returns at once.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000C530(_rdram: *mut u8, _ctx: *mut RecompContext) {}
+
+/// The current id of the push/pop pair [`func_8000C5F0`] / [`func_8000C658`].
+pub const CURRENT_ID: u32 = 0x8009_B800;
+/// The current id's live word; saved to `SAVED_WORDS[id]` when it changes.
+pub const CURRENT_WORD: u32 = 0x8009_B7DC;
+/// One saved word per id. There is room for three before [`CURRENT_ID`]:
+/// `SAVED_WORDS[3]` is `CURRENT_ID` itself.
+pub const SAVED_WORDS: u32 = 0x8009_B7F4;
+/// The stack of ids (words); `ID_STACK[depth]` is the current one.
+pub const ID_STACK: u32 = 0x800D_5718;
+/// The stack depth.
+pub const ID_DEPTH: u32 = 0x800D_578C;
+
+/// `func_8000C5F0(id)`: push `id` as the current id.
+/// `SAVED_WORDS[current] = CURRENT_WORD`, `depth += 1`, `ID_STACK[depth] =
+/// id`, then `CURRENT_ID = id` and `CURRENT_WORD = SAVED_WORDS[id]`.
+/// QUIRK: nothing bounds the depth or the ids; ids from 3 up alias
+/// `CURRENT_ID` and what follows it.
+///
+/// Leaves `v1 = CURRENT_ID`, `a1 = CURRENT_WORD`, `v0 = SAVED_WORDS`, `a2 =
+/// ID_DEPTH`, `at`, `t0` = the old depth, `t1` the new, `t3`-`t9` the
+/// scaled indices and words.
+///
+/// Domain: the ids and depth index RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000C5F0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V1] = li(CURRENT_ID);
+    g[T7] = lw(m, g[V1], 0);
+    g[A1] = li(CURRENT_WORD);
+    g[T6] = lw(m, g[A1], 0);
+    g[V0] = li(SAVED_WORDS);
+    g[T8] = sll(g[T7], 2);
+    g[T9] = addu(g[V0], g[T8]);
+    g[A2] = li(ID_DEPTH);
+    sw(m, g[T9], 0, g[T6]);
+    g[T0] = lw(m, g[A2], 0);
+    g[T4] = sll(g[A0], 2);
+    g[T1] = addu(g[T0], 1);
+    g[T3] = sll(g[T1], 2);
+    sw(m, g[A2], 0, g[T1]);
+    g[AT] = addu(li(0x800D_0000), g[T3]);
+    sw(m, g[AT], 0x5718, g[A0]);
+    g[T5] = addu(g[V0], g[T4]);
+    g[T7] = lw(m, g[T5], 0);
+    sw(m, g[V1], 0, g[A0]);
+    sw(m, g[A1], 0, g[T7]);
+}
+
+/// `func_8000C658()`: pop the current id. `SAVED_WORDS[current] =
+/// CURRENT_WORD`; if `depth > 0` (signed) it decrements; then `CURRENT_ID =
+/// ID_STACK[depth]` and `CURRENT_WORD = SAVED_WORDS[CURRENT_ID]`. QUIRK: at
+/// depth 0 or below it doesn't decrement and reloads `ID_STACK[depth]`.
+///
+/// Leaves `a0 = CURRENT_ID`, `a1 = CURRENT_WORD`, `v1 = SAVED_WORDS`, `a2 =
+/// ID_DEPTH`, `v0` = the depth now, `t0` = the old depth - 1, `t2` = the new
+/// id, `t1`, `t4`-`t9`.
+///
+/// Domain: the ids and depth index RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000C658(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[A0] = li(CURRENT_ID);
+    g[T7] = lw(m, g[A0], 0);
+    g[A1] = li(CURRENT_WORD);
+    g[T6] = lw(m, g[A1], 0);
+    g[V1] = li(SAVED_WORDS);
+    g[T8] = sll(g[T7], 2);
+    g[T9] = addu(g[V1], g[T8]);
+    g[A2] = li(ID_DEPTH);
+    sw(m, g[T9], 0, g[T6]);
+    g[V0] = lw(m, g[A2], 0);
+    g[T2] = li(0x800D_0000);
+    g[T0] = addu(g[V0], u64::MAX);
+    if (g[V0] as i64) > 0 {
+        sw(m, g[A2], 0, g[T0]);
+        g[V0] = g[T0];
+    }
+    g[T1] = sll(g[V0], 2);
+    g[T2] = addu(g[T2], g[T1]);
+    g[T2] = lw(m, g[T2], 0x5718);
+    g[T4] = sll(g[T2], 2);
+    g[T5] = addu(g[V1], g[T4]);
+    g[T7] = lw(m, g[T5], 0);
+    sw(m, g[A0], 0, g[T2]);
+    sw(m, g[A1], 0, g[T7]);
+}
+
+/// `func_8000DA6C()`: returns `[0x8009B7E4]`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000DA6C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    ctx.gpr[V0] = lw(&mem, li(0x800A_0000), -0x481C);
+}
+
+/// `func_8000E9BC(p, b0, b1, b2, b3, b4, b5)`: if `p` and `q = [p + 0xC]`
+/// are nonzero, store each of the six values as a byte at `q + 0x20` ..
+/// `q + 0x25`, skipping negative ones. Each value is the low halfword of its
+/// argument, signed: `a1`-`a3`, then the fifth to seventh arguments from
+/// the stack (`[sp + 0x12]`, `[sp + 0x16]`, `[sp + 0x1A]`).
+///
+/// Spills `a1`-`a3` to their argument slots; leaves `t6`, `t8`, `t0`, `t7`
+/// = the first value, `a2`, `a3` the next two, `v0 = q` if `p != 0`, and `v1`
+/// = the last stack value read (all three when `q != 0`).
+///
+/// Domain: canonical `sp` with the argument slots in RDRAM; canonical `p`,
+/// and `q` when `p != 0`, in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000E9BC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T6] = sll(g[A1], 16);
+    sw(m, g[SP], 8, g[A2]);
+    g[T8] = sll(g[A2], 16);
+    sw(m, g[SP], 0xC, g[A3]);
+    g[T0] = sll(g[A3], 16);
+    g[A3] = sra(g[T0], 16);
+    g[A2] = sra(g[T8], 16);
+    g[T7] = sra(g[T6], 16);
+    sw(m, g[SP], 4, g[A1]);
+    if g[A0] == 0 {
+        return;
+    }
+    g[V0] = lw(m, g[A0], 0xC);
+    if g[V0] == 0 {
+        return;
+    }
+    if (g[T7] as i64) >= 0 {
+        sb(m, g[V0], 0x20, g[T7]);
+    }
+    if (g[A2] as i64) >= 0 {
+        sb(m, g[V0], 0x21, g[A2]);
+    }
+    if (g[A3] as i64) >= 0 {
+        sb(m, g[V0], 0x22, g[A3]);
+    }
+    // Each lh is in the delay slot of the test before it, so it runs either way.
+    g[V1] = lh(m, g[SP], 0x12);
+    if (g[V1] as i64) >= 0 {
+        sb(m, g[V0], 0x23, g[V1]);
+    }
+    g[V1] = lh(m, g[SP], 0x16);
+    if (g[V1] as i64) >= 0 {
+        sb(m, g[V0], 0x24, g[V1]);
+    }
+    g[V1] = lh(m, g[SP], 0x1A);
+    if (g[V1] as i64) >= 0 {
+        sb(m, g[V0], 0x25, g[V1]);
+    }
+}
+
+/// `func_8000FCA4(k, b)`: the low byte of word `k` of the array at
+/// `0x8009B824` (its byte at `+3`) = `b`; spills `a1`. QUIRK: `k` is unbounded.
+///
+/// Leaves `t7 = 4k`, `at = 0x800A0000 + 4k`.
+///
+/// Domain: canonical `sp` with `[sp + 4]` in RDRAM; the byte in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000FCA4(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T7] = sll(g[A0], 2);
+    g[AT] = addu(li(0x800A_0000), g[T7]);
+    sw(m, g[SP], 4, g[A1]);
+    sb(m, g[AT], -0x47D9, g[A1]);
+}
+
+/// `func_8000FE1C()`: set two blocks to -1: for `k` in 0..2, the word at
+/// `0x8009B814 + 4k` and the eight words at `0x8009B82C + 0x20k`.
+///
+/// Leaves `v1 = 0x8009B81C`, `a0 = t0 = 0x8009B86C`, `a1 = a0`, `v0 = a3 =
+/// 8`, `a2 = -1`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000FE1C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T0] = li(0x8009_B86C);
+    g[A0] = li(0x8009_B82C);
+    g[V1] = li(0x8009_B814);
+    g[A3] = 8;
+    g[A2] = u64::MAX;
+    loop {
+        sw(m, g[V1], 0, g[A2]);
+        g[V0] = 0;
+        g[A1] = g[A0];
+        loop {
+            g[V0] = addu(g[V0], 4);
+            sw(m, g[A1], 0, g[A2]);
+            sw(m, g[A1], 4, g[A2]);
+            sw(m, g[A1], 8, g[A2]);
+            sw(m, g[A1], 0xC, g[A2]);
+            g[A1] = addu(g[A1], 0x10);
+            if g[V0] == g[A3] {
+                break;
+            }
+        }
+        g[A0] = addu(g[A0], 0x20);
+        g[V1] = addu(g[V1], 4);
+        if g[A0] == g[T0] {
+            break;
+        }
+    }
+}
+
+/// `func_8000FE78()`: the 20 words at `0x800D5AA8` = -9999, four per
+/// iteration. Leaves `v1 = a0 = 0x800D5AF8`, `v0 = -9999`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000FE78(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[A0] = li(0x800D_5AF8);
+    g[V1] = li(0x800D_5AA8);
+    g[V0] = (-0x270Fi64) as u64;
+    loop {
+        g[V1] = addu(g[V1], 0x10);
+        sw(m, g[V1], -0xC, g[V0]);
+        sw(m, g[V1], -8, g[V0]);
+        sw(m, g[V1], -4, g[V0]);
+        sw(m, g[V1], -0x10, g[V0]);
+        if g[V1] == g[A0] {
+            break;
+        }
+    }
+}
+
+/// `func_8000FEF0()`: the ten words at `0x800D5F80` and the ten at
+/// `0x800D5FA8` = -1 (word `k` of the first, then of the second, per
+/// iteration), then the 40 bytes at `0x800D5C38` = 0, four per iteration. The two word arrays are the ones
+/// [`func_80010014`] sets and the bytes are [`func_8000FFF8`]'s.
+///
+/// Leaves `a0 = a1 = 0x800D5FD0`, `at = 0`, `v1 = v0 = 0x800D5C60`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000FEF0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[A1] = li(0x800D_5FD0);
+    g[A0] = li(0x800D_5FA8);
+    g[V1] = li(0x800D_5F80);
+    g[V0] = u64::MAX;
+    loop {
+        g[A0] = addu(g[A0], 4);
+        g[AT] = sltu(g[A0], g[A1]);
+        g[V1] = addu(g[V1], 4);
+        sw(m, g[V1], -4, g[V0]);
+        sw(m, g[A0], -4, g[V0]);
+        if g[AT] == 0 {
+            break;
+        }
+    }
+    g[V0] = li(0x800D_5C60);
+    g[V1] = li(0x800D_5C38);
+    loop {
+        g[V1] = addu(g[V1], 4);
+        sb(m, g[V1], -3, 0);
+        sb(m, g[V1], -2, 0);
+        sb(m, g[V1], -1, 0);
+        sb(m, g[V1], -4, 0);
+        if g[V1] == g[V0] {
+            break;
+        }
+    }
+}
+
+/// `func_8000FFF8(k)`: if `k < 40` (signed), the byte at `0x800D5C38 + k` =
+/// 0. QUIRK: negative `k` writes before the array, and the compare is on
+/// the whole 64-bit register while the address uses its low word, so e.g.
+/// `i64::MIN` clears byte 0.
+///
+/// Leaves `at = 0x800D0000` (`+ k` when it stores).
+///
+/// Domain: `0x800D5C38 + k` in RDRAM for `k < 40`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000FFF8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[AT] = slt(g[A0], 0x28);
+    let in_range = g[AT] != 0;
+    g[AT] = li(0x800D_0000);
+    if in_range {
+        g[AT] = addu(g[AT], g[A0]);
+        sb(&mut mem, g[AT], 0x5C38, 0);
+    }
+}
+
+/// `func_80010014(k, a, b)`: if `k < 10` (signed), `[0x800D5F80 + 4k] = a`
+/// and `[0x800D5FA8 + 4k] = b`. QUIRK: negative `k` writes before the
+/// arrays; the compare is 64-bit, the address uses the low word.
+///
+/// Leaves `at` = 1 if `k < 10` (then `0x800D0000 + 4k`) else 0, `v0 = 4k`.
+///
+/// Domain: both words in RDRAM for `k < 10`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80010014(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[AT] = slt(g[A0], 0xA);
+    g[V0] = sll(g[A0], 2);
+    if g[AT] != 0 {
+        g[AT] = addu(li(0x800D_0000), g[V0]);
+        sw(m, g[AT], 0x5F80, g[A1]);
+        g[AT] = addu(li(0x800D_0000), g[V0]);
+        sw(m, g[AT], 0x5FA8, g[A2]);
+    }
+}
+
+/// `func_80010040()`: `[0x8009B86C] = 0`. Leaves `at = 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80010040(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    ctx.gpr[AT] = li(0x800A_0000);
+    sw(&mut mem, ctx.gpr[AT], -0x4794, 0);
+}
+
+/// Eight (shift, base) pairs decoding 16-bit handles ([`func_8001004C`]).
+pub const HANDLE_SEGMENTS: u32 = 0x8009_B888;
+
+/// `func_8001004C(h)`: decode a handle: segment `s = (h & 0xE000) >> 13`,
+/// index `i = (h & 0x1FFC) >> 2`; returns `base + (i << shift)` with
+/// `(shift, base)` the words at `HANDLE_SEGMENTS + 8s`. The shift is `sllv`,
+/// by `shift & 31`.
+///
+/// Leaves `t6`-`t9`, `a1` = the pair's address, `t2` = shift, `t4` = base,
+/// `t0`, `t1 = i`, `t3 = i << shift`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8001004C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let m = &mem;
+    let g = &mut ctx.gpr;
+    g[T6] = g[A0] & 0xE000;
+    g[T7] = sra(g[T6], 13);
+    g[T9] = li(HANDLE_SEGMENTS);
+    g[T8] = sll(g[T7], 3);
+    g[A1] = addu(g[T8], g[T9]);
+    g[T2] = lw(m, g[A1], 0);
+    g[T0] = g[A0] & 0x1FFC;
+    g[T4] = lw(m, g[A1], 4);
+    g[T1] = sra(g[T0], 2);
+    g[T3] = sllv(g[T1], g[T2]);
+    g[V0] = addu(g[T4], g[T3]);
 }

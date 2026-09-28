@@ -164,10 +164,10 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8000B98C,func_8000B98C,ours,1,,recomp,,,
 0x8000BB78,func_8000BB78,ours,1,,recomp,,,
 0x8000BC10,func_8000BC10,ours,6,,recomp,,,
-0x8000C530,func_8000C530,ours,0,,recomp,,,
+0x8000C530,func_8000C530,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
 0x8000C540,func_8000C540,ours,8,,recomp,,,
-0x8000C5F0,func_8000C5F0,ours,0,,recomp,,,
-0x8000C658,func_8000C658,ours,0,,recomp,,,
+0x8000C5F0,func_8000C5F0,ours,0,,rust_verified,unit_diff,high,"push current id (0x8009B800) saving its word; QUIRK unbounded, ids >= 3 alias (game::misc)"
+0x8000C658,func_8000C658,ours,0,,rust_verified,unit_diff,high,pop current id; QUIRK no decrement at depth <= 0 (game::misc)
 0x8000C6C8,func_8000C6C8,ours,0,,recomp,,,
 0x8000C724,func_8000C724,ours,0,,recomp,,,
 0x8000C77C,func_8000C77C,ours,6,,recomp,,,
@@ -181,32 +181,32 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8000D90C,func_8000D90C,ours,2,,recomp,,,
 0x8000D960,func_8000D960,ours,5,,recomp,,,
 0x8000D9A8,func_8000D9A8,ours,1,,recomp,,,
-0x8000DA6C,func_8000DA6C,ours,0,,recomp,,,
+0x8000DA6C,func_8000DA6C,ours,0,,rust_verified,unit_diff,high,returns [0x8009B7E4] (game::misc)
 0x8000DA78,func_8000DA78,ours,8,,recomp,,,
 0x8000E680,func_8000E680,ours,1,,recomp,,,
 0x8000E738,func_8000E738,ours,1,,recomp,,,
 0x8000E7F0,func_8000E7F0,ours,8,,recomp,,,
 0x8000E8C4,func_8000E8C4,ours,1,,recomp,,,
-0x8000E9BC,func_8000E9BC,ours,0,,recomp,,,
+0x8000E9BC,func_8000E9BC,ours,0,,rust_verified,unit_diff,high,"six optional bytes at [p+0xC]+0x20, negative = skip (game::misc)"
 0x8000EA4C,func_8000EA4C,ours,1,,recomp,,,
 0x8000EBE8,func_8000EBE8,ours,1,,recomp,,,
 0x8000EEE0,func_8000EEE0,ours,2,,recomp,,,
 0x8000F0DC,func_8000F0DC,ours,3,,recomp,,,
 0x8000F5A0,func_8000F5A0,ours,0,,recomp,,,
 0x8000FA2C,func_8000FA2C,ours,4,,recomp,,,
-0x8000FCA4,func_8000FCA4,ours,0,,recomp,,,
+0x8000FCA4,func_8000FCA4,ours,0,,rust_verified,unit_diff,high,byte 3 of word k at 0x8009B824; QUIRK unbounded (game::misc)
 0x8000FCBC,func_8000FCBC,ours,0,,recomp,,,
 0x8000FD74,func_8000FD74,ours,0,,recomp,,,
-0x8000FE1C,func_8000FE1C,ours,0,,recomp,,,
-0x8000FE78,func_8000FE78,ours,0,,recomp,,,
+0x8000FE1C,func_8000FE1C,ours,0,,rust_verified,unit_diff,high,two blocks at 0x8009B814/0x8009B82C = -1 (game::misc)
+0x8000FE78,func_8000FE78,ours,0,,rust_verified,unit_diff,high,20 words at 0x800D5AA8 = -9999 (game::misc)
 0x8000FEAC,func_8000FEAC,ours,0,,recomp,,,
-0x8000FEF0,func_8000FEF0,ours,0,,recomp,,,
+0x8000FEF0,func_8000FEF0,ours,0,,rust_verified,unit_diff,high,"0x800D5F80/5FA8 words = -1, 0x800D5C38 bytes = 0 (game::misc)"
 0x8000FF54,func_8000FF54,ours,0,,recomp,,,
 0x8000FFB8,func_8000FFB8,ours,0,,recomp,,,
-0x8000FFF8,func_8000FFF8,ours,0,,recomp,,,
-0x80010014,func_80010014,ours,0,,recomp,,,
-0x80010040,func_80010040,ours,0,,recomp,,,
-0x8001004C,func_8001004C,ours,0,,recomp,,,
+0x8000FFF8,func_8000FFF8,ours,0,,rust_verified,unit_diff,high,"byte k (< 40) at 0x800D5C38 = 0; QUIRK 64-bit compare, low-word address (game::misc)"
+0x80010014,func_80010014,ours,0,,rust_verified,unit_diff,high,set word pair k (< 10); QUIRK as func_8000FFF8 (game::misc)
+0x80010040,func_80010040,ours,0,,rust_verified,unit_diff,high,[0x8009B86C] = 0 (game::misc)
+0x8001004C,func_8001004C,ours,0,,rust_verified,unit_diff,high,"decode handle via (shift, base) table 0x8009B888 (game::misc)"
 0x80010080,func_80010080,ours,9,,recomp,,,
 0x800105DC,func_800105DC,ours,2,,recomp,,,
 0x80010B34,func_80010B34,ours,2,,recomp,,,

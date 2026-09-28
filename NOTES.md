@@ -24,10 +24,21 @@ Running log of discoveries and decisions. Newest session at the bottom.
 - About 250 UI strings sit in the block at ROM `0x0A0000` (just after code), e.g. `INSERT A CONTROLLER INTO`. These are the main string anchors for Phase 2 matching against SW_RACER_RE.
 - Everything past about `0x100000` looks compressed or binary (assets).
 
-### FPU control register (SPEC §10 Q5)
-- ~340 `cfc1`/`ctc1 $31` pairs in game code, nearly all in the pattern *save FCR31 → set rounding mode → `cvt.w.s` → restore*. This is a compiler idiom for float→int conversions, not a global mode change. **The recompiler must honour the local rounding mode**, and Rust ports of these conversions need to reproduce the rounding mode the idiom selects.
-- Other FCR31 writes: `0x8008d370` (`$k1`, exception handler context restore) and `0x80093c24` (likely `__osSetFpcCsr`). **(verify)** what the initial FCR31 value is.
-- 557 `trunc.w.s` as well. Both idioms exist; this doesn't settle IDO vs GCC by itself, though the cfc1/ctc1 dance is characteristic of IDO **(verify)**.
+### FPU control register (SPEC §10 Q5; settled session 6)
+- **Initial FCR31 is `0x01000800`**: FS (flush subnormals to zero) | EV (trap on invalid operation), round to nearest. Written once by `func_8008B580` (libultra's `__osInitialize_common`, which also sets Status.CU1) through `func_80093C20` (`__osSetFpcCsr`: `cfc1 v0; ctc1 a0`). The only other FCR31 write is the exception handler's context restore (`0x8008D370`).
+- **Every game-side `cfc1` (35 functions) is IDO's float→unsigned idiom**, not a plain rounding switch: save FCR31; write 1 (round toward zero, *all enables off*, FS off); `cvt.w.s`; `cfc1` and test the V/Z/O/U flags (`andi 0x78`). No flags: result = the word, and a negative word becomes `0xFFFFFFFF`. Flags: subtract 2^31 (`0x4F000000`), convert again, OR `0x80000000` (or `0xFFFFFFFF` if that overflows too); restore FCR31. It works on hardware only because the `ctc1 1` turns EV off for the conversion. The compiler interleaves unrelated instructions, so the regions look irregular.
+- 35 flag-testing functions: `8000DA78 8000EEE0 8000FA2C 80010080 800105DC 80010B34 80011F38 80019BB4 8001A408 8001C404 8001D05C 8001E6C0 80021F84 80022798 800228C0 80028E78 800290A4 8002B574 8002BBA4 8002C780 8002CC28 8002D048 800444B0 80046DC4 80047A78 80047DB0 80055D38 80056464 80056844 80058058 80059E54 8005B3F0 8005C36C 80060DE4 8007C074`. `cargo xtask next-function` flags them ("tests FCR31 flags").
+- **The oracle differs from hardware there**: `get_cop1_cs()` returns the rounding bits only, so the flag test always sees 0 and the second path never runs. Inputs in [2^31, 2^32) come out `0xFFFFFFFF` in the C and correct on hardware. Ports follow the C (the path stays in the code, dead, as it is in the C); a lift-phase decision.
+- 557 `trunc.w.s`, 72 `trunc.w.d`, 192 `cvt.w.s`, 24 `cvt.w.d`; no `round`/`ceil`/`floor` anywhere.
+
+### Floats in ports (decision, session 6; `game::recomp::fpu`)
+How N64Recomp's C does floats, measured on this host (`oracle/c/fpu_probe.c`, `difftest/tests/fpu.rs`):
+- **Arithmetic** is host IEEE single/double, round to nearest, **with subnormals** (the hardware flushes them: FS). `MUL_S` etc. are plain `*`, never fused. Rust `f32` ops compile to the same SSE instructions, so ports use them directly. For non-NaN operands, one `+ - * / sqrt` computed in f64 and narrowed equals the f32 op, so that mistake is invisible; `mul_add` is not, and a mutant test must catch it (it takes ordinary-range values, see below).
+- **`NAN_CHECK` is an active `assert`** in the oracle (no `NDEBUG`). It guards every arithmetic operand, `neg`, `sqrt`, `cvt.d.s` and `cvt.s.d`, but **not** compares, moves or float→int conversions. A NaN operand stops the C (exit `0xC0000409`, no dialog; `difftest/tests/nan_domain.rs`). **So NaN operands of guarded ops are outside every port's domain**; the hardware would trap too (EV). NaN *results* (`inf - inf`, `0 * inf`) are computed and compared bit for bit (x86 default NaN `0xFFC00000`, not MIPS `0x7FBFFFFF`: another C-vs-hardware difference ports follow). NaN payloads are tested where the C doesn't look at them.
+- **Conversions honour the host rounding mode** (`set_cop1_cs` = `fesetround`). Rust can't set it, so **ports keep FCR31's rounding bits in a local `fcr31`** (0 at entry: boot sets round-to-nearest and the idiom restores) and pass it to `fpu::cvt_w_s/cvt_w_d/cvt_s_w/cvt_s_d`. `get_cop1_cs` gives `fcr31`, `set_cop1_cs(v)` sets `fcr31 = v & 3`. Arithmetic only ever runs round-to-nearest; the translator adds a `debug_assert` in functions that write FCR31.
+- **Out-of-range and NaN conversions are host-specific**, reproduced exactly by the helpers: `CVT_W_S` (MSVC `lrintf`) gives **0** for NaN and |x| > 2^31, but `0x80000000` for 2^31 itself; `CVT_W_D` (`lrint`) gives 0 whenever the rounded value is outside `i32`; `TRUNC_W_*` (C cast = `cvttss2si`) gives `0x80000000`. glibc would differ (64-bit `long`), and so does the hardware.
+- Odd FPRs are only reached through `f_odd` (`mtc1`/`mfc1` of a double's high half), never with an odd `CHECK_FR`.
+- **Test strategies for floats** need signed zeros, subnormals, halfway cases, infinities *and* ordinary values with full mantissas in the game's range (e.g. ±1e4). Edge values alone missed both fused-multiply-add mutants: random bit patterns give terms of wildly different size, and half-integers square exactly.
 
 ### 64-bit instructions
 - `ld`/`sd`/`dsll32`/`dsra32`/`ddiv`/`ddivu`/`dmultu` are confined to about `0x8008a000–0x8008d000`, probably libultra `__ll_*` 64-bit helpers and `_Printf`. Game code appears to be 32-bit. `cvt.l.s`/`cvt.s.l` at `0x8008c648`/`0x8008c700` (libultra `__f_to_ll` family?).
@@ -151,6 +162,33 @@ Rules for writing a port with calls:
 
 ### Runtime hooks (session 5)
 Ports that must do what generated code does with the runtime call the same hook: `game::imports::runtime` declares them (`pause_self` so far), and whoever links `game` defines them. That's the oracle's stub runtime in tests, where every hook traps. Tests of code that reaches a trap run in a child process (`crates/difftest/tests/texture_block_init.rs`, like `crates/oracle/tests/traps.rs`).
+
+### The OS boundary and message-queue doubles (design, session 6; not built yet)
+**What blocks game code** (`symbols/callgraph.csv`; OS range = `>= 0x80087CC0`). 363 unverified game functions reach the OS range through 65 OS functions they call directly. By what each of those reaches:
+
+| Family | Boundary fns | Game fns reaching one | Examples |
+|---|---|---|---|
+| pure (computation only) | 26 | 316 | `__ll_lshift`/`__ull_div`/`__ll_mul` (8008AB84/AB48/AC48), `sinf`/`cosf` (8008A8C0/A750), `osContGetReadData`, `alBnkfNew`, `osCreateThread` |
+| hw (device registers, CP0; no queues) | 22 | 258 | `osGetCount` (8008C550), `osAiGetLength` (8008ADA0), `osInvalDCache`, `osStartThread` (CP0 via `__osDisableInt`) |
+| msg (message queues / threads) | 14 | 187 | `osRecvMesg` 179, `osPfs*` 165, `osContStartReadData` 162, `8008A710` 109, `osPiStartDma` 58 |
+| indirect (function pointers) | 3 | 206 | `alAudioFrame` (80088538) 161, `sprintf` (8008A6B4, `_Printf`'s output callback) 88, `alInit` 4 |
+
+If a family's boundary functions were satisfied, how many of the 363 would have nothing else in the OS range: pure 66; pure + hw 135; + msg 157; **+ indirect 363**. So message queues alone unblock little: **indirect calls (audio and sprintf) gate more game code than message queues do**.
+
+**`func_80008F28` is not a message wait.** It is `if ([0x8009A2B8]) func_8002E124()`. The flag is also tested by `func_80007A44` and `func_8000787C`, and looks like "audio running" (**guess**). `func_8002E124` services audio: `osAiGetLength`, the 64-bit helpers, then `func_800073A4` toward `alAudioFrame`. So under the ROM reads, `heap_set_level`'s `func_80007E80` wait and `func_8002E034`'s handshake is the audio frame, reaching all four families. No double of the message layer alone makes it honest.
+
+**Plan, in order of payoff:**
+1. **Pure OS functions: port them, don't double them.** They are recompiled C like game code and the translator handles most (the 64-bit helpers need `ld`/`sd`/`dsllv`/`ddivu`/`dmultu` shapes). `sinf`/`cosf` must be ported (the rule on the game's own maths routines). Replacing libultra wholesale (SPEC Phases 6-7) means these ports are the replacement.
+2. **Indirect calls: support `LOOKUP_FUNC`.** The oracle's stub `get_function(vram)` should resolve to the compiled-in C, a double, or a trap, like direct callees. Ports then call `recomp::call(get_function(target))` through a runtime hook, and the translator emits that instead of refusing. That covers `sprintf`'s callback and `alAudioFrame`'s handlers, and the ~50 functions whose only blocker is an indirect call.
+3. **hw doubles take injected values.** `osGetCount`, `osAiGetLength`, `osAiGetStatus` and friends return what the test supplies. That is a contract: the function's effect *is* returning the register, and both sides of a difftest see the same value.
+4. **Message-queue contract doubles** over the real RDRAM layout, for a single-threaded test world:
+   - `osCreateMesgQueue(mq, msg, count)`: port it (pure). Layout (`func_800880E0`): `+0 mtqueue`, `+4 fullqueue` (both `&__osThreadTail` = `0x800A7BB0` when empty), `+8 validCount`, `+0xC first`, `+0x10 msgCount`, `+0x14 msg` (array of words).
+   - `osSendMesg(mq, m, flag)` (8008C930): full (`validCount >= msgCount`): NOBLOCK returns -1; **BLOCK is refused** (it waits for another thread). Otherwise `msg[(first + validCount) % msgCount] = m`, `validCount++`, return 0. `osJamMesg` (8008C7B0): the same but `first = (first + msgCount - 1) % msgCount` and the message goes at the new `first`.
+   - `osRecvMesg(mq, &m, flag)` (80087E80): with a message, `*m = msg[first]` if `m != 0`, `first = (first + 1) % msgCount`, `validCount--`, return 0. **Empty + NOBLOCK returns -1; empty + BLOCK is refused**, like the ROM doubles refuse bad transfers, unless the test installed a scripted *event source* for that queue (e.g. "PI DMA done", "audio thread replied"). The source posts the message, and the double records it in the call trace.
+   - Waking a waiting thread (`mtqueue`/`fullqueue` not `__osThreadTail`) is refused: no other threads exist. `osStartThread` of a thread that would preempt is refused for the same reason. `osCreateThread` is pure and gets ported.
+   - Register leftovers: like the ROM doubles, restore callee-saved registers sign-extended and scramble caller-saved ones. Stack below `sp` isn't reproduced.
+   - Device drivers on top (`osPiStartDma`, `osContStartReadData`, `osPfs*`, `osAiSetNextBuffer`) get their own contracts: DMA from the ROM image or a test input script, then a completion message on the caller's queue through the msg doubles.
+5. `func_8002E124` (audio service) and with it `func_80008F28`, the ROM-read chain and `heap_set_level` become portable once 1-4 cover `alAudioFrame`'s tree. Until then the ROM doubles stay the contract for the chain.
 
 ## Upstream projects (checked 2026-09-28)
 
