@@ -10,6 +10,7 @@
 //! them under the C names, to override the recompiled code in the game build,
 //! will be opt-in when that build exists.
 
+pub mod asset;
 pub mod recomp;
 pub mod util;
 
@@ -23,4 +24,7 @@ pub struct Ported {
 }
 
 /// Every ported function (status `rust_verified` in `symbols/functions.csv`).
-pub const PORTED: &[Ported] = &[Ported { vram: 0x8000_0554, name: "func_80000554", func: util::func_80000554 }];
+pub const PORTED: &[Ported] = &[
+    Ported { vram: 0x8000_0554, name: "func_80000554", func: util::func_80000554 },
+    Ported { vram: 0x8001_1940, name: "func_80011940", func: asset::func_80011940 },
+];

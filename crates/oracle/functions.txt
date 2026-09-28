@@ -3,3 +3,4 @@
 # Calls from these to functions not listed here are linked to stubs that trap.
 
 func_80000554  # zero n words (util::func_80000554)
+func_80011940  # Comp/Wolf LZSS decompressor (asset::func_80011940)

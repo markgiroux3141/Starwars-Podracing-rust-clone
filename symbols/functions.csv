@@ -224,11 +224,11 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800118F8,func_800118F8,ours,1,,recomp,,,
 0x80011918,func_80011918,ours,0,,recomp,,,
 0x80011928,func_80011928,ours,0,,recomp,,,
-0x80011940,func_80011940,ours,0,,recomp,,,
-0x80011B18,func_80011B18,ours,15,,recomp,,,
+0x80011940,comp_decompress,ours,0,asset,rust_verified,unit_diff,high,"Comp/Wolf LZSS (NOTES); QUIRK: window = src-0x1000, uninitialised"
+0x80011B18,rom_read_dma,ours,15,asset,recomp,,med,osPiStartDma + polled osRecvMesg; one-time init func_8002E034
 0x80011BDC,func_80011BDC,ours,15,,recomp,,,
-0x80011CDC,func_80011CDC,ours,16,,recomp,,,
-0x80011D60,func_80011D60,ours,16,,recomp,,,
+0x80011CDC,rom_read,ours,16,asset,recomp,,med,rom_read_dma in 0x800-byte chunks
+0x80011D60,rom_read_small,ours,16,asset,recomp,,med,as rom_read via func_80011BDC; headers/tables
 0x80011DF0,func_80011DF0,ours,0,,recomp,,,
 0x80011E54,func_80011E54,ours,0,,recomp,,,
 0x80011EA4,func_80011EA4,ours,1,,recomp,,,
@@ -466,18 +466,18 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8002FE80,func_8002FE80,ours,0,,recomp,,,
 0x8002FE94,func_8002FE94,ours,0,,recomp,,,
 0x8002FEE4,func_8002FEE4,ours,2,,recomp,,,
-0x8002FF38,func_8002FF38,ours,17,,recomp,,,
+0x8002FF38,sprite_load,ours,17,asset,recomp,,med,sprite block 0x013307F0
 0x80030130,func_80030130,ours,18,,recomp,,,
 0x80030154,func_80030154,ours,18,,recomp,,,
-0x80030174,func_80030174,ours,17,,recomp,,,
+0x80030174,spline_load,ours,17,asset,recomp,,med,spline block 0x012C7F30
 0x80030274,func_80030274,ours,18,,recomp,,,
 0x80030298,func_80030298,ours,2,,recomp,,,
 0x80030304,func_80030304,ours,1,,recomp,,,
-0x80030328,func_80030328,ours,17,,recomp,,,
-0x8003043C,func_8003043C,ours,17,,recomp,,,
-0x800304AC,func_800304AC,ours,18,,recomp,,,
+0x80030328,texture_read,ours,17,asset,recomp,,med,"reads (pixels, palette) of a texture entry"
+0x8003043C,texture_block_init,ours,17,asset,recomp,,med,count -> 0x800DB890; QUIRK: hangs if > 1700
+0x800304AC,texture_get,ours,18,asset,recomp,,med,"texture block 0x0102ABB0 by index, cached at 0x800D9E00"
 0x80030574,func_80030574,ours,0,,recomp,,,
-0x800305E8,func_800305E8,ours,19,,recomp,,,
+0x800305E8,model_load,ours,19,asset,recomp,,med,"model block 0x0141E200: mask, Comp, relocation"
 0x80030964,func_80030964,ours,1,,recomp,,,
 0x80030A7C,func_80030A7C,ours,0,,recomp,,,
 0x80030B68,func_80030B68,ours,0,,recomp,,,
@@ -1104,7 +1104,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800879B8,func_800879B8,ours,0,,recomp,,,
 0x80087CB0,func_80087CB0,ours,0,,recomp,,,
 0x80087CC0,func_80087CC0,ours,0,,recomp,,,privileged instrs; runtime-provided
-0x80087D70,func_80087D70,ours,5,,recomp,,,
+0x80087D70,osPiStartDma,libultra,5,os,recomp,,high,
 0x80087E80,func_80087E80,ours,4,,recomp,,,
 0x80087FC0,func_80087FC0,ours,0,,recomp,,,
 0x80088020,func_80088020,ours,0,,recomp,,,
@@ -1196,7 +1196,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8008BAB0,func_8008BAB0,ours,4,,recomp,,,
 0x8008BC30,func_8008BC30,ours,6,,recomp,,,
 0x8008BD90,func_8008BD90,ours,0,,recomp,,,
-0x8008BDC0,func_8008BDC0,ours,6,,recomp,,,
+0x8008BDC0,osCreatePiManager,libultra,6,os,recomp,,high,
 0x8008BF3C,func_8008BF3C,ours,0,,recomp,,,
 0x8008BFB0,func_8008BFB0,ours,3,,recomp,,,
 0x8008C090,func_8008C090,ours,1,,recomp,,,libultra range?
@@ -1218,7 +1218,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8008C738,func_8008C738,ours,0,,recomp,,,libultra range?
 0x8008C770,func_8008C770,ours,1,,recomp,,,libultra range?
 0x8008C7B0,func_8008C7B0,ours,4,,recomp,,,libultra range?
-0x8008C900,func_8008C900,ours,0,,recomp,,,libultra range?
+0x8008C900,osPiGetCmdQueue,libultra,0,os,recomp,,high,libultra range?
 0x8008C930,func_8008C930,ours,4,,recomp,,,libultra range?
 0x8008CA80,func_8008CA80,ours,0,,recomp,,,libultra range?
 0x8008CAA0,func_8008CAA0,ours,0,,recomp,,,libultra range?
@@ -1332,8 +1332,8 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800941B0,func_800941B0,ours,0,,recomp,,,libultra range?
 0x800941D0,func_800941D0,ours,0,,recomp,,,libultra range?
 0x800941E0,func_800941E0,ours,2,,recomp,,,libultra range?
-0x800944E0,func_800944E0,ours,2,,recomp,,,libultra range?
-0x800945C0,func_800945C0,ours,2,,recomp,,,libultra range?
+0x800944E0,__osPiRawStartDma,libultra,2,os,recomp,,high,libultra range?
+0x800945C0,__osEPiRawStartDma,libultra,2,os,recomp,,high,libultra range?
 0x800947F0,func_800947F0,ours,5,,recomp,,,libultra range?
 0x80094C70,func_80094C70,ours,0,,recomp,,,libultra range?
 0x80094C80,func_80094C80,ours,7,,recomp,,,libultra range?
