@@ -2276,6 +2276,127 @@ pub unsafe extern "C" fn func_8000FCA4(rdram: *mut u8, ctx: *mut RecompContext) 
     sb(m, g[AT], -0x47D9, g[A1]);
 }
 
+/// `func_8000FCBC(i, w, v, x, r, g, b, a)`: for `0 <= i < 2` (64-bit
+/// signed), set slot `i` of the pair of blocks [`func_8000FE1C`] resets:
+/// `[0x8009B814 + 4i] = w`; the float triple at `0x800D57D0 + 12i` = `*v`
+/// (each loaded before its store); the words `0x800D57B0`, `0x800D57A0`,
+/// `0x800D5790` `+ 4i` = -1000 (in that order); the float `[0x8009B81C +
+/// 4i] = x` (`a3`); then the four bytes at `0x8009B824 + 4i` = the low bytes
+/// of the four stack arguments (`sp + 0x10..0x20`), all loaded before the
+/// stores.
+///
+/// Leaves `f12 = x`, `at` = the bound test, `t0 = -1000` for `i >= 0`; on a
+/// store `v0 = 4i`, `t6 = 12i`, `t7 = 0x800D57D0`, `v1` = the triple,
+/// `f4`/`f6`/`f8` its words, `t8 = 0x8009B824`, `a3` = the bytes' address,
+/// `t9 t1 t2 t3` the bytes, `at = 0x800A0000 + 4i`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000FCBC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    f[12].set_u32l(g[A3] as u32);
+    g[AT] = slt(g[A0], 2);
+    if (g[A0] as i64) < 0 {
+        return;
+    }
+    g[T0] = (-0x3E8i64) as u64;
+    if g[AT] == 0 {
+        return;
+    }
+    g[V0] = sll(g[A0], 2);
+    g[AT] = addu(li(0x800A_0000), g[V0]);
+    sw(m, g[AT], -0x47EC, g[A1]);
+    g[T6] = sll(g[A0], 2);
+    f[4].set_u32l(lw(m, g[A2], 0) as u32);
+    g[T6] = subu(g[T6], g[A0]);
+    g[T7] = li(0x800D_57D0);
+    g[T6] = sll(g[T6], 2);
+    g[V1] = addu(g[T6], g[T7]);
+    sw(m, g[V1], 0, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A2], 4) as u32);
+    g[AT] = addu(li(0x800D_0000), g[V0]);
+    sw(m, g[V1], 4, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A2], 8) as u32);
+    g[T8] = li(0x8009_B824);
+    sw(m, g[V1], 8, u64::from(f[8].u32l()));
+    sw(m, g[AT], 0x57B0, g[T0]);
+    sw(m, g[AT], 0x57A0, g[T0]);
+    sw(m, g[AT], 0x5790, g[T0]);
+    g[AT] = addu(li(0x800A_0000), g[V0]);
+    sw(m, g[AT], -0x47E4, u64::from(f[12].u32l()));
+    g[A3] = addu(g[V0], g[T8]);
+    let bytes = [T9, T1, T2, T3];
+    for (k, r) in bytes.into_iter().enumerate() {
+        g[r] = lbu(m, g[SP], 0x13 + 4 * k as i32);
+    }
+    for (k, r) in bytes.into_iter().enumerate() {
+        sb(m, g[A3], k as i32, g[r]);
+    }
+}
+
+/// `func_8000FD74(i, j, w, x, y, r, g, b)`: for `0 <= i < 2` and `0 <= j <
+/// 8` (64-bit signed), set entry `(i, j)` of the 2x8 tables [`func_8000FE1C`]
+/// resets: `[0x8009B82C + 32i + 4j] = w`, the float `[0x800D57E8 + 32i +
+/// 4j] = y` (the stack argument at `sp + 0x10`), the float `[0x800D5828 +
+/// 32i + 4j] = x` (`a3`), and the three bytes at `0x800D5868 + 24i + 3j` =
+/// the low bytes of the stack arguments at `sp + 0x14..0x20`.
+///
+/// Leaves `f12 = x`, `at` = the last bound test (or an address), `v0 = 4j`
+/// once `j >= 0`, and on a store `f4 = y`, `t0`..`t9` the offsets and
+/// bytes, `v1` = the bytes' address.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000FD74(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    f[12].set_u32l(g[A3] as u32);
+    g[AT] = slt(g[A0], 2);
+    if (g[A0] as i64) < 0 || g[AT] == 0 {
+        return;
+    }
+    g[AT] = slt(g[A1], 8);
+    if (g[A1] as i64) < 0 {
+        return;
+    }
+    g[V0] = sll(g[A1], 2);
+    if g[AT] == 0 {
+        return;
+    }
+    g[T6] = sll(g[A0], 5);
+    g[T7] = addu(g[T6], g[V0]);
+    g[AT] = addu(li(0x800A_0000), g[T7]);
+    f[4].set_u32l(lw(m, g[SP], 0x10) as u32);
+    sw(m, g[AT], -0x47D4, g[A2]);
+    g[T8] = sll(g[A0], 5);
+    g[T9] = addu(g[T8], g[V0]);
+    g[AT] = addu(li(0x800D_0000), g[T9]);
+    g[T2] = sll(g[A0], 2);
+    g[T0] = sll(g[A0], 5);
+    g[T2] = subu(g[T2], g[A0]);
+    g[T3] = sll(g[A1], 2);
+    sw(m, g[AT], 0x57E8, u64::from(f[4].u32l()));
+    g[T1] = addu(g[T0], g[V0]);
+    g[T3] = subu(g[T3], g[A1]);
+    g[T2] = sll(g[T2], 3);
+    g[T5] = li(0x800D_5868);
+    g[AT] = addu(li(0x800D_0000), g[T1]);
+    g[T4] = addu(g[T2], g[T3]);
+    g[T6] = lbu(m, g[SP], 0x17);
+    g[T7] = lbu(m, g[SP], 0x1B);
+    g[T8] = lbu(m, g[SP], 0x1F);
+    sw(m, g[AT], 0x5828, u64::from(f[12].u32l()));
+    g[V1] = addu(g[T4], g[T5]);
+    sb(m, g[V1], 0, g[T6]);
+    sb(m, g[V1], 1, g[T7]);
+    sb(m, g[V1], 2, g[T8]);
+}
+
 /// `func_8000FE1C()`: set two blocks to -1: for `k` in 0..2, the word at
 /// `0x8009B814 + 4k` and the eight words at `0x8009B82C + 0x20k`.
 ///
@@ -2340,6 +2461,36 @@ pub unsafe extern "C" fn func_8000FE78(rdram: *mut u8, ctx: *mut RecompContext) 
     }
 }
 
+/// `func_8000FEAC(k, v, w)`: `[0x800D5AA8 + 4k] = w` (the words
+/// [`func_8000FE78`] resets to -9999), then the float triple at
+/// `0x800D59B8 + 12k` = `*v`. Unbounded (32-bit address arithmetic).
+///
+/// Leaves `t6 = 4k`, `at = 0x800D0000 + 4k`, `t7 = 12k`, `t8 =
+/// 0x800D59B8`, `v0` = the triple, `f4`/`f6`/`f8` its words.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000FEAC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    g[T6] = sll(g[A0], 2);
+    g[AT] = addu(li(0x800D_0000), g[T6]);
+    sw(m, g[AT], 0x5AA8, g[A2]);
+    g[T7] = sll(g[A0], 2);
+    f[4].set_u32l(lw(m, g[A1], 0) as u32);
+    g[T7] = subu(g[T7], g[A0]);
+    g[T8] = li(0x800D_59B8);
+    g[T7] = sll(g[T7], 2);
+    g[V0] = addu(g[T7], g[T8]);
+    sw(m, g[V0], 0, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A1], 4) as u32);
+    sw(m, g[V0], 4, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A1], 8) as u32);
+    sw(m, g[V0], 8, u64::from(f[8].u32l()));
+}
+
 /// `func_8000FEF0()`: the ten words at `0x800D5F80` and the ten at
 /// `0x800D5FA8` = -1 (word `k` of the first, then of the second, per
 /// iteration), then the 40 bytes at `0x800D5C38` = 0, four per iteration. The two word arrays are the ones
@@ -2379,6 +2530,81 @@ pub unsafe extern "C" fn func_8000FEF0(rdram: *mut u8, ctx: *mut RecompContext) 
             break;
         }
     }
+}
+
+/// The float-triple copy [`func_8000FF54`] and [`func_8000FFB8`] share:
+/// `v0` = triple `k` of the 40 at `0x800D5C60`, then `*v` copied to it
+/// word by word. `after_y` runs between the second word's load and store
+/// (the compiler put [`func_8000FF54`]'s extra setup there).
+fn copy_triple(m: &mut Mem, g: &mut [u64; 32], f: &mut [crate::recomp::Fpr; 32], after_y: impl FnOnce(&mut [u64; 32])) {
+    f[4].set_u32l(lw(m, g[A1], 0) as u32);
+    g[T6] = subu(g[T6], g[A0]);
+    g[T7] = li(0x800D_5C60);
+    g[T6] = sll(g[T6], 2);
+    g[V0] = addu(g[T6], g[T7]);
+    sw(m, g[V0], 0, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A1], 4) as u32);
+    after_y(g);
+    sw(m, g[V0], 4, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A1], 8) as u32);
+    sw(m, g[V0], 8, u64::from(f[8].u32l()));
+}
+
+/// `func_8000FF54(k, v)`: if `k < 40` (64-bit signed), the float triple at
+/// `0x800D5C60 + 12k` = `*v`, `[0x800D60A0 + 4k] = -1000`, and the flag
+/// byte `[0x800D5C38 + k] = 1` ([`func_8000FFF8`]'s bytes). QUIRK: negative
+/// `k` passes and writes before the arrays (as in [`func_8000FFF8`]).
+///
+/// Leaves `at` = the bound test (or `0x800D0000 + k` past it), `t6 = 4k`
+/// then `12k`, and past it `t7 = 0x800D5C60`, `v0` = the triple, `f4`..`f8`
+/// its words, `t9 = 4k`, `t8 = -1000`, `t0 = 1`.
+///
+/// Domain: the three stores in RDRAM for `k < 40`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000FF54(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[AT] = slt(g[A0], 0x28);
+    g[T6] = sll(g[A0], 2);
+    if g[AT] == 0 {
+        return;
+    }
+    copy_triple(m, g, &mut ctx.fpr, |g| {
+        g[T9] = sll(g[A0], 2);
+        g[AT] = li(0x800D_0000);
+    });
+    g[AT] = addu(g[AT], g[T9]);
+    g[T8] = (-0x3E8i64) as u64;
+    sw(m, g[AT], 0x60A0, g[T8]);
+    g[AT] = addu(li(0x800D_0000), g[A0]);
+    g[T0] = 1;
+    sb(m, g[AT], 0x5C38, g[T0]);
+}
+
+/// `func_8000FFB8(k, v)`: if `k < 40` (64-bit signed), the float triple at
+/// `0x800D5C60 + 12k` = `*v` ([`func_8000FF54`] without the marker and the
+/// flag). QUIRK: negative `k` passes.
+///
+/// Leaves `at` = the bound test, `t6 = 4k` then `12k`, and past it `t7 =
+/// 0x800D5C60`, `v0` = the triple, `f4`..`f8` its words.
+///
+/// Domain: the triple in RDRAM for `k < 40`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000FFB8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[AT] = slt(g[A0], 0x28);
+    g[T6] = sll(g[A0], 2);
+    if g[AT] == 0 {
+        return;
+    }
+    copy_triple(m, g, &mut ctx.fpr, |_| {});
 }
 
 /// `func_8000FFF8(k)`: if `k < 40` (signed), the byte at `0x800D5C38 + k` =
@@ -2468,6 +2694,18 @@ pub unsafe extern "C" fn func_8001004C(rdram: *mut u8, ctx: *mut RecompContext) 
     g[V0] = addu(g[T4], g[T3]);
 }
 
+/// `func_80011764(x, y)` with the floats in `f12`/`f14`: `[0x8009B878] =
+/// x`, `[0x8009B87C] = y`. Leaves `at = 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80011764(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    ctx.gpr[AT] = li(0x800A_0000);
+    sw(&mut mem, ctx.gpr[AT], -0x4788, u64::from(ctx.fpr[12].u32l()));
+    sw(&mut mem, ctx.gpr[AT], -0x4784, u64::from(ctx.fpr[14].u32l()));
+}
+
 /// `func_80011778(r, g, b, a)`: the four bytes at `0x8009B874` = the low
 /// bytes of `a0`-`a3`; spills them to their argument slots first. Leaves
 /// `v0 = 0x8009B874`.
@@ -2489,6 +2727,17 @@ pub unsafe extern "C" fn func_80011778(rdram: *mut u8, ctx: *mut RecompContext) 
     sb(m, g[V0], 1, g[A1]);
     sb(m, g[V0], 2, g[A2]);
     sb(m, g[V0], 3, g[A3]);
+}
+
+/// `func_800117E4(x)` with the float in `f12`: `[0x8009B880] = x`. Leaves
+/// `at = 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800117E4(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    ctx.gpr[AT] = li(0x800A_0000);
+    sw(&mut mem, ctx.gpr[AT], -0x4780, u64::from(ctx.fpr[12].u32l()));
 }
 
 /// `func_80011814()`: the byte at `0x8009B870` = 1. Leaves `t6 = 1`, `at =

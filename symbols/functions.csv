@@ -195,14 +195,14 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8000F5A0,func_8000F5A0,ours,0,,recomp,,,
 0x8000FA2C,func_8000FA2C,ours,4,,recomp,,,
 0x8000FCA4,func_8000FCA4,ours,0,,rust_verified,unit_diff,high,byte 3 of word k at 0x8009B824; QUIRK unbounded (game::misc)
-0x8000FCBC,func_8000FCBC,ours,0,,recomp,,,
-0x8000FD74,func_8000FD74,ours,0,,recomp,,,
+0x8000FCBC,func_8000FCBC,ours,0,,rust_verified,unit_diff,high,"0 <= i < 2 (64-bit): [0x8009B814+4i] = a1, triple 0x800D57D0+12i, -1000 at 0x800D57B0/A0/90+4i, float 0x8009B81C+4i, 4 stack-arg bytes at 0x8009B824+4i (game::misc)"
+0x8000FD74,func_8000FD74,ours,0,,rust_verified,unit_diff,high,"i < 2, j < 8: [0x8009B82C+32i+4j] = a2, floats 0x800D57E8/0x800D5828 +32i+4j, 3 bytes at 0x800D5868+24i+3j (game::misc)"
 0x8000FE1C,func_8000FE1C,ours,0,,rust_verified,unit_diff,high,two blocks at 0x8009B814/0x8009B82C = -1 (game::misc)
 0x8000FE78,func_8000FE78,ours,0,,rust_verified,unit_diff,high,20 words at 0x800D5AA8 = -9999 (game::misc)
-0x8000FEAC,func_8000FEAC,ours,0,,recomp,,,
+0x8000FEAC,func_8000FEAC,ours,0,,rust_verified,unit_diff,high,"[0x800D5AA8+4k] = a2, triple 0x800D59B8+12k (unbounded) (game::misc)"
 0x8000FEF0,func_8000FEF0,ours,0,,rust_verified,unit_diff,high,"0x800D5F80/5FA8 words = -1, 0x800D5C38 bytes = 0 (game::misc)"
-0x8000FF54,func_8000FF54,ours,0,,recomp,,,
-0x8000FFB8,func_8000FFB8,ours,0,,recomp,,,
+0x8000FF54,func_8000FF54,ours,0,,rust_verified,unit_diff,high,"k < 40 (signed; negatives pass): triple 0x800D5C60+12k, [0x800D60A0+4k] = -1000, byte 0x800D5C38+k = 1 (game::misc)"
+0x8000FFB8,func_8000FFB8,ours,0,,rust_verified,unit_diff,high,k < 40 (signed): triple 0x800D5C60+12k (game::misc)
 0x8000FFF8,func_8000FFF8,ours,0,,rust_verified,unit_diff,high,"byte k (< 40) at 0x800D5C38 = 0; QUIRK 64-bit compare, low-word address (game::misc)"
 0x80010014,func_80010014,ours,0,,rust_verified,unit_diff,high,set word pair k (< 10); QUIRK as func_8000FFF8 (game::misc)
 0x80010040,func_80010040,ours,0,,rust_verified,unit_diff,high,[0x8009B86C] = 0 (game::misc)
@@ -212,10 +212,10 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80010B34,func_80010B34,ours,2,,recomp,,,
 0x80010EA0,func_80010EA0,ours,3,,recomp,,,
 0x800116E8,func_800116E8,ours,1,,recomp,,,
-0x80011764,func_80011764,ours,0,,recomp,,,
+0x80011764,func_80011764,ours,0,,rust_verified,unit_diff,high,"[0x8009B878] = f12, [0x8009B87C] = f14 (game::misc)"
 0x80011778,func_80011778,ours,0,,rust_verified,unit_diff,high,four bytes at 0x8009B874 from a0-a3 (game::misc)
 0x800117A4,func_800117A4,ours,2,,recomp,,,
-0x800117E4,func_800117E4,ours,0,,recomp,,,
+0x800117E4,func_800117E4,ours,0,,rust_verified,unit_diff,high,[0x8009B880] = f12 (game::misc)
 0x800117F0,func_800117F0,ours,2,,recomp,,,
 0x80011814,func_80011814,ours,0,,rust_verified,unit_diff,high,byte [0x8009B870] = 1 (game::misc)
 0x80011824,func_80011824,ours,0,,rust_verified,unit_diff,high,[0x800D6140 + 4k] = v; QUIRK unbounded (game::misc)
