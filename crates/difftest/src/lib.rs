@@ -16,6 +16,7 @@
 //! the two runs must make the same calls with the same registers.
 
 pub mod rom;
+pub mod world;
 
 use game::recomp::{RecompContext, RecompFn};
 use oracle::doubles::{self, Call};
