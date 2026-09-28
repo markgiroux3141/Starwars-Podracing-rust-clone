@@ -61,7 +61,10 @@ Running log of discoveries and decisions. Newest session at the bottom.
   | sprite | `0x013307F0` | 173 | single offsets | `func_8002FF38`; reads a 0x14-byte header, tests byte +4 == 2 |
   | model | `0x0141E200` | 307 | (mask, model) pairs | `func_800305E8(idx)` |
 - Model load (`func_800305E8`): the mask (`mask..model`) goes into the buffer at `[0x80114528]`. The model goes at the heap cursor `func_8002FAFC()`, aligned to 8. If its first word is `"Comp"`, the compressed payload is DMA'd to `(heap_end [0x800D9DBC] - (csize-12)) & ~7`, i.e. the top of the heap, and `func_80011940(src, dst)` decompresses it to the cursor. Out of space sets `0x800A2864 = 1` and returns 0. Then every model word whose mask bit is set (bit 31-(i&31) of mask word i>>5, MSB first) is relocated: top byte `0x0A` means a texture reference (`func_800304AC(word & 0xFFFFFF, &word, &word+4)` writes the pixel and palette pointers), otherwise nonzero words get `+ model base`. It then checks the tag (`Modl` `Trak` `Podd` `Part` `Scen` `MAlt` `Pupp`), returning model+4, or calls `func_800827C0` (error). 92 of the 307 models are compressed.
-- Texture descriptors live in the models, not the texture block. The relocated `0x0A00_iiii` word is at MaterialTexture+0x3C. PC-side facts (blender-swe1r, GPL; facts only): +0x0C u16 format, +0x10 u16 width, +0x12 u16 height. Format codes 3/512/513/1024/1025 = RGBA32/CI4/CI8/I4/I8, i.e. `(G_IM_FMT << 8) | G_IM_SIZ`. The palette is RGBA5551 big-endian.
+- **Texture descriptors live in the models, not the texture block.** On N64 they sit relative to the relocated `0x0A00_iiii` reference word R: **format u16 at R−0x2C, width u16 at R−0x28, height u16 at R−0x26**, and width×4 / height×4 u16s at R−0x34/−0x32 (these agree everywhere). This is the PC MaterialTexture layout (blender-swe1r facts: format +0x0C, width +0x10, height +0x12, reference +0x3C) with the reference 4 bytes earlier. **The PC offsets read as format 0 on N64.** The loader writes the pixel pointer at R and the palette pointer at R+4.
+- Format codes are `(G_IM_FMT << 8) | G_IM_SIZ`. Only five occur: 0x200 CI4 (1378 textures), 0x201 CI8 (90), 0x3 RGBA32 (45), 0x400 I4 (70), 0x401 I8 (20). Palettes are exactly 32 bytes for CI4 and 512 for CI8 (16/256 RGBA5551 BE entries), and absent otherwise.
+- **Texture data is linear rows padded to 8 bytes** (one TMEM line; e.g. 74×47 CI4 has 40-byte rows). Level 0 is first; 35 textures are followed by a mipmap chain (each level halves, rows padded again; e.g. 32×64 CI4 = 1024+256+128+64+32). With that rule, all 1603 textures referenced by the 4095 in-range references have a fitting descriptor (1568 exact, 35 mipmapped). 2 textures have two different descriptors, one of which fits. 45 textures are referenced by no model (maybe by code or sprites). 31 references have index ≥ 1648; `texture_get` gives them null pointers.
+- Not verified from N64 code: where the game turns the descriptor into `G_SETTIMG`/`G_SETTILE`, the TLUT type (RGBA16 assumed), and how I/IA texels are combined. Decoded PNGs look right (skies, pod parts, flags with alpha).
 - ROM `0x100000`–`0x0102ABB0` is not these blocks; it looks like VADPCM audio (not examined yet).
 
 ### Asset compression: "Comp"/"Wolf" LZSS (`func_80011940`)
@@ -99,7 +102,7 @@ Findings from sp00nznet/racer we can use as facts (addresses, not code):
 - MSVC: VS 2022 Community (14.42) and VS 2026 Community (14.51). Ninja ships with both.
 - **clang-cl is not installed** (VS "C++ Clang tools" component). May be needed for N64ModernRuntime/RT64.
 - clippy is not installed for the toolchain (`rustup component add clippy`).
-- Python 3.12; project venv at `.venv/` with rabbitizer 1.16.2, spimdisasm 1.42.4, splat64.
+- Python 3.12; project venv at `.venv/` with rabbitizer 1.16.2, spimdisasm 1.42.4, splat64, and Pillow (session 3; only for looking at extracted PNGs, not used by any committed tool).
 
 ## Session log
 
@@ -152,3 +155,30 @@ Findings from sp00nznet/racer we can use as facts (addresses, not code):
 
 **Suggested next step**
 - Phase 2: `tools/callgraph.py` (or extend find_functions' call data) with depth, flagging indirect calls. Identify libultra by signature (the range starts ≤ `0x80087CC0`). Then port more depth-0 integer leaves (332 leaves have no floats; see functions.csv) using the same difftest pattern, and add `cargo xtask next-function`.
+
+### 2026-09-28 — Session 3
+
+**Done**
+- **Call graph:** `find_functions.py` writes `symbols/callgraph.csv`, one row per call site: `call`, `tail`, `fallthrough`, plus `jalr`/`jr` for indirect sites with unknown targets. Depth is computed over the SCC condensation of the direct edges, so every function has one (324 were empty; max 27). Mutually recursive functions share a depth, and indirect edges don't count.
+- **`cargo xtask next-function`** (`xtask/src/next_function.rs`): a function is ready when it is `recomp`, not ignored, has no indirect sites, and all its callees are `rust_verified`/`lifted`. Ranking: `--subsystem`, depth, outside the OS range, integer before float, then FCR31. It flags float, `get_cop1_cs` (FCR31 read: the oracle has rounding bits only) and the OS range. `--toward func_X` limits it to what X reaches and lists what's blocked below it.
+- **`tools/xref.py`**: `dis`, `callers [-r N]`, `callees`, `refs ADDR [ADDR2]`, `pi`. Used to trace the asset path (Facts above).
+- **Asset path found** (Facts: "ROM asset loading path"). From PI registers → `osPiStartDma` → the game's ROM read (`func_80011B18`/`CDC`/`D60`) → the four block loaders. The blocks are the PC version's texture/spline/sprite/model blocks, same table format, tiling ROM 0x0102ABB0–0x01FF30F0.
+- **Decompressor ported: `func_80011940` (`comp_decompress`)**, a depth-0 integer leaf, now `rust_verified`. Its format was written in NOTES before porting ("Asset compression"). `game::asset::func_80011940` is register- and access-order-exact; `game::asset::lzss` is the slice version. `crates/difftest/tests/func_80011940.rs` covers proptest token streams (256), random-byte streams (24), terminators on every flag bit and with any length nibble, register leftovers, aliasing layouts, and **all 92 compressed models from baserom.z64**: C, port and slice version agree byte for byte, in both a roomy and a tight (overlapping) heap layout. A batched-read mutant and a wrong-`t3` mutant are both caught.
+- **`crates/assets` + `cargo xtask extract`**: raw blocks, decompressed models and masks, and **1603 textures as PNG** in `extracted/` (gitignored; the command refuses to run otherwise), plus `extracted/textures.csv`. `crates/assets/tests/rom.rs` pins the invariants (counts, tiling, descriptor fits, palette sizes).
+- functions.csv: 10 asset functions named (`ours`, med) and 5 PI functions (`libultra`, high). 2/1374 verified. Tests: 43.
+
+**Surprises**
+- The ring buffer is the 4 KB *below the compressed input*, uninitialised. It's harmless for real data (no stream reads an unwritten byte), but the game's heap placement (input at the top of the heap, output at the cursor) can make output, window and input overlap when memory is tight. So the port keeps the per-byte read→dst→window order.
+- `a0`/`a1` are dereferenced raw, so a zero-extended `0x0000_0000_8xxx_xxxx` pointer is *non-canonical* and crashes the C (an address error on hardware). Unlike `func_80000554`, upper halves of pointer arguments are outside the domain here.
+- Two "mutants" I first tried were equivalent: swapping two stores of the same byte, and `t1 == 16`, which is impossible at exit because `t1` then holds the terminator's nibble. Pick mutants that can actually fire.
+- The texture descriptor is the PC layout shifted by 4 bytes, not identical. The PC offsets gave format 0 everywhere.
+- `texture_block_init` spins forever (`b .`) if the texture count exceeds 1700 (QUIRK, in the notes column).
+- A `*.proptest-regressions` file with three seeds for minimal synthetic cases (no ROM data) is committed, as proptest recommends.
+
+**In progress / not done**
+- Sprites (0x14-byte header, byte +4 == 2) and splines are dumped raw, not decoded. Audio (ROM 0x100000–0x0102ABB0, VADPCM-looking) not examined.
+- The code that consumes texture descriptors (display-list building) isn't located, so the TLUT type and I/IA combine are assumptions.
+- Loader functions (`model_load` etc.) aren't portable yet: they call the PI/OS wrappers (osInvalDCache is not recompilable) and heap functions `func_8002FAFC`/`func_8002FAC4`/`func_8002FC58`.
+
+**Suggested next step**
+- Port the heap helpers `func_8002FAFC` (cursor), `func_8002FAC4` (set cursor) and `func_8002FC58` (free space), probably tiny leaves, via `cargo xtask next-function --toward func_800305E8`. `--toward` currently reports that model_load reaches 116 functions (49 ready now), blocked below only by `func_80088538` (3 indirect calls), probably via the wait-loop helper `func_80008F28`. Then difftest `model_load`'s relocation logic with the ROM read stubbed: feed the DMA from baserom.z64 in an oracle stub, which needs a small "ROM read" hook in the stub runtime. After that, decode sprites (find their loader's use of the 0x14-byte header) for a second visual.
