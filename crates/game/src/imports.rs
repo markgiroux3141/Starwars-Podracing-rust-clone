@@ -32,12 +32,24 @@ pub mod runtime {
         /// What N64Recomp emits for a branch to itself (`b .`), the idle loop
         /// of a thread with nothing left to do. It doesn't return.
         pub fn pause_self(rdram: *mut u8);
+
+        /// What N64Recomp emits as a jump table's `default:`, an index that
+        /// matched no case: the function's name, the `jr` and the table's
+        /// address. The generated C carries on after the switch if it returns.
+        pub fn switch_error(func: *const core::ffi::c_char, vram: u32, jtbl: u32);
     }
 
     #[cfg(test)]
     #[no_mangle]
     pub unsafe extern "C" fn pause_self(_rdram: *mut u8) {
         eprintln!("pause_self is only linked in the oracle or the game build, not game's unit tests");
+        std::process::abort();
+    }
+
+    #[cfg(test)]
+    #[no_mangle]
+    pub unsafe extern "C" fn switch_error(_func: *const core::ffi::c_char, _vram: u32, _jtbl: u32) {
+        eprintln!("switch_error is only linked in the oracle or the game build, not game's unit tests");
         std::process::abort();
     }
 }

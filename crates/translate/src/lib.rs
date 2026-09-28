@@ -197,6 +197,85 @@ L_8000100C:
         assert_eq!(d.callees, ["func_80002000"]);
     }
 
+    /// A jump table as N64Recomp prints it, with a delay slot that does
+    /// something: it runs before the match, and its dead copy after the
+    /// switch runs only if `switch_error` returns. Cases 1 and 2 share a
+    /// target.
+    #[test]
+    fn jump_table_becomes_a_match() {
+        let b = body(
+            "    // 0x80001000: sll         $t6, $a0, 2
+    ctx->r14 = S32(ctx->r4 << 2);
+    // 0x80001004: lui         $at, 0x800B
+    ctx->r1 = S32(0X800B << 16);
+    // 0x80001008: addu        $at, $at, $t6
+    gpr jr_addend_80001010 = ctx->r14;
+    ctx->r1 = ADD32(ctx->r1, ctx->r14);
+    // 0x8000100C: lw          $t6, -0x7E00($at)
+    ctx->r14 = ADD32(ctx->r1, -0X7E00);
+    // 0x80001010: jr          $t6
+    // 0x80001014: addiu       $v1, $zero, 0x7
+    ctx->r3 = ADD32(0, 0X7);
+
+    switch (jr_addend_80001010 >> 2) {
+        case 0: goto L_80001018; break;
+        case 1: goto L_80001020; break;
+        case 2: goto L_80001020; break;
+        default: switch_error(__func__, 0x80001010, 0x800A8200);
+    }
+    // 0x80001014: addiu       $v1, $zero, 0x7
+    ctx->r3 = ADD32(0, 0X7);
+L_80001018:
+    // 0x80001018: jr          $ra
+    // 0x8000101C: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+    return;
+    // 0x8000101C: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+L_80001020:
+    // 0x80001020: jr          $ra
+    // 0x80001024: addiu       $v0, $zero, 0x2
+    ctx->r2 = ADD32(0, 0X2);
+    return;",
+        );
+        let want = "let jr_addend_80001010 = g[T6];\ng[AT] = addu(g[AT], g[T6]);\ng[T6] = addu(g[AT], (-0x7E00i64) as u64);\n\
+                    g[V1] = 7;\nmatch jr_addend_80001010 >> 2 {\n0 => {\nbreak 'b_8000101C;\n}\n1 | 2 => {}\n\
+                    _ => {\nimports::runtime::switch_error(c\"func_80001000\".as_ptr(), 0x8000_1010, 0x800A_8200);\ng[V1] = 7;\n\
+                    break 'b_8000101C;\n}\n}\n// L_80001020\ng[V0] = 2;\nreturn;\n}\n// L_80001018\ng[V0] = 1;";
+        assert!(b.contains(want), "{b}");
+    }
+
+    #[test]
+    fn jump_table_shapes_are_checked() {
+        let sw = |cases: &str| {
+            wrap(&format!(
+                "    // 0x80001000: addu        $at, $at, $t6
+    gpr jr_addend_80001008 = ctx->r14;
+    ctx->r1 = ADD32(ctx->r1, ctx->r14);
+    // 0x80001008: jr          $t6
+    switch (jr_addend_80001008 >> 2) {{
+{cases}
+    }}
+L_80001010:
+    return;"
+            ))
+        };
+        let ok = "        case 0: goto L_80001010; break;\n        default: switch_error(__func__, 0x80001008, 0x800A8200);";
+        assert!(translate(&sw(ok)).is_ok());
+        for bad in [
+            // cases out of order
+            "        case 1: goto L_80001010; break;\n        default: switch_error(__func__, 0x80001008, 0x800A8200);",
+            // no default
+            "        case 0: goto L_80001010; break;",
+            // a default for another jr
+            "        case 0: goto L_80001010; break;\n        default: switch_error(__func__, 0x80001004, 0x800A8200);",
+            // anything else inside
+            "        case 0: goto L_80001010; break;\n    ctx->r1 = 0 | 0;\n        default: switch_error(__func__, 0x80001008, 0x800A8200);",
+        ] {
+            assert_eq!(translate(&sw(bad)).err().map(|r| r.kind), Some("jump table"), "{bad}");
+        }
+    }
+
     #[test]
     fn long_conversions_are_refused() {
         let r = translate(&wrap("    // 0x80001000: cvt.l.s $f0, $f2\n    ctx->f0.u64 = CVT_L_S(ctx->f2.fl);\n    return;")).err().unwrap();

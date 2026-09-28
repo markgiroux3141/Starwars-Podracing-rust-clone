@@ -19,6 +19,10 @@ pub enum Term {
     /// `if cond { goto taken } else { goto fall }`, with the branch's
     /// address and instruction for comments.
     Branch(Cond, usize, usize),
+    /// A jump table: `match jr_addend_JR >> 2`, case `k` going to
+    /// `cases[k]`, anything else to `default` (a block calling
+    /// `switch_error`, then falling through to what follows the switch).
+    Switch { jr: u32, cases: Vec<usize>, default: usize },
     Return,
 }
 
@@ -44,6 +48,7 @@ pub struct Cfg {
 enum PTerm {
     Goto(String),
     Branch(Cond, String, String),
+    Switch { jr: u32, cases: Vec<String>, default: String },
     Return,
 }
 
@@ -81,17 +86,68 @@ pub fn build(src: &str) -> Result<Cfg, Refusal> {
     let mut first_addr = None;
     // Inside `if (...) {`: the condition, and the ops and target so far.
     let mut in_if: Option<(Cond, Vec<(Op, u32)>, Option<String>, u32)> = None;
+    // Inside `switch (...) {`: the `jr`'s address, the case labels so far,
+    // and the default's `switch_error` arguments once seen.
+    let mut in_switch: Option<(u32, Vec<String>, Option<(u32, u32)>)> = None;
+    let jt = |n: usize, what: &str| Refusal::new("jump table", format!("line {}: {what}", n + 2));
 
     for (n, line) in lines.enumerate() {
         let parsed = classify(line).map_err(|e| {
             let kind = if e.starts_with("jump table") { "jump table" } else { "parse" };
             Refusal::new(kind, format!("line {}: {e}: `{}`", n + 2, line.trim()))
         })?;
+        if in_switch.is_some() && !matches!(parsed, Line::Skip | Line::Comment { .. } | Line::Case(..) | Line::Default { .. } | Line::Close) {
+            return Err(jt(n, "unexpected line inside a switch"));
+        }
         match parsed {
             Line::Skip => {}
             Line::Comment { addr: a, .. } => {
                 addr = a;
                 first_addr.get_or_insert(a);
+            }
+            Line::JrAddend { jr, reg } => {
+                if in_if.is_some() || in_switch.is_some() {
+                    return Err(jt(n, "jr_addend inside an if or switch"));
+                }
+                blocks[cur].ops.push((Op::JrAddend(jr, reg), addr));
+            }
+            Line::Switch { jr } => {
+                if in_if.is_some() || in_switch.is_some() {
+                    return Err(jt(n, "switch inside an if or switch"));
+                }
+                // The addend's `let` must be in scope: in the same block.
+                if !blocks[cur].ops.iter().any(|(o, _)| matches!(o, Op::JrAddend(j, _) if *j == jr)) {
+                    return Err(jt(n, "switch without its jr_addend in the same block"));
+                }
+                in_switch = Some((jr, Vec::new(), None));
+            }
+            Line::Case(k, l) => {
+                let Some((_, cases, None)) = &mut in_switch else { return Err(jt(n, "case outside a switch, or after default")) };
+                if k != cases.len() as u64 {
+                    return Err(jt(n, "cases out of order"));
+                }
+                cases.push(l);
+            }
+            Line::Default { jr, table } => {
+                let Some((j, _, d @ None)) = &mut in_switch else { return Err(jt(n, "default outside a switch")) };
+                if *j != jr {
+                    return Err(jt(n, "default for another jr"));
+                }
+                *d = Some((jr, table));
+            }
+            Line::Close if in_switch.is_some() => {
+                let (jr, cases, d) = in_switch.take().unwrap();
+                let (_, table) = d.ok_or_else(|| jt(n, "switch without default"))?;
+                // If switch_error returns, the C carries on after the switch:
+                // the jr's dead delay-slot copy, then whatever follows.
+                let def = fresh(&mut blocks, jr, None, false);
+                blocks[def].ops.push((Op::SwitchError { func: name.clone(), jr, table }, jr));
+                let after = fresh(&mut blocks, addr, None, false);
+                let after_label = blocks[after].label.clone().unwrap();
+                blocks[def].term = Some(PTerm::Goto(after_label));
+                let default = blocks[def].label.clone().unwrap();
+                end(&mut blocks[cur], PTerm::Switch { jr, cases, default });
+                cur = after;
             }
             Line::If(e) => {
                 if in_if.is_some() {
@@ -161,6 +217,11 @@ pub fn build(src: &str) -> Result<Cfg, Refusal> {
         let term = match b.term.as_ref().unwrap() {
             PTerm::Goto(l) => Term::Goto(find(l)?),
             PTerm::Branch(c, t, f) => Term::Branch(c.clone(), find(t)?, find(f)?),
+            PTerm::Switch { jr, cases, default } => Term::Switch {
+                jr: *jr,
+                cases: cases.iter().map(|l| find(l)).collect::<Result<_, _>>()?,
+                default: find(default)?,
+            },
             PTerm::Return => Term::Return,
         };
         let label = b.label.clone().filter(|l| !l.starts_with('#'));
@@ -179,10 +240,12 @@ fn end(b: &mut PBlock, t: PTerm) {
 }
 
 impl Cfg {
+    /// Successors, one per edge (a switch lists a target once per case).
     pub fn succs(&self, b: usize) -> Vec<usize> {
-        match self.blocks[b].term {
-            Term::Goto(t) => vec![t],
-            Term::Branch(_, t, f) => vec![t, f],
+        match &self.blocks[b].term {
+            Term::Goto(t) => vec![*t],
+            Term::Branch(_, t, f) => vec![*t, *f],
+            Term::Switch { cases, default, .. } => cases.iter().copied().chain([*default]).collect(),
             Term::Return => vec![],
         }
     }
@@ -273,6 +336,12 @@ impl Cfg {
                         changed |= forward[*t] != *t || forward[*f] != *f;
                         *t = forward[*t];
                         *f = forward[*f];
+                    }
+                    Term::Switch { cases, default, .. } => {
+                        for t in cases.iter_mut().chain([default]) {
+                            changed |= forward[*t] != *t;
+                            *t = forward[*t];
+                        }
                     }
                     Term::Return => {}
                 }

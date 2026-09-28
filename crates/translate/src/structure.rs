@@ -22,6 +22,9 @@ pub enum S {
     Loop(String, Vec<S>),
     Break(String),
     Continue(String),
+    /// A jump table: `match jr_addend_JR >> 2 { ks => arm, .. _ => default }`,
+    /// cases with the same target sharing an arm.
+    Match(u32, Vec<(Vec<u64>, Vec<S>)>, Vec<S>),
     Return,
     /// State machine fallback: `pc = n`.
     SetPc(usize),
@@ -185,6 +188,10 @@ impl Graph<'_> {
                 match b.term {
                     Term::Goto(t) => out.extend(self.do_branch(x, t)),
                     Term::Branch(ref c, t, f) => out.push(S::If(c.clone(), self.do_branch(x, t), self.do_branch(x, f))),
+                    Term::Switch { jr, ref cases, default } => {
+                        let arms = group_cases(cases).into_iter().map(|(ks, t)| (ks, self.do_branch(x, t))).collect();
+                        out.push(S::Match(jr, arms, self.do_branch(x, default)));
+                    }
                     Term::Return => out.push(S::Return),
                 }
                 out
@@ -208,6 +215,18 @@ impl Graph<'_> {
     }
 }
 
+/// Case numbers by target, in order of first appearance.
+fn group_cases(cases: &[usize]) -> Vec<(Vec<u64>, usize)> {
+    let mut arms: Vec<(Vec<u64>, usize)> = Vec::new();
+    for (k, &t) in cases.iter().enumerate() {
+        match arms.iter_mut().find(|(_, x)| *x == t) {
+            Some((ks, _)) => ks.push(k as u64),
+            None => arms.push((vec![k as u64], t)),
+        }
+    }
+    arms
+}
+
 /// The fallback for irreducible graphs: one arm per block.
 fn machine(cfg: &Cfg, order: &[usize]) -> Vec<S> {
     let mut arms = Vec::new();
@@ -217,6 +236,11 @@ fn machine(cfg: &Cfg, order: &[usize]) -> Vec<S> {
         match blk.term {
             Term::Goto(t) => code.push(S::SetPc(t)),
             Term::Branch(ref c, t, f) => code.push(S::If(c.clone(), vec![S::SetPc(t)], vec![S::SetPc(f)])),
+            Term::Switch { jr, ref cases, default } => code.push(S::Match(
+                jr,
+                group_cases(cases).into_iter().map(|(ks, t)| (ks, vec![S::SetPc(t)])).collect(),
+                vec![S::SetPc(default)],
+            )),
             Term::Return => code.push(S::Return),
         }
         arms.push((b, blk.addr, code));
@@ -233,6 +257,7 @@ fn falls_through(code: &[S]) -> bool {
         None => true,
         Some(S::Break(_) | S::Continue(_) | S::Return | S::SetPc(_)) => false,
         Some(S::If(_, t, e)) => falls_through(t) || falls_through(e),
+        Some(S::Match(_, arms, d)) => arms.iter().any(|(_, a)| falls_through(a)) || falls_through(d),
         // A loop only ends through a `break` to its own label; blocks can end
         // by breaking out, which falls through to what follows.
         Some(S::Loop(l, body)) => mentions_break(body, l),
@@ -245,6 +270,7 @@ fn mentions_break(code: &[S], label: &str) -> bool {
     code.iter().any(|s| match s {
         S::Break(l) => l == label,
         S::If(_, t, e) => mentions_break(t, label) || mentions_break(e, label),
+        S::Match(_, arms, d) => arms.iter().any(|(_, a)| mentions_break(a, label)) || mentions_break(d, label),
         S::Block(_, b) | S::Loop(_, b) => mentions_break(b, label),
         _ => false,
     })
@@ -254,6 +280,7 @@ fn mentions(code: &[S], label: &str) -> bool {
     code.iter().any(|s| match s {
         S::Break(l) | S::Continue(l) => l == label,
         S::If(_, t, e) => mentions(t, label) || mentions(e, label),
+        S::Match(_, arms, d) => arms.iter().any(|(_, a)| mentions(a, label)) || mentions(d, label),
         S::Block(_, b) | S::Loop(_, b) => mentions(b, label),
         _ => false,
     })
@@ -284,6 +311,13 @@ fn strip_tails(code: &mut Vec<S>, equiv: &[S]) {
                 strip_tails(t, eq);
                 strip_tails(e, eq);
             }
+            S::Match(_, arms, d) => {
+                let eq: &[S] = if last { equiv } else { &[] };
+                for (_, a) in arms.iter_mut() {
+                    strip_tails(a, eq);
+                }
+                strip_tails(d, eq);
+            }
             S::Block(l, body) => {
                 let mut eq = vec![S::Break(l.clone())];
                 if last {
@@ -313,6 +347,12 @@ fn hoist_loop_exits(code: &mut Vec<S>) {
             S::If(_, t, e) => {
                 hoist_loop_exits(t);
                 hoist_loop_exits(e);
+            }
+            S::Match(_, arms, d) => {
+                for (_, a) in arms.iter_mut() {
+                    hoist_loop_exits(a);
+                }
+                hoist_loop_exits(d);
             }
             S::Block(_, b) => hoist_loop_exits(b),
             S::Loop(l, body) => {
@@ -367,6 +407,12 @@ fn tidy(code: &mut Vec<S>) {
             S::If(_, t, e) => {
                 tidy(t);
                 tidy(e);
+            }
+            S::Match(_, arms, d) => {
+                for (_, a) in arms.iter_mut() {
+                    tidy(a);
+                }
+                tidy(d);
             }
             S::Block(_, b) | S::Loop(_, b) => tidy(b),
             _ => {}
@@ -443,6 +489,12 @@ fn saved_uses(code: &[S], n: usize, pos: &mut usize, neg: &mut usize) {
                 saved_uses(t, n, pos, neg);
                 saved_uses(e, n, pos, neg);
             }
+            S::Match(_, arms, d) => {
+                for (_, a) in arms {
+                    saved_uses(a, n, pos, neg);
+                }
+                saved_uses(d, n, pos, neg);
+            }
             S::Block(_, b) | S::Loop(_, b) => saved_uses(b, n, pos, neg),
             _ => {}
         }
@@ -469,6 +521,12 @@ fn flip_saved(code: &mut [S], n: usize) {
                 flip_saved(t, n);
                 flip_saved(e, n);
             }
+            S::Match(_, arms, d) => {
+                for (_, a) in arms.iter_mut() {
+                    flip_saved(a, n);
+                }
+                flip_saved(d, n);
+            }
             S::Block(_, b) | S::Loop(_, b) => flip_saved(b, n),
             _ => {}
         }
@@ -490,6 +548,9 @@ fn rename(code: Vec<S>, from: &str, to: &str) -> Vec<S> {
         .map(|s| match s {
             S::Break(l) if l == from => S::Break(to.to_string()),
             S::If(c, t, e) => S::If(c, rename(t, from, to), rename(e, from, to)),
+            S::Match(jr, arms, d) => {
+                S::Match(jr, arms.into_iter().map(|(ks, a)| (ks, rename(a, from, to))).collect(), rename(d, from, to))
+            }
             S::Block(l, b) => S::Block(l, rename(b, from, to)),
             S::Loop(l, b) => S::Loop(l, rename(b, from, to)),
             s => s,

@@ -76,6 +76,12 @@ fn uses(code: &[S], u: &mut Uses) {
                 uses(t, u);
                 uses(e, u);
             }
+            S::Match(_, arms, d) => {
+                for (_, a) in arms {
+                    uses(a, u);
+                }
+                uses(d, u);
+            }
             S::Block(_, b) | S::Loop(_, b) => uses(b, u),
             S::Machine(_, arms) => {
                 for (_, _, b) in arms {
@@ -197,6 +203,8 @@ fn op_uses(o: &Op, u: &mut Uses) {
             u.stores = true;
             u.runtime = true;
         }
+        Op::JrAddend(..) => u.gprs = true,
+        Op::SwitchError { .. } => u.runtime = true,
         Op::SaveCond(_, c) => cond_uses(c, u),
         Op::Label(_) => {}
         Op::FLoad(..) => {
@@ -250,6 +258,7 @@ fn uses_floats(code: &[S]) -> bool {
                 | Op::Mfc1(..) | Op::Mfc1Odd(..) | Op::FArith(..) | Op::FUn(..) | Op::Cvt(..) | Op::FCmp(..)
         ),
         S::If(_, t, e) => uses_floats(t) || uses_floats(e),
+        S::Match(_, arms, d) => arms.iter().any(|(_, a)| uses_floats(a)) || uses_floats(d),
         S::Block(_, b) | S::Loop(_, b) => uses_floats(b),
         S::Machine(_, arms) => arms.iter().any(|(_, _, b)| uses_floats(b)),
         _ => false,
@@ -260,6 +269,7 @@ fn contains_call(code: &[S]) -> bool {
     code.iter().any(|s| match s {
         S::Op(o) => o.is_call() && !matches!(o, Op::PauseSelf),
         S::If(_, t, e) => contains_call(t) || contains_call(e),
+        S::Match(_, arms, d) => arms.iter().any(|(_, a)| contains_call(a)) || contains_call(d),
         S::Block(_, b) | S::Loop(_, b) => contains_call(b),
         S::Machine(_, arms) => arms.iter().any(|(_, _, b)| contains_call(b)),
         _ => false,
@@ -269,7 +279,7 @@ fn contains_call(code: &[S]) -> bool {
 /// Whether `s` reads or writes `g`.
 fn uses_g(s: &S) -> bool {
     match s {
-        S::Op(Op::Call(_) | Op::PauseSelf | Op::Label(_)) => false,
+        S::Op(Op::Call(_) | Op::PauseSelf | Op::SwitchError { .. } | Op::Label(_)) => false,
         S::Op(Op::MulDiv(_, a, b)) => matches!(a, Val::R(_)) || matches!(b, Val::R(_)),
         S::Op(Op::Mtc1(_, v) | Op::Mtc1Odd(_, v) | Op::Ctc1(v)) => matches!(v, Val::R(_)),
         S::Op(Op::FArith(..) | Op::FUn(..) | Op::Cvt(..) | Op::FCmp(..)) => false,
@@ -301,6 +311,13 @@ fn insert_rebinds(code: &mut Vec<S>) {
                 insert_rebinds(t);
                 insert_rebinds(e);
                 after = contains_call(t) || contains_call(e);
+            }
+            S::Match(_, arms, d) => {
+                for (_, a) in arms.iter_mut() {
+                    insert_rebinds(a);
+                }
+                insert_rebinds(d);
+                after = arms.iter().any(|(_, a)| contains_call(a)) || contains_call(d);
             }
             S::Block(_, b) => {
                 insert_rebinds(b);
@@ -356,6 +373,12 @@ fn needed_labels(code: &[S], stack: &mut Vec<(bool, String)>, out: &mut BTreeSet
             S::If(_, t, e) => {
                 needed_labels(t, stack, out);
                 needed_labels(e, stack, out);
+            }
+            S::Match(_, arms, d) => {
+                for (_, a) in arms {
+                    needed_labels(a, stack, out);
+                }
+                needed_labels(d, stack, out);
             }
             S::Block(l, b) => {
                 stack.push((false, l.clone()));
@@ -543,6 +566,12 @@ fn op(o: &Op, fcr31: bool) -> String {
         Op::MfHi(d) => format!("{} = hi;", r(*d)),
         Op::Call(f) => format!("call(imports::{f}, m, ctx);"),
         Op::PauseSelf => "imports::runtime::pause_self(m.as_mut_ptr());".into(),
+        Op::JrAddend(jr, reg) => format!("let jr_addend_{jr:08X} = {};", r(*reg)),
+        Op::SwitchError { func, jr, table } => format!(
+            "imports::runtime::switch_error(c\"{func}\".as_ptr(), {}, {});",
+            hex(u64::from(*jr)),
+            hex(u64::from(*table))
+        ),
         Op::SaveCond(n, c) => format!("let c{n} = {};", cond(c)),
         Op::Label(l) if l == "\u{0}rebind" => "let g = &mut ctx.gpr;".into(),
         Op::Label(l) => format!("// {l}"),
@@ -623,6 +652,24 @@ impl Writer<'_> {
             S::Continue(l) => {
                 let t = if simple_jump(&self.stack, l) { "continue;".into() } else { format!("continue '{l};") };
                 self.line(d, &t);
+            }
+            S::Match(jr, arms, def) => {
+                self.line(d, &format!("match jr_addend_{jr:08X} >> 2 {{"));
+                let arm = |w: &mut Self, pat: &str, body: &[S]| {
+                    if body.is_empty() {
+                        w.line(d + 1, &format!("{pat} => {{}}"));
+                    } else {
+                        w.line(d + 1, &format!("{pat} => {{"));
+                        w.seq(body, d + 2);
+                        w.line(d + 1, "}");
+                    }
+                };
+                for (ks, body) in arms {
+                    let pat = ks.iter().map(|k| k.to_string()).collect::<Vec<_>>().join(" | ");
+                    arm(self, &pat, body);
+                }
+                arm(self, "_", def);
+                self.line(d, "}");
             }
             S::Return => self.line(d, "return;"),
             S::SetPc(n) => self.line(d, &format!("pc = {n};")),

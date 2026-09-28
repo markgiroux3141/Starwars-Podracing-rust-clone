@@ -276,6 +276,15 @@ pub enum Line {
     Close,
     /// One or more `;`-separated statements: `lhs = rhs` or an expression.
     Stmts(Vec<Stmt>),
+    /// `gpr jr_addend_X = ctx->rN;`: a jump table's index register, saved
+    /// at its `addu` (X is the `jr`'s address).
+    JrAddend { jr: u32, reg: u8 },
+    /// `switch (jr_addend_X >> 2) {`.
+    Switch { jr: u32 },
+    /// `case K: goto L; break;`.
+    Case(u64, String),
+    /// `default: switch_error(__func__, JR, TABLE);`.
+    Default { jr: u32, table: u32 },
     /// Declarations and the closing `;}`: nothing to translate.
     Skip,
 }
@@ -312,15 +321,12 @@ pub fn classify(line: &str) -> Result<Line, String> {
         return Ok(Line::Goto(l.to_string()));
     }
     if let Some(l) = s.strip_suffix(':') {
-        if l.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_') {
-            if l == "default" {
-                return Err("jump table (switch)".into());
-            }
+        if l.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_') && l != "default" {
             return Ok(Line::Label(l.to_string()));
         }
     }
     if s.starts_with("case ") || s.starts_with("switch ") || s.starts_with("default:") || s.starts_with("gpr jr_addend") {
-        return Err("jump table (switch)".into());
+        return jump_table_line(s).ok_or_else(|| format!("jump table (switch): unexpected shape `{s}`"));
     }
     if let Some(c) = s.strip_prefix("if (").and_then(|c| c.strip_suffix(") {")) {
         let toks = tokenize(c)?;
@@ -341,6 +347,38 @@ pub fn classify(line: &str) -> Result<Line, String> {
         out.push(st);
     }
     Ok(Line::Stmts(out))
+}
+
+fn hex_u32(s: &str) -> Option<u32> {
+    u32::from_str_radix(s.strip_prefix("0x").or_else(|| s.strip_prefix("0X"))?, 16).ok()
+}
+
+/// The four line shapes of N64Recomp's jump tables (`emit_switch` and
+/// friends in its `cgenerator.cpp`), exactly as it prints them.
+fn jump_table_line(s: &str) -> Option<Line> {
+    if let Some(rest) = s.strip_prefix("gpr jr_addend_") {
+        // gpr jr_addend_80008F98 = ctx->r14;
+        let (jr, rhs) = rest.split_once(" = ctx->r")?;
+        let reg = rhs.strip_suffix(';')?.parse::<u8>().ok().filter(|&r| r < 32)?;
+        return Some(Line::JrAddend { jr: u32::from_str_radix(jr, 16).ok()?, reg });
+    }
+    if let Some(rest) = s.strip_prefix("switch (jr_addend_") {
+        let jr = rest.strip_suffix(" >> 2) {")?;
+        return Some(Line::Switch { jr: u32::from_str_radix(jr, 16).ok()? });
+    }
+    if let Some(rest) = s.strip_prefix("case ") {
+        // case 0: goto L_80008FA0; break;
+        let (k, rest) = rest.split_once(": goto ")?;
+        let label = rest.strip_suffix("; break;")?;
+        if !label.starts_with("L_") || !label.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_') {
+            return None;
+        }
+        return Some(Line::Case(k.parse().ok()?, label.to_string()));
+    }
+    // default: switch_error(__func__, 0x80008F98, 0x800A8200);
+    let args = s.strip_prefix("default: switch_error(__func__, ")?.strip_suffix(");")?;
+    let (jr, table) = args.split_once(", ")?;
+    Some(Line::Default { jr: hex_u32(jr)?, table: hex_u32(table)? })
 }
 
 #[cfg(test)]
@@ -385,6 +423,17 @@ mod tests {
             Line::Stmts(v) => assert_eq!(v.len(), 3),
             l => panic!("{l:?}"),
         }
-        assert!(classify("default: switch_error(__func__, 0x8000107C, 0x800A80FC);").is_err());
+        assert!(matches!(
+            classify("        default: switch_error(__func__, 0x8000107C, 0x800A80FC);").unwrap(),
+            Line::Default { jr: 0x8000107C, table: 0x800A80FC }
+        ));
+        assert!(matches!(classify("    gpr jr_addend_80008F98 = ctx->r14;").unwrap(), Line::JrAddend { jr: 0x80008F98, reg: 14 }));
+        assert!(matches!(classify("    switch (jr_addend_80008F98 >> 2) {").unwrap(), Line::Switch { jr: 0x80008F98 }));
+        match classify("        case 12: goto L_80008FA0; break;").unwrap() {
+            Line::Case(12, l) => assert_eq!(l, "L_80008FA0"),
+            l => panic!("{l:?}"),
+        }
+        assert!(classify("        case 1: goto L_1; return;").is_err());
+        assert!(classify("    switch (jr_addend_80008F98 >> 3) {").is_err());
     }
 }

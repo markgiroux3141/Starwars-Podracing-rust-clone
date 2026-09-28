@@ -102,6 +102,13 @@ pub enum Op {
     Call(String),
     /// The runtime's `pause_self`, N64Recomp's translation of `b .`.
     PauseSelf,
+    /// `let jr_addend_JR = rN;`: a jump table's index register (byte
+    /// offset into the table), saved at the table's `addu`.
+    JrAddend(u32, u8),
+    /// The runtime's `switch_error(func, jr, table)`: a jump table's
+    /// index matched no case. The C carries on after the switch if it
+    /// returns.
+    SwitchError { func: String, jr: u32, table: u32 },
     /// `let c<n> = cond;`: a branch condition read before its delay slot
     /// overwrites one of its registers.
     SaveCond(usize, Cond),
