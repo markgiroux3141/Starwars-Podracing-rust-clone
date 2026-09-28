@@ -1105,13 +1105,13 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80087CB0,func_80087CB0,ours,0,,recomp,,,
 0x80087CC0,func_80087CC0,ours,0,,recomp,,,privileged instrs; runtime-provided
 0x80087D70,osPiStartDma,libultra,5,os,recomp,,high,
-0x80087E80,func_80087E80,ours,4,,recomp,,,
+0x80087E80,osRecvMesg,libultra,4,,recomp,,high,blocking wait via __osEnqueueAndYield
 0x80087FC0,func_80087FC0,ours,0,,recomp,,,
 0x80088020,func_80088020,ours,0,,recomp,,,
 0x80088050,func_80088050,ours,0,,recomp,,,
 0x80088074,func_80088074,ours,1,,recomp,,,
-0x800880AC,func_800880AC,ours,4,,recomp,,,
-0x800880E0,func_800880E0,ours,0,,recomp,,,
+0x800880AC,alInit,libultra,4,,recomp,,med,"sets alGlobals 0x800A6990 once, calls 0x800887D0"
+0x800880E0,osCreateMesgQueue,libultra,0,,recomp,,high,OSMesgQueue: +0 mtqueue +4 fullqueue (&__osThreadTail 0x800A7BB0) +8 validCount +0xC first +0x10 msgCount +0x14 msg
 0x80088110,func_80088110,ours,0,,recomp,,,
 0x80088150,func_80088150,ours,0,,recomp,,,
 0x800882B0,func_800882B0,ours,2,,recomp,,,
@@ -1124,7 +1124,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800884E8,func_800884E8,ours,0,,recomp,,,
 0x80088500,func_80088500,ours,0,,recomp,,,
 0x80088530,func_80088530,ours,0,,recomp,,,
-0x80088538,func_80088538,ours,2,,recomp,,,
+0x80088538,alAudioFrame,libultra,2,,recomp,,med,"walks alGlobals client list, calls handlers indirectly"
 0x800887D0,func_800887D0,ours,3,,recomp,,,
 0x80088AD0,func_80088AD0,ours,0,,recomp,,,privileged instrs; runtime-provided
 0x80088B00,func_80088B00,ours,0,,recomp,,,
@@ -1138,7 +1138,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80089288,func_80089288,ours,0,,recomp,,,
 0x80089290,func_80089290,ours,0,,recomp,,,
 0x8008937C,func_8008937C,ours,0,,recomp,,,
-0x80089384,func_80089384,ours,1,,recomp,,,
+0x80089384,alBnkfNew,libultra,1,,recomp,,med,checks bank magic 0x4231 ('B1')
 0x80089488,func_80089488,ours,0,,recomp,,,
 0x800894D0,func_800894D0,ours,0,,recomp,,,
 0x80089570,func_80089570,ours,0,,recomp,,,
@@ -1153,8 +1153,8 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80089870,func_80089870,ours,6,,recomp,,,
 0x800899E0,func_800899E0,ours,0,,recomp,,,
 0x80089AB0,func_80089AB0,ours,0,,recomp,,,
-0x80089BB0,func_80089BB0,ours,7,,recomp,,,
-0x80089C34,func_80089C34,ours,0,,recomp,,,
+0x80089BB0,osContStartReadData,libultra,7,,recomp,,high,"SI access, pack, SI DMA, osRecvMesg"
+0x80089C34,osContGetReadData,libultra,0,,recomp,,high,copies from __osContPifRam 0x80149C70
 0x80089CC0,func_80089CC0,ours,0,,recomp,,,
 0x80089D90,func_80089D90,ours,12,,recomp,,,
 0x80089E50,func_80089E50,ours,10,,recomp,,,
@@ -1166,21 +1166,21 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8008A420,func_8008A420,ours,11,,recomp,,,
 0x8008A5F8,func_8008A5F8,ours,0,,recomp,,,
 0x8008A690,func_8008A690,ours,1,,recomp,,,
-0x8008A6B4,func_8008A6B4,ours,5,,recomp,,,
+0x8008A6B4,sprintf,libultra,5,,recomp,,high,_Printf (0x80093180) with proutSprintf 0x8008A690 (indirect call)
 0x8008A710,func_8008A710,ours,7,,recomp,,,
-0x8008A750,func_8008A750,ours,0,,recomp,,,
-0x8008A8C0,func_8008A8C0,ours,0,,recomp,,,
+0x8008A750,cosf,libultra,0,,recomp,,med,"libultra cosf by shape (exponent test 310); port, never std"
+0x8008A8C0,sinf,libultra,0,,recomp,,med,"libultra sinf by shape (exponent tests 255/230, table 0x800ADE20); port, never std"
 0x8008AAE0,func_8008AAE0,ours,0,,recomp,,,
 0x8008AB0C,func_8008AB0C,ours,0,,recomp,,,
-0x8008AB48,func_8008AB48,ours,0,,recomp,,,
-0x8008AB84,func_8008AB84,ours,0,,recomp,,,
+0x8008AB48,__ull_div,libultra,0,,recomp,,high,pure 64-bit helper; break 7 on zero
+0x8008AB84,__ll_lshift,libultra,0,,recomp,,high,pure 64-bit helper
 0x8008ABB0,func_8008ABB0,ours,0,,recomp,,,
 0x8008ABEC,func_8008ABEC,ours,0,,recomp,,,
-0x8008AC48,func_8008AC48,ours,0,,recomp,,,
+0x8008AC48,__ll_mul,libultra,0,,recomp,,high,pure 64-bit helper
 0x8008AC78,func_8008AC78,ours,0,,recomp,,,
 0x8008ACD8,func_8008ACD8,ours,0,,recomp,,,
 0x8008AD74,func_8008AD74,ours,0,,recomp,,,
-0x8008ADA0,func_8008ADA0,ours,0,,recomp,,,
+0x8008ADA0,osAiGetLength,libultra,0,,recomp,,high,AI_LEN_REG 0xA450000C
 0x8008ADB0,func_8008ADB0,ours,1,,recomp,,,
 0x8008AE30,func_8008AE30,ours,1,,recomp,,,
 0x8008AEA0,func_8008AEA0,ours,2,,recomp,,,
@@ -1189,8 +1189,8 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8008B190,func_8008B190,ours,1,,recomp,,,
 0x8008B1B0,func_8008B1B0,ours,7,,recomp,,,
 0x8008B318,func_8008B318,ours,1,,recomp,,,
-0x8008B424,func_8008B424,ours,9,,recomp,,,
-0x8008B580,func_8008B580,ours,2,,recomp,,,
+0x8008B424,osPfsInitPak,libultra,9,,recomp,,med,"OSPfs: +4 queue +8 channel, status +0"
+0x8008B580,__osInitialize_common,libultra,2,,recomp,,high,FCR31 = 0x01000800 (FS|EV); Status |= CU1
 0x8008B810,func_8008B810,ours,1,,recomp,,,
 0x8008B960,func_8008B960,ours,3,,recomp,,,
 0x8008BAB0,func_8008BAB0,ours,4,,recomp,,,
@@ -1207,7 +1207,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8008C31C,func_8008C31C,ours,0,,recomp,,,libultra range?
 0x8008C344,func_8008C344,ours,0,,recomp,,,libultra range?
 0x8008C390,func_8008C390,ours,1,,recomp,,,libultra range?
-0x8008C550,func_8008C550,ours,0,,recomp,,,libultra range?; privileged instrs; runtime-provided
+0x8008C550,osGetCount,libultra,0,,recomp,,high,mfc0 Count
 0x8008C560,func_8008C560,ours,0,,recomp,,,libultra range?
 0x8008C57C,func_8008C57C,ours,0,,recomp,,,libultra range?
 0x8008C598,func_8008C598,ours,0,,recomp,,,libultra range?
@@ -1217,11 +1217,11 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8008C704,func_8008C704,ours,0,,recomp,,,libultra range?
 0x8008C738,func_8008C738,ours,0,,recomp,,,libultra range?
 0x8008C770,func_8008C770,ours,1,,recomp,,,libultra range?
-0x8008C7B0,func_8008C7B0,ours,4,,recomp,,,libultra range?
+0x8008C7B0,osJamMesg,libultra,4,,recomp,,high,first = (first + msgCount - 1) % msgCount
 0x8008C900,osPiGetCmdQueue,libultra,0,os,recomp,,high,libultra range?
-0x8008C930,func_8008C930,ours,4,,recomp,,,libultra range?
-0x8008CA80,func_8008CA80,ours,0,,recomp,,,libultra range?
-0x8008CAA0,func_8008CAA0,ours,0,,recomp,,,libultra range?
+0x8008C930,osSendMesg,libultra,4,,recomp,,high,index (first + validCount) % msgCount
+0x8008CA80,__osDisableInt,libultra,0,,recomp,,high,mfc0/mtc0 Status IE
+0x8008CAA0,__osRestoreInt,libultra,0,,recomp,,med,
 0x8008CAC0,func_8008CAC0,ours,0,,recomp,,,libultra range?
 0x8008CB00,func_8008CB00,ours,0,,recomp,,,libultra range?; indirect jr
 0x8008CB10,func_8008CB10,ours,2,,recomp,,,libultra range?; privileged instrs; runtime-provided
@@ -1320,7 +1320,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80093B60,func_80093B60,ours,0,,recomp,,,libultra range?
 0x80093C00,func_80093C00,ours,0,,recomp,,,libultra range?
 0x80093C10,func_80093C10,ours,0,,recomp,,,libultra range?
-0x80093C20,func_80093C20,ours,0,,recomp,,,libultra range?
+0x80093C20,__osSetFpcCsr,libultra,0,,recomp,,high,cfc1 v0; ctc1 a0
 0x80093C30,func_80093C30,ours,1,,recomp,,,libultra range?
 0x80093C80,func_80093C80,ours,1,,recomp,,,libultra range?
 0x80093CD0,func_80093CD0,ours,0,,recomp,,,libultra range?; privileged instrs; runtime-provided
