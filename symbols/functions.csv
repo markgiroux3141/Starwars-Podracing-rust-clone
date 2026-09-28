@@ -239,12 +239,12 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800125E4,func_800125E4,ours,0,,recomp,,,
 0x800129B8,func_800129B8,ours,1,,recomp,,,
 0x800129E4,func_800129E4,ours,0,,recomp,,,
-0x80012B5C,func_80012B5C,ours,0,,recomp,,,
+0x80012B5C,func_80012B5C,ours,0,,rust_verified,unit_diff,high,lookup c in 16-byte records [o+0x5C] for c in [o+0x5A]..[o+0x5B]; QUIRK a miss copies uninitialised stack words (game::misc)
 0x80012BF0,func_80012BF0,ours,1,,recomp,,,
 0x80013DC0,func_80013DC0,ours,2,,recomp,,,
 0x800141EC,func_800141EC,ours,1,,recomp,,,
 0x80014568,func_80014568,ours,1,,recomp,,,
-0x80014C98,func_80014C98,ours,0,,recomp,,,
+0x80014C98,func_80014C98,ours,0,,rust_verified,unit_diff,high,"gDPPipeSync (0xE7000000, 0) onto the display list at [0x801217B0] (game::misc)"
 0x80014CC0,func_80014CC0,ours,1,,recomp,,,
 0x80014D20,func_80014D20,ours,2,,recomp,,,
 0x80014D4C,func_80014D4C,ours,0,,recomp,,,
@@ -306,30 +306,30 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80017C18,func_80017C18,ours,0,,recomp,,,
 0x80017C98,func_80017C98,ours,0,,recomp,,,
 0x80017D18,func_80017D18,ours,4,,recomp,,,
-0x80017D48,func_80017D48,ours,0,,recomp,,,
-0x80017D50,func_80017D50,ours,0,,recomp,,,
+0x80017D48,func_80017D48,ours,0,,rust_verified,unit_diff,high,[o+0x1C] = v (game::misc)
+0x80017D50,func_80017D50,ours,0,,rust_verified,unit_diff,high,[o+0x1C] (game::misc)
 0x80017D58,func_80017D58,ours,0,,recomp,,,
 0x80017D80,func_80017D80,ours,0,,recomp,,,
-0x80017DA4,func_80017DA4,ours,0,,recomp,,,
-0x80017DAC,func_80017DAC,ours,0,,recomp,,,
-0x80017DB4,func_80017DB4,ours,0,,recomp,,,
-0x80017DDC,func_80017DDC,ours,0,,recomp,,,
-0x80017DE4,func_80017DE4,ours,0,,recomp,,,
-0x80017DEC,func_80017DEC,ours,0,,recomp,,,
-0x80017DF4,func_80017DF4,ours,0,,recomp,,,
+0x80017DA4,func_80017DA4,ours,0,,rust_verified,unit_diff,high,[o] (game::misc)
+0x80017DAC,func_80017DAC,ours,0,,rust_verified,unit_diff,high,[o+0x14] (game::misc)
+0x80017DB4,func_80017DB4,ours,0,,rust_verified,unit_diff,high,o ? [o+0x18][k] : 0; QUIRK unbounded k (game::misc)
+0x80017DDC,func_80017DDC,ours,0,,rust_verified,unit_diff,high,(i16)[o+0x20] (game::misc)
+0x80017DE4,func_80017DE4,ours,0,,rust_verified,unit_diff,high,(i16)[o+0x22] (game::misc)
+0x80017DEC,func_80017DEC,ours,0,,rust_verified,unit_diff,high,[o+0x24] (game::misc)
+0x80017DF4,func_80017DF4,ours,0,,rust_verified,unit_diff,high,"*a, *b = [o+0x2C], [o+0x28] or zeros (game::misc)"
 0x80017E20,func_80017E20,ours,0,,recomp,,,
-0x80017E54,func_80017E54,ours,0,,recomp,,,
-0x80017E5C,func_80017E5C,ours,0,,recomp,,,
-0x80017E70,func_80017E70,ours,0,,recomp,,,
-0x80017E88,func_80017E88,ours,0,,recomp,,,
-0x80017EDC,func_80017EDC,ours,0,,recomp,,,
-0x80017EE4,func_80017EE4,ours,0,,recomp,,,
-0x80017EEC,func_80017EEC,ours,0,,recomp,,,
-0x80017EF4,func_80017EF4,ours,0,,recomp,,,
-0x80017EFC,func_80017EFC,ours,0,,recomp,,,
-0x80017F0C,func_80017F0C,ours,0,,recomp,,,
-0x80017F20,func_80017F20,ours,0,,recomp,,,
-0x80017F28,func_80017F28,ours,0,,recomp,,,
+0x80017E54,func_80017E54,ours,0,,rust_verified,unit_diff,high,[o+0x14] (game::misc)
+0x80017E5C,func_80017E5C,ours,0,,rust_verified,unit_diff,high,[o+0x18][k]; QUIRK unbounded k (game::misc)
+0x80017E70,func_80017E70,ours,0,,rust_verified,unit_diff,high,[o+8] = v if which == 2 (game::misc)
+0x80017E88,func_80017E88,ours,0,,rust_verified,unit_diff,high,"-1, or flag bits 3/6 of [o] as 1|2 (game::misc)"
+0x80017EDC,func_80017EDC,ours,0,,rust_verified,unit_diff,high,[o] (game::misc)
+0x80017EE4,func_80017EE4,ours,0,,rust_verified,unit_diff,high,[o+4] (game::misc)
+0x80017EEC,func_80017EEC,ours,0,,rust_verified,unit_diff,high,[o+4] = v (game::misc)
+0x80017EF4,func_80017EF4,ours,0,,rust_verified,unit_diff,high,[o] (game::misc)
+0x80017EFC,func_80017EFC,ours,0,,rust_verified,unit_diff,high,[o] |= bits (game::misc)
+0x80017F0C,func_80017F0C,ours,0,,rust_verified,unit_diff,high,[o] &= ~bits (game::misc)
+0x80017F20,func_80017F20,ours,0,,rust_verified,unit_diff,high,returns 4 (game::misc)
+0x80017F28,func_80017F28,ours,0,,rust_verified,unit_diff,high,"0x80120DF0 + 0x170k for 0 <= k < 4, else 0 (game::misc)"
 0x80017F64,func_80017F64,ours,3,,recomp,,,
 0x80017FD0,func_80017FD0,ours,1,,recomp,,,
 0x80018084,func_80018084,ours,0,,recomp,,,

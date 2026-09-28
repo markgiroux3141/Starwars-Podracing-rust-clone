@@ -1856,3 +1856,400 @@ pub unsafe extern "C" fn func_80011F04(rdram: *mut u8, ctx: *mut RecompContext) 
     sw(m, g[SP], 0xC, g[A3]);
     sw(m, g[AT], 0x6938, 0);
 }
+
+/// `func_80012B5C(c, o, &a, &b)`: look up `c` (the low byte of `a0`) in
+/// `o`'s table of 16-byte records at `[o + 0x5C]`, which covers `c` from the
+/// byte `[o + 0x5A]` up to the byte `[o + 0x5B]`. `*a` and `*b` (each only
+/// if its pointer is nonzero) are first set to -1, then to the record's
+/// halfwords at `+2` and `+0xE`, sign-extended.
+///
+/// QUIRK: those two values go through the stack (`[sp + 4]`, `[sp]` of an
+/// 8-byte frame) and are copied out **whether or not the lookup hit**: on a
+/// miss (no table, or `c` out of range) `*a` and `*b` get whatever those
+/// stack words held, overwriting the -1. Spills `a0` to its slot.
+///
+/// Leaves `a0` = the byte (or the record, on a hit), `t6`-`t8` (`t7`/`t8` =
+/// the words copied out), `v0` = the table, and on the way `t0`-`t5`, `t9`,
+/// `at`.
+///
+/// Domain: canonical `sp` with `[sp - 8]..[sp + 4]` in RDRAM; canonical
+/// `o`, `a`, `b`; the table and record in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80012B5C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-8i64) as u64);
+    sw(m, g[SP], 8, g[A0]);
+    g[T6] = g[A0] & 0xFF;
+    g[A0] = g[T6];
+    if g[A2] != 0 {
+        g[T7] = u64::MAX;
+        sw(m, g[A2], 0, g[T7]);
+    }
+    g[T8] = u64::MAX;
+    if g[A3] != 0 {
+        sw(m, g[A3], 0, g[T8]);
+    }
+    g[V0] = lw(m, g[A1], 0x5C);
+    if g[V0] != 0 {
+        g[T0] = lbu(m, g[A1], 0x5A);
+        g[AT] = slt(g[A0], g[T0]);
+        if g[AT] == 0 {
+            g[T9] = lbu(m, g[A1], 0x5B);
+            g[T1] = sll(g[A0], 4);
+            g[T2] = addu(g[V0], g[T1]);
+            g[AT] = slt(g[T9], g[A0]);
+            g[T3] = sll(g[T0], 4);
+            if g[AT] == 0 {
+                // A hit: record = table + 16 * (c - first).
+                g[T4] = subu(0, g[T3]);
+                g[A0] = addu(g[T2], g[T4]);
+                g[T5] = lh(m, g[A0], 2);
+                sw(m, g[SP], 4, g[T5]);
+                g[T6] = lh(m, g[A0], 0xE);
+                sw(m, g[SP], 0, g[T6]);
+            }
+        }
+    }
+    // QUIRK: copied out on a miss too, from stack words never written.
+    g[T7] = lw(m, g[SP], 4);
+    if g[A2] != 0 {
+        sw(m, g[A2], 0, g[T7]);
+    }
+    g[T8] = lw(m, g[SP], 0);
+    if g[A3] != 0 {
+        sw(m, g[A3], 0, g[T8]);
+    }
+    g[SP] = addu(g[SP], 8);
+}
+
+/// The display list pointer [`func_80014C98`] appends to.
+pub const DL_HEAD: u32 = 0x8012_17B0;
+
+/// `func_80014C98()`: append `gDPPipeSync` (`0xE7000000`, `0`) at the
+/// display list pointer [`DL_HEAD`] and advance it by 8 (the pointer is
+/// stored before the command, then the low word, then the high).
+///
+/// Leaves `a0 = DL_HEAD`, `v1` = the old pointer, `t6` = the new, `t7 =
+/// 0xE7000000`.
+///
+/// Domain: the pointer canonical, 8 bytes at it in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80014C98(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[A0] = li(DL_HEAD);
+    g[V1] = lw(m, g[A0], 0);
+    g[T7] = li(0xE700_0000);
+    g[T6] = addu(g[V1], 8);
+    sw(m, g[A0], 0, g[T6]);
+    sw(m, g[V1], 4, 0);
+    sw(m, g[V1], 0, g[T7]);
+}
+
+/// A struct field getter: `v0 = [a0 + off]`.
+fn get_word(rdram: *mut u8, ctx: *mut RecompContext, off: i32) {
+    // SAFETY: forwarded from the entry points below.
+    let (mem, ctx) = unsafe { enter(rdram, ctx) };
+    ctx.gpr[V0] = lw(&mem, ctx.gpr[A0], off);
+}
+
+/// A struct field getter: `v0 = (i16)[a0 + off]`.
+fn get_half(rdram: *mut u8, ctx: *mut RecompContext, off: i32) {
+    // SAFETY: forwarded from the entry points below.
+    let (mem, ctx) = unsafe { enter(rdram, ctx) };
+    ctx.gpr[V0] = lh(&mem, ctx.gpr[A0], off);
+}
+
+/// A struct field setter: `[a0 + off] = a1`.
+fn set_word(rdram: *mut u8, ctx: *mut RecompContext, off: i32) {
+    // SAFETY: forwarded from the entry points below.
+    let (mut mem, ctx) = unsafe { enter(rdram, ctx) };
+    sw(&mut mem, ctx.gpr[A0], off, ctx.gpr[A1]);
+}
+
+/// `func_80017D48(o, v)`: `[o + 0x1C] = v` ([`set_word`]).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017D48(rdram: *mut u8, ctx: *mut RecompContext) {
+    set_word(rdram, ctx, 0x1C)
+}
+
+/// `func_80017D50(o)`: `[o + 0x1C]` ([`get_word`]).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017D50(rdram: *mut u8, ctx: *mut RecompContext) {
+    get_word(rdram, ctx, 0x1C)
+}
+
+/// `func_80017DA4(o)`: `[o]` ([`get_word`]).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017DA4(rdram: *mut u8, ctx: *mut RecompContext) {
+    get_word(rdram, ctx, 0)
+}
+
+/// `func_80017DAC(o)`: `[o + 0x14]` ([`get_word`]).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017DAC(rdram: *mut u8, ctx: *mut RecompContext) {
+    get_word(rdram, ctx, 0x14)
+}
+
+/// `func_80017DB4(o, k)`: 0 if `o` is null, else word `k` of the array at
+/// `[o + 0x18]`. QUIRK: `k` is unbounded. Leaves `t6` = the array, `t7 =
+/// 4k`, `t8` = the element's address, when `o != 0`.
+///
+/// Domain: for nonzero `o`, canonical and the element in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017DB4(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let m = &mem;
+    let g = &mut ctx.gpr;
+    if g[A0] == 0 {
+        g[V0] = 0;
+        return;
+    }
+    g[T6] = lw(m, g[A0], 0x18);
+    g[T7] = sll(g[A1], 2);
+    g[T8] = addu(g[T6], g[T7]);
+    g[V0] = lw(m, g[T8], 0);
+}
+
+/// `func_80017DDC(o)`: `(i16)[o + 0x20]` ([`get_half`]).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017DDC(rdram: *mut u8, ctx: *mut RecompContext) {
+    get_half(rdram, ctx, 0x20)
+}
+
+/// `func_80017DE4(o)`: `(i16)[o + 0x22]` ([`get_half`]).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017DE4(rdram: *mut u8, ctx: *mut RecompContext) {
+    get_half(rdram, ctx, 0x22)
+}
+
+/// `func_80017DEC(o)`: `[o + 0x24]` ([`get_word`]).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017DEC(rdram: *mut u8, ctx: *mut RecompContext) {
+    get_word(rdram, ctx, 0x24)
+}
+
+/// `func_80017DF4(o, zero, &a, &b)`: if `zero != 0` (64-bit), `*a = *b = 0`;
+/// else `*a = [o + 0x2C]` and `*b = [o + 0x28]`, in that order. Leaves `t6`,
+/// `t7` = the words copied, in the second case.
+///
+/// Domain: canonical `a`, `b` (and `o` when `zero == 0`) in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017DF4(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    if g[A1] != 0 {
+        sw(m, g[A2], 0, 0);
+        sw(m, g[A3], 0, 0);
+    } else {
+        g[T6] = lw(m, g[A0], 0x2C);
+        sw(m, g[A2], 0, g[T6]);
+        g[T7] = lw(m, g[A0], 0x28);
+        sw(m, g[A3], 0, g[T7]);
+    }
+}
+
+/// `func_80017E54(o)`: `[o + 0x14]` ([`get_word`]; the same as
+/// [`func_80017DAC`]).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017E54(rdram: *mut u8, ctx: *mut RecompContext) {
+    get_word(rdram, ctx, 0x14)
+}
+
+/// `func_80017E5C(o, k)`: word `k` of the array at `[o + 0x18]`, without
+/// [`func_80017DB4`]'s null check. QUIRK: `k` is unbounded. Leaves `t6` =
+/// the array, `t7 = 4k`, `t8` = the element's address.
+///
+/// Domain: canonical `o`; the element in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017E5C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let m = &mem;
+    let g = &mut ctx.gpr;
+    g[T6] = lw(m, g[A0], 0x18);
+    g[T7] = sll(g[A1], 2);
+    g[T8] = addu(g[T6], g[T7]);
+    g[V0] = lw(m, g[T8], 0);
+}
+
+/// `func_80017E70(o, which, v)`: `[o + 8] = v` if `which == 2` (64-bit
+/// compare), else nothing. Leaves `at = 2`.
+///
+/// Domain: when `which == 2`, canonical `o` with `o + 8` in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017E70(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[AT] = 2;
+    if g[A1] == g[AT] {
+        sw(&mut mem, g[A0], 8, g[A2]);
+    }
+}
+
+/// `func_80017E88(o, which)`: -1 unless `o` is nonzero and `which == 1`
+/// (64-bit); then, from the flags word `[o]`: bit 3 gives 1, bit 6 gives 2,
+/// both 3, neither 0.
+///
+/// Leaves `v1` = the result (except for exactly bit 6, where it stays 0),
+/// and when the flags are read `at = 1`, `v0`, `t6 = flags & 8`, `t7 =
+/// flags & 0x40`.
+///
+/// Domain: canonical `o` with `[o]` in RDRAM when `which == 1`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017E88(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[V1] = u64::MAX;
+    if g[A0] != 0 {
+        g[AT] = 1;
+        if g[A1] == g[AT] {
+            g[V0] = lw(&mem, g[A0], 0);
+            g[V1] = 0;
+            g[T6] = g[V0] & 8;
+            g[T7] = g[V0] & 0x40;
+            if g[T6] != 0 {
+                g[V1] = 1;
+            }
+            if g[T7] != 0 {
+                if g[V1] == 0 {
+                    g[V0] = 2;
+                    return;
+                }
+                g[V1] = 3;
+            }
+        }
+    }
+    g[V0] = g[V1];
+}
+
+/// `func_80017EDC(o)`: `[o]` ([`get_word`]).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017EDC(rdram: *mut u8, ctx: *mut RecompContext) {
+    get_word(rdram, ctx, 0)
+}
+
+/// `func_80017EE4(o)`: `[o + 4]` ([`get_word`]).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017EE4(rdram: *mut u8, ctx: *mut RecompContext) {
+    get_word(rdram, ctx, 4)
+}
+
+/// `func_80017EEC(o, v)`: `[o + 4] = v` ([`set_word`]).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017EEC(rdram: *mut u8, ctx: *mut RecompContext) {
+    set_word(rdram, ctx, 4)
+}
+
+/// `func_80017EF4(o)`: `[o]` ([`get_word`]).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017EF4(rdram: *mut u8, ctx: *mut RecompContext) {
+    get_word(rdram, ctx, 0)
+}
+
+/// `func_80017EFC(o, bits)`: `[o] |= bits`. Leaves `t6`/`t7` = old/new.
+///
+/// Domain: canonical `o` in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017EFC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[T6] = lw(&mem, g[A0], 0);
+    g[T7] = g[T6] | g[A1];
+    sw(&mut mem, g[A0], 0, g[T7]);
+}
+
+/// `func_80017F0C(o, bits)`: `[o] &= !bits`. Leaves `t6` = old, `t7 = !bits`
+/// (all 64 bits), `t8` = new.
+///
+/// Domain: canonical `o` in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017F0C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[T6] = lw(&mem, g[A0], 0);
+    g[T7] = !g[A1];
+    g[T8] = g[T6] & g[T7];
+    sw(&mut mem, g[A0], 0, g[T8]);
+}
+
+/// `func_80017F20()`: returns 4.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017F20(_rdram: *mut u8, ctx: *mut RecompContext) {
+    (*ctx).gpr[V0] = 4;
+}
+
+/// Four 0x170-byte records returned by [`func_80017F28`].
+pub const RECORDS_170: u32 = 0x8012_0DF0;
+
+/// `func_80017F28(k)`: `RECORDS_170 + 0x170 * k` for `0 <= k < 4` (signed
+/// 64-bit), else 0. Leaves `at` = `k < 4`, and `t6` = `4k`, or on a hit
+/// `0x170 * k`, with `t7 = RECORDS_170`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017F28(_rdram: *mut u8, ctx: *mut RecompContext) {
+    let g = &mut (*ctx).gpr;
+    g[AT] = slt(g[A0], 4);
+    if (g[A0] as i64) >= 0 {
+        g[T6] = sll(g[A0], 2);
+        if g[AT] != 0 {
+            // t6 = k * 0x170: ((4k - k) * 8 - k) * 16
+            g[T6] = subu(g[T6], g[A0]);
+            g[T6] = sll(g[T6], 3);
+            g[T6] = subu(g[T6], g[A0]);
+            g[T7] = li(RECORDS_170);
+            g[T6] = sll(g[T6], 4);
+            g[V0] = addu(g[T6], g[T7]);
+            return;
+        }
+    }
+    g[V0] = 0;
+}
