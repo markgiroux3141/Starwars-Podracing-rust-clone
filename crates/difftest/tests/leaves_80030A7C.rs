@@ -1,4 +1,4 @@
-//! The leaves at 0x80030A7C..0x80031F94 (game::misc): a header-list merge,
+//! The leaves at 0x80030A7C..0x80031F94 (game::misc, game::channels, game::loader): a header-list merge,
 //! model_load's statistics getter, memset, four 28-byte channel records
 //! (three of the setters call themselves for "all channels") and the
 //! animation object's destination. Recompiled C vs Rust on random register
@@ -8,7 +8,7 @@
 #![allow(non_snake_case)]
 
 use difftest::{compare, State};
-use game::misc;
+use game::{channels, loader, misc};
 use game::recomp::{reg::*, RecompFn};
 use proptest::prelude::*;
 
@@ -178,7 +178,7 @@ proptest! {
         let mut s = state(seed);
         s.randomise_memory(seed ^ 1, 0x800D_9DC0, 0x20);
         (s.ctx.gpr[A0], s.ctx.gpr[A1], s.ctx.gpr[A2]) = (sext(O), sext(O + 4), sext(O + 8));
-        let after = run("func_80030B68", misc::func_80030B68, &s)?;
+        let after = run("func_80030B68", loader::func_80030B68, &s)?;
         prop_assert_eq!(
             (word(&after, O), word(&after, O + 4), word(&after, O + 8)),
             (word(&s, 0x800D_9DC8), word(&s, 0x800D_9DD0), word(&s, 0x800D_9DCC))
@@ -204,7 +204,7 @@ proptest! {
     fn func_800314C0(seed: u64, i in prop_oneof![0u64..4, Just(u64::MAX), 4u64..8]) {
         let mut s = channel_state(seed);
         s.ctx.gpr[A0] = i;
-        let after = run("func_800314C0", misc::func_800314C0, &s)?;
+        let after = run("func_800314C0", channels::func_800314C0, &s)?;
         prop_assert_eq!(after.ctx.gpr[V0], sext(word(&s, channel(i))));
     }
 
@@ -222,7 +222,7 @@ proptest! {
             s.rdram.mem().write_u16(r + 4, value as u16);
         }
         (s.ctx.gpr[A0], s.ctx.gpr[A1], s.ctx.gpr[A2], s.ctx.gpr[A3]) = (i, value, a2, a3);
-        let after = run("func_800314DC", misc::func_800314DC, &s)?;
+        let after = run("func_800314DC", channels::func_800314DC, &s)?;
         let keep = half(&s, r + 6) != 0 && half(&s, r + 4) == value as u16 && a2 != 0;
         prop_assert_eq!(half(&after, r + 6), if keep { half(&s, r + 6) } else { 0x8000 });
         prop_assert_eq!(half(&after, r + 4), value as u16);
@@ -235,9 +235,9 @@ proptest! {
     #[test]
     fn channel_setters(seed: u64, k in 0usize..3, i in prop_oneof![0u64..4, Just(u64::MAX), Just(0xFFFF_FFFFu64), 4u64..6]) {
         let (name, port): (&str, RecompFn) = [
-            ("func_80031560", misc::func_80031560 as RecompFn),
-            ("func_800315D8", misc::func_800315D8),
-            ("func_80031640", misc::func_80031640),
+            ("func_80031560", channels::func_80031560 as RecompFn),
+            ("func_800315D8", channels::func_800315D8),
+            ("func_80031640", channels::func_80031640),
         ][k];
         let mut s = channel_state(seed);
         s.ctx.gpr[A0] = i;
@@ -263,7 +263,7 @@ proptest! {
     fn func_80031BEC(seed: u64, i in 0u64..8) {
         let mut s = channel_state(seed);
         s.ctx.gpr[A0] = i;
-        let after = run("func_80031BEC", misc::func_80031BEC, &s)?;
+        let after = run("func_80031BEC", channels::func_80031BEC, &s)?;
         for j in 0..8u32 {
             let a = 0x800D_B910 + 4 * j;
             prop_assert_eq!(word(&after, a), if u64::from(j) == i { 1 } else { word(&s, a) });

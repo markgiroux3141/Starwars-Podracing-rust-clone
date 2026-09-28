@@ -1,0 +1,365 @@
+//! Save data and what the game derives from it (**guess** at the meaning;
+//! NOTES.md, "Depth-0 leaves ported in session 7"): the 0x3F0-byte block at
+//! `0x80113680` and its 0x2C-byte profile records, the racer list and track
+//! selection built from them, and the CRC-32 table (probably for its
+//! checksum).
+
+// Ports keep N64Recomp's names (func_80005AFC), capitals included.
+#![allow(non_snake_case)]
+
+use n64mem::Mem;
+use crate::recomp::{addu, enter, lb, lbu, li, lw, multu, reg::*, sb, sll, sllv, slt, subu, sw, RecompContext};
+
+/// `func_8001F464()`: 1 if bit 1 of `[0x80113688]` is set, else 0. Leaves
+/// `t6` = the word, `t7` = the bit.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8001F464(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[T6] = lw(&mem, li(0x8011_0000), 0x3688);
+    g[T7] = g[T6] & 2;
+    g[V0] = u64::from(g[T7] != 0);
+}
+
+/// `func_80024704(p)`: update the track selection (**guess**) at
+/// `0x8011A240`: `+0x28` = circuits available, `+0x2C` = tracks unlocked in
+/// the chosen circuit `c = (s8) [p + 0x5E]`, `+0x30` (the selected track)
+/// clamped to at most `+0x2C - 1`, `+0x20 = (c > 0)` and `+0x24 = (c <
+/// +0x28)` (signed).
+///
+/// The save data is `0x80113E60` if the byte `[p + 0x6C]` (signed) is
+/// nonzero, else `0x80113680` (see [`func_8002DAD0`](crate::misc::func_8002DAD0)). Circuits: 3, or 2 if
+/// its byte `+0xB` (resp. `+0xF`) is 0. Tracks: the bits `0..n` set in its
+/// byte `+8 + c` (resp. `+0xC + c`), `n = [0x800A21B4 + c]` (unsigned
+/// byte); `c` and `n` are read again after each set bit.
+///
+/// Leaves `a2 = 0x8011A240`, `a3` = the save data, `v0` = tracks - 1, `v1 =
+/// c`, `a1 = n`, `t2 = t8 = 1`, and the loop's loads in `t0`..`t9`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80024704(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[A2] = li(0x8011_A240);
+    g[T6] = 3;
+    sw(m, g[A2], 0x28, g[T6]);
+    sw(m, g[A2], 0x2C, 0);
+    g[T7] = lb(m, g[A0], 0x6C);
+    g[A3] = li(0x8011_3680);
+    // (flag byte, its temporary, the "2" register), then the bit loop's
+    // (byte offset, pointer, byte, one, mask, test, count, count + 1).
+    let (flag, tflag, two, bits, ptr, byte, one, mask, test, cnt, cnt1) = if g[T7] != 0 {
+        g[A3] = li(0x8011_3E60);
+        (0xB, T8, T9, 8, T0, T1, T2, T3, T4, T5, T6)
+    } else {
+        (0xF, T7, T8, 0xC, T9, T0, T2, T1, T3, T4, T5)
+    };
+    g[tflag] = lbu(m, g[A3], flag);
+    g[two] = 2;
+    if g[tflag] == 0 {
+        sw(m, g[A2], 0x28, g[two]);
+    }
+    g[V1] = lb(m, g[A0], 0x5E);
+    g[A1] = lbu(m, addu(li(0x800A_0000), g[V1]), 0x21B4);
+    g[V0] = 0;
+    g[ptr] = addu(g[A3], g[V1]);
+    if (g[A1] as i64) > 0 {
+        loop {
+            g[byte] = lbu(m, g[ptr], bits);
+            g[one] = 1;
+            g[mask] = sllv(g[one], g[V0]);
+            g[test] = g[byte] & g[mask];
+            g[V0] = addu(g[V0], 1);
+            if g[test] != 0 {
+                g[cnt] = lw(m, g[A2], 0x2C);
+                g[cnt1] = addu(g[cnt], 1);
+                sw(m, g[A2], 0x2C, g[cnt1]);
+                g[V1] = lb(m, g[A0], 0x5E);
+                g[A1] = lbu(m, addu(li(0x800A_0000), g[V1]), 0x21B4);
+            }
+            g[AT] = slt(g[V0], g[A1]);
+            if g[AT] == 0 {
+                break;
+            }
+            g[ptr] = addu(g[A3], g[V1]);
+        }
+    }
+    g[V0] = lw(m, g[A2], 0x2C);
+    g[T6] = lw(m, g[A2], 0x30);
+    g[T8] = 1;
+    g[V0] = addu(g[V0], u64::MAX);
+    g[AT] = slt(g[V0], g[T6]);
+    g[T2] = 1;
+    if g[AT] != 0 {
+        sw(m, g[A2], 0x30, g[V0]);
+    }
+    sw(m, g[A2], 0x24, 0);
+    sw(m, g[A2], 0x20, 0);
+    g[V1] = lb(m, g[A0], 0x5E);
+    if (g[V1] as i64) > 0 {
+        sw(m, g[A2], 0x20, g[T8]);
+        g[V1] = lb(m, g[A0], 0x5E);
+    }
+    g[T9] = lw(m, g[A2], 0x28);
+    g[AT] = slt(g[V1], g[T9]);
+    if g[AT] != 0 {
+        sw(m, g[A2], 0x24, g[T2]);
+    }
+}
+
+/// `func_800281F0(p)`: build the list of available racers (**guess**; 23
+/// entries) at `0x800D6CD8`: the unlock mask `[0x80113E74 + 0x2C * (s8) [p
+/// + 0x6F]]` (a word of the current profile record, [`func_80039914`]) ORed
+/// with `0x22E01`, always available; each set bit `i < 23`, in order, gives
+/// an 8-byte entry `{+0: i, +4: 0xFF, +5: 0}`, and the rest of the 23 get
+/// `{-1, 0xFF, 0}`. The number available goes to `[0x8011A26C]` (the count
+/// [`func_80047920`](crate::misc::func_80047920) reads). The fill is unrolled: `(23 - n) & 3` single
+/// entries, then four at a time.
+///
+/// Leaves `v0` = the count, `a1 = 23`, `a2 = -1` (or `0x800D6CD8` if all 23
+/// are available), `a3 = 0xFF`, `t9 = 1`, `at = 0x80120000`, and the
+/// loops' registers in `a0`, `v1`, `t0`..`t8`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800281F0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T6] = lb(m, g[A0], 0x6F);
+    g[T7] = sll(g[T6], 2);
+    g[T7] = subu(g[T7], g[T6]);
+    g[T7] = sll(g[T7], 2);
+    g[T7] = subu(g[T7], g[T6]);
+    g[T7] = sll(g[T7], 2);
+    g[V1] = lw(m, addu(li(0x8011_0000), g[T7]), 0x3E74);
+    g[AT] = li(0x2_2E01);
+    g[A2] = li(0x800D_6CD8);
+    g[T8] = g[V1] | g[AT];
+    g[V0] = 0;
+    g[V1] = g[T8];
+    g[A1] = 0;
+    g[A3] = 0xFF;
+    g[T9] = 1;
+    loop {
+        g[T1] = sllv(g[T9], g[A1]);
+        g[T2] = g[T1] & g[V1];
+        g[T3] = sll(g[V0], 3);
+        if g[T2] != 0 {
+            g[A0] = addu(g[A2], g[T3]);
+            sw(m, g[A0], 0, g[A1]);
+            sb(m, g[A0], 4, g[A3]);
+            sb(m, g[A0], 5, 0);
+            g[V0] = addu(g[V0], 1);
+        }
+        g[A1] = addu(g[A1], 1);
+        g[AT] = slt(g[A1], 0x17);
+        if g[AT] == 0 {
+            break;
+        }
+        g[T9] = 1;
+    }
+    g[AT] = slt(g[V0], 0x17);
+    g[A1] = g[V0];
+    if g[AT] != 0 {
+        // The unavailable rest: -1, 0xFF, 0.
+        g[T0] = 0x17;
+        g[A2] = subu(g[T0], g[V0]);
+        g[T4] = g[A2] & 3;
+        g[A0] = addu(g[T4], g[V0]);
+        let mut done = false;
+        if g[T4] != 0 {
+            g[T6] = li(0x800D_6CD8);
+            g[T5] = sll(g[A1], 3);
+            g[V1] = addu(g[T5], g[T6]);
+            g[A2] = u64::MAX;
+            loop {
+                g[A1] = addu(g[A1], 1);
+                sw(m, g[V1], 0, g[A2]);
+                sb(m, g[V1], 4, g[A3]);
+                sb(m, g[V1], 5, 0);
+                g[V1] = addu(g[V1], 8);
+                if g[A0] == g[A1] {
+                    break;
+                }
+            }
+            if g[A1] == g[T0] {
+                g[T8] = li(0x800D_0000);
+                done = true;
+            }
+        }
+        if !done {
+            g[T8] = li(0x800D_6CD8);
+            g[T7] = sll(g[A1], 3);
+            g[A0] = li(0x800D_6D90);
+            g[V1] = addu(g[T7], g[T8]);
+            g[A2] = u64::MAX;
+            loop {
+                g[V1] = addu(g[V1], 0x20);
+                for off in [-0x18, -0x10, -8, -0x20] {
+                    sw(m, g[V1], off, g[A2]);
+                    sb(m, g[V1], off + 4, g[A3]);
+                    sb(m, g[V1], off + 5, 0);
+                }
+                if g[V1] == g[A0] {
+                    break;
+                }
+            }
+        }
+    }
+    g[AT] = li(0x8012_0000);
+    sw(m, g[AT], -0x5D94, g[V0]);
+}
+
+/// `func_800390C0()` = `crc32_table_init`: fill the 256 words at
+/// `0x80114070` with the table of the MSB-first CRC-32 (polynomial
+/// `0x04C11DB7`): entry `v` is `v << 24` shifted left eight times, XORing
+/// the polynomial after each shift out of bit 31. The compiler unrolled the
+/// eight steps into two passes of four, each step with its own temporaries.
+///
+/// Leaves, from the last entry (255): `v0 = 0x100 = t0`, `a1 = 0x80114470`,
+/// `a2 = 0x80000000`, `a3` = the polynomial, `a0 = 0`, `v1` = the entry,
+/// and the steps' temporaries `t1`..`t9`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800390C0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[A1] = li(0x8011_4070);
+    g[A3] = li(0x04C1_1DB7);
+    g[V0] = 0;
+    g[T0] = 0x100;
+    g[A2] = li(0x8000_0000);
+    loop {
+        g[V1] = sll(g[V0], 24);
+        g[A0] = 8;
+        g[T6] = g[V1] & g[A2];
+        loop {
+            g[A0] = addu(g[A0], (-4i64) as u64);
+            // Step 1: test t6, shift in t7 (bit set) or t8.
+            if g[T6] == 0 {
+                g[T8] = sll(g[V1], 1);
+                g[V1] = g[T8];
+            } else {
+                g[T7] = sll(g[V1], 1);
+                g[V1] = g[T7] ^ g[A3];
+            }
+            // Steps 2-4: test, the plain shift (always made), the XOR shift.
+            for (test, plain, xor) in [(T9, T2, T1), (T3, T5, T4), (T6, T8, T7)] {
+                g[test] = g[V1] & g[A2];
+                g[plain] = sll(g[V1], 1);
+                if g[test] == 0 {
+                    g[V1] = g[plain];
+                } else {
+                    g[xor] = sll(g[V1], 1);
+                    g[V1] = g[xor] ^ g[A3];
+                }
+            }
+            if g[A0] == 0 {
+                break;
+            }
+            g[T6] = g[V1] & g[A2];
+        }
+        g[V0] = addu(g[V0], 1);
+        g[A1] = addu(g[A1], 4);
+        sw(m, g[A1], -4, g[V1]);
+        if g[V0] == g[T0] {
+            break;
+        }
+    }
+}
+
+/// Copy `words` words (a multiple of 3, plus `tail` = 0 or 2 more) from
+/// `[src]` to `[dst]`, three per iteration as the compiler unrolled it,
+/// through `at` (the tail's second word through `tail_reg`). Leaves `src`
+/// and `dst` advanced past the triples, `end` = the end of the triples.
+fn copy_words(m: &mut Mem, g: &mut [u64; 32], (src, dst, end): (usize, usize, usize), tail: Option<usize>) {
+    loop {
+        g[AT] = lw(m, g[src], 0);
+        g[src] = addu(g[src], 0xC);
+        g[dst] = addu(g[dst], 0xC);
+        sw(m, g[dst], -0xC, g[AT]);
+        g[AT] = lw(m, g[src], -8);
+        sw(m, g[dst], -8, g[AT]);
+        g[AT] = lw(m, g[src], -4);
+        sw(m, g[dst], -4, g[AT]);
+        if g[src] == g[end] {
+            break;
+        }
+    }
+    if let Some(t) = tail {
+        g[AT] = lw(m, g[src], 0);
+        sw(m, g[dst], 0, g[AT]);
+        g[t] = lw(m, g[src], 4);
+        sw(m, g[dst], 4, g[t]);
+    }
+}
+
+/// `func_8003960C()`: copy the 0x3F0-byte block at `0x80113680` (the save
+/// data, **guess**; its flags at `+8` are read by [`func_8001F464`] and
+/// [`func_8002DC7C`](crate::misc::func_8002DC7C)) to `0x80113A70`. Leaves `t7 = t0 = 0x80113A70`, `t6
+/// = 0x80113E60`, `at` = the last word.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003960C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[T7] = li(0x8011_3680);
+    g[T6] = li(0x8011_3A70);
+    g[T0] = addu(g[T7], 0x3F0);
+    copy_words(&mut mem, g, (T7, T6, T0), None);
+}
+
+/// `func_80039914(a, b)`: copy the 0x2C-byte record `b` of the save data
+/// (`0x80113694 + 0x2C * b`) to record `a` at `0x80113E60` (the current
+/// profiles, **guess**). The multiplies keep only the low 32 bits.
+/// Leaves `v0 = 0x2C`, `t6`/`t9` = the products, `t1 = 0x80113680`, `t7 =
+/// 0x80113E60`, `t0 = 0x2C * b + 0x14`, `t2`/`t8` past the triples, `t5` =
+/// the last word, `at` the one before.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80039914(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[V0] = 0x2C;
+    g[T1] = li(0x8011_3680);
+    g[T7] = li(0x8011_3E60);
+    g[T6] = multu(g[A0], g[V0]).0;
+    g[T8] = addu(g[T6], g[T7]);
+    g[T9] = multu(g[A1], g[V0]).0;
+    g[T0] = addu(g[T9], 0x14);
+    g[T2] = addu(g[T0], g[T1]);
+    g[T5] = addu(g[T2], 0x24);
+    copy_words(&mut mem, g, (T2, T8, T5), Some(T5));
+}
+
+/// `func_80039984(a, b)`: the reverse of [`func_80039914`], record `b` at
+/// `0x80113E60` to record `a` of the save data at `0x80113694`. Leaves `v0 =
+/// 0x2C`, `t6`/`t0` = the products, `t1 = 0x80113E60`, `t8 =
+/// 0x80113680`, `t7 = 0x2C * a + 0x14`, `t2`/`t9` past the triples, `t5` =
+/// the last word, `at` the one before.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80039984(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[V0] = 0x2C;
+    g[T1] = li(0x8011_3E60);
+    g[T8] = li(0x8011_3680);
+    g[T6] = multu(g[A0], g[V0]).0;
+    g[T7] = addu(g[T6], 0x14);
+    g[T9] = addu(g[T7], g[T8]);
+    g[T0] = multu(g[A1], g[V0]).0;
+    g[T2] = addu(g[T0], g[T1]);
+    g[T5] = addu(g[T2], 0x24);
+    copy_words(&mut mem, g, (T2, T9, T5), Some(T5));
+}

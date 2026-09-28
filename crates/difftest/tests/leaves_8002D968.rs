@@ -1,4 +1,4 @@
-//! The leaves at 0x8002D968..0x8002FE94 (game::misc): byte and flag tests,
+//! The leaves at 0x8002D968..0x8002FE94 (game::misc, game::heap): byte and flag tests,
 //! argument spills, setters, two memory fills, a heap-level lookup and a
 //! power-of-two round-up. Recompiled C vs Rust on random register files
 //! and memory, each checked against its statement.
@@ -7,7 +7,7 @@
 #![allow(non_snake_case)]
 
 use difftest::{compare, State};
-use game::misc;
+use game::{heap, misc};
 use game::recomp::{reg::*, RecompFn};
 use proptest::prelude::*;
 
@@ -214,7 +214,7 @@ proptest! {
         }
         let p = sext(cursors.get(pick).copied().unwrap_or(base)).wrapping_add(delta as u64);
         s.ctx.gpr[A0] = p;
-        let after = run("func_8002FB4C", misc::func_8002FB4C, &s)?;
+        let after = run("func_8002FB4C", heap::func_8002FB4C, &s)?;
         let top = level.wrapping_sub(1);
         let want = if top <= 0 {
             i64::from(top) + 1

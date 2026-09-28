@@ -1,4 +1,4 @@
-//! The leaves at 0x80012B5C..0x80017F64 (game::misc): a record lookup with
+//! The leaves at 0x80012B5C..0x80017F64 (game::misc, game::render): a record lookup with
 //! an uninitialised-stack QUIRK, a gDPPipeSync append, and a run of struct
 //! field accessors at 0x80017D48. Recompiled C vs Rust on random register
 //! files and memory, each checked against its statement.
@@ -7,7 +7,8 @@
 #![allow(non_snake_case)]
 
 use difftest::{compare, State};
-use game::misc::{self, DL_HEAD, RECORDS_170};
+use game::misc::{self, RECORDS_170};
+use game::render::{self, DL_HEAD};
 use game::recomp::{reg::*, RecompFn};
 use proptest::prelude::*;
 
@@ -84,7 +85,7 @@ proptest! {
     fn func_80014C98(seed: u64, at in (0x8030_0000u32..0x8040_0000).prop_map(|v| v & !7)) {
         let mut s = state(seed);
         s.rdram.mem().write_u32(DL_HEAD, at);
-        let after = run("func_80014C98", misc::func_80014C98, &s)?;
+        let after = run("func_80014C98", render::func_80014C98, &s)?;
         prop_assert_eq!((word(&after, at), word(&after, at + 4)), (0xE700_0000, 0));
         prop_assert_eq!(word(&after, DL_HEAD), at + 8);
     }

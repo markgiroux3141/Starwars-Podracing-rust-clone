@@ -152,6 +152,9 @@ By address, drafted with the translator, one test file per group. What they show
 - **`model_error` (`func_800827C0`) only spills `a0`.** It stays unported: loader.rs checks calls to it through its stand-in double, and a compiled-in function can't have one.
 - Also: `framebuffers_init` confirmed against the NOTES formula; four 28-byte records at `0x800DB8A0` (channels, **guess**) whose setters call themselves for "all four" on -1; ring allocators of 256 × 32 bytes (`0x800E0C50`) and 3072 × 64 bytes (`0x800E2C50`) that hand out entry 1 first; a 190-entry (x, y, byte) list at `0x80118958`/`0x80118C50`; a header-list merge (`func_80030A7C`: node list, "Data"/"Anim" skipped, "AltN" pointers).
 
+### Module layout (session 8)
+`game::misc` was split by subsystem (pure moves; `functions.csv` notes name each function's module): `pools` (the registry at `[0x800A2170]`), `render` (display-list writers, render modes, lights, `framebuffers_init`, the RSP task), `save` (save block copies, crc32 table, racer list, track selection), `spline` (walker and point helpers), `channels` (`0x800DB8A0`); `heap_level_of` went to `heap`, `model_load_stats` to `loader`. `misc` keeps what is still unknown, by address. New ports go in the subsystem's module (`register_ports.py MODULE`).
+
 ### Splines (session 6; `assets::Spline`, `spline_load` = `func_80030174`)
 - Block: `u32 count` (91), then single offsets. Entry: a 16-byte header, then `count` points of **0x54 bytes**, exactly filling the entry (all 91).
 - Header: `+0` unknown, `+4` point count, `+8` **segment count = points + one per extra successor at a fork** (all 91), `+0xC` stale. **The loader overwrites `+0xC` with the first point's address** (cursor + 0x10); it doesn't relocate the old value.

@@ -1,4 +1,4 @@
-//! The leaves at 0x800811CC..0x80086CC8 (game::misc): flags, a memory
+//! The leaves at 0x800811CC..0x80086CC8 (game::misc, game::render): flags, a memory
 //! compare, strcmp, a spill, the RSP graphics task setup, a record flag and
 //! three halfwords. Recompiled C vs Rust on random register files and
 //! memory, each checked against its statement.
@@ -7,7 +7,7 @@
 #![allow(non_snake_case)]
 
 use difftest::{compare, State};
-use game::misc;
+use game::{misc, render};
 use game::recomp::{reg::*, RecompFn};
 use proptest::prelude::*;
 
@@ -118,7 +118,7 @@ proptest! {
         m.write_u32(0x8012_17B4, data);
         drop(m);
         s.ctx.gpr[A0] = ty;
-        let after = run("func_80084C30", misc::func_80084C30, &s)?;
+        let after = run("func_80084C30", render::func_80084C30, &s)?;
         let five = ty as u16 as i16 == 5;
         let want = [
             (8, 0x8009_7FF0),

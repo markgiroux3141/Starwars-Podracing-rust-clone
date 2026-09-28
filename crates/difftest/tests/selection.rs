@@ -1,4 +1,4 @@
-//! Two of the larger depth-0 functions (game::misc): the track selection
+//! Two of the larger depth-0 functions (game::save): the track selection
 //! state (func_80024704) and the racer list (func_800281F0). Recompiled C
 //! vs Rust on random save data, each checked against its statement.
 
@@ -6,7 +6,7 @@
 #![allow(non_snake_case)]
 
 use difftest::{compare, State};
-use game::misc;
+use game::save;
 use game::recomp::{reg::*, RecompFn};
 use proptest::prelude::*;
 
@@ -57,7 +57,7 @@ proptest! {
         m.write_u8((i64::from(save) + bits_at + i64::from(c)) as u32, bits);
         m.write_u32(W + 0x30, sel as u32);
         drop(m);
-        let after = run("func_80024704", misc::func_80024704, &s)?;
+        let after = run("func_80024704", save::func_80024704, &s)?;
         // Read back: for c = 3 (profile 0x80113680) the circuit's bits byte
         // is the flag byte itself.
         let flag = byte(&s, save + flag_at);
@@ -78,7 +78,7 @@ proptest! {
         s.randomise_memory(seed ^ 4, 0x800D_6CD0, 0xC8);
         s.rdram.mem().write_u8(P + 0x6F, profile as u8);
         s.rdram.mem().write_u32(0x8011_3E74 + 0x2C * profile as u32, mask);
-        let after = run("func_800281F0", misc::func_800281F0, &s)?;
+        let after = run("func_800281F0", save::func_800281F0, &s)?;
         let all = mask | 0x2_2E01;
         let racers: Vec<u32> = (0..23).filter(|i| all >> i & 1 != 0).collect();
         for k in 0..23u32 {

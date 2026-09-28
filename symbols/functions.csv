@@ -244,7 +244,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80013DC0,func_80013DC0,ours,2,,recomp,,,
 0x800141EC,func_800141EC,ours,1,,recomp,,,
 0x80014568,func_80014568,ours,1,,recomp,,,
-0x80014C98,func_80014C98,ours,0,,rust_verified,unit_diff,high,"gDPPipeSync (0xE7000000, 0) onto the display list at [0x801217B0] (game::misc)"
+0x80014C98,func_80014C98,ours,0,render,rust_verified,unit_diff,high,"gDPPipeSync (0xE7000000, 0) onto the display list at [0x801217B0] (game::render)"
 0x80014CC0,func_80014CC0,ours,1,,recomp,,,
 0x80014D20,func_80014D20,ours,2,,recomp,,,
 0x80014D4C,func_80014D4C,ours,0,,recomp,,,
@@ -359,7 +359,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8001DD48,func_8001DD48,ours,26,,recomp,,,
 0x8001DDA8,func_8001DDA8,ours,25,,recomp,,,
 0x8001E6C0,func_8001E6C0,ours,22,,recomp,,,
-0x8001F464,func_8001F464,ours,0,,rust_verified,unit_diff,high,bit 1 of [0x80113688] (game::misc)
+0x8001F464,func_8001F464,ours,0,save,rust_verified,unit_diff,high,bit 1 of [0x80113688] (game::save)
 0x8001F48C,func_8001F48C,ours,20,,recomp,,,
 0x8001F5AC,func_8001F5AC,ours,26,,recomp,,,
 0x80020030,func_80020030,ours,26,,recomp,,,
@@ -368,7 +368,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80022798,func_80022798,ours,8,,recomp,,,
 0x800228C0,func_800228C0,ours,25,,recomp,,,
 0x80024070,func_80024070,ours,26,,recomp,,,
-0x80024704,func_80024704,ours,0,,rust_verified,unit_diff,high,"track selection state at 0x8011A240 (circuits, unlocked tracks, clamp, left/right) (game::misc)"
+0x80024704,func_80024704,ours,0,save,rust_verified,unit_diff,high,"track selection state at 0x8011A240 (circuits, unlocked tracks, clamp, left/right) (game::save)"
 0x80024874,func_80024874,ours,1,,recomp,,,
 0x80024954,func_80024954,ours,25,,recomp,,,
 0x80025148,func_80025148,ours,25,,recomp,,,
@@ -379,7 +379,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80027D24,func_80027D24,ours,22,,recomp,,,
 0x80028070,func_80028070,ours,1,,recomp,,,
 0x800280D8,func_800280D8,ours,22,,recomp,,,
-0x800281F0,func_800281F0,ours,0,,rust_verified,unit_diff,high,racer list at 0x800D6CD8 from the profile's unlock mask | 0x22E01; count to 0x8011A26C (game::misc)
+0x800281F0,func_800281F0,ours,0,save,rust_verified,unit_diff,high,racer list at 0x800D6CD8 from the profile's unlock mask | 0x22E01; count to 0x8011A26C (game::save)
 0x80028320,func_80028320,ours,25,,recomp,,,
 0x80028498,func_80028498,ours,5,,recomp,,,
 0x80028D60,func_80028D60,ours,4,,recomp,,,
@@ -491,11 +491,11 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80031324,func_80031324,ours,23,,recomp,,,
 0x800313D8,memset,ours,0,,rust_verified,unit_diff,high,"byte fill, returns p (game::misc)"
 0x8003140C,func_8003140C,ours,15,,recomp,,,
-0x800314C0,func_800314C0,ours,0,,rust_verified,unit_diff,high,channel [0x800DB8A0 + 28i] (game::misc)
-0x800314DC,func_800314DC,ours,0,,rust_verified,unit_diff,high,"set channel value (+4, +0x16), +8 from a2/a3, +6 reset (game::misc)"
-0x80031560,func_80031560,ours,0,,rust_verified,unit_diff,high,"channel start ([+0xC]=1, [+6]=0x8000); -1 = all four (self-call) (game::misc)"
-0x800315D8,func_800315D8,ours,0,,rust_verified,unit_diff,high,channel [+0xC]=0; -1 = all four (self-call) (game::misc)
-0x80031640,func_80031640,ours,0,,rust_verified,unit_diff,high,channel [+8]=0; -1 = all four (self-call) (game::misc)
+0x800314C0,func_800314C0,ours,0,channels,rust_verified,unit_diff,high,channel [0x800DB8A0 + 28i] (game::channels)
+0x800314DC,func_800314DC,ours,0,channels,rust_verified,unit_diff,high,"set channel value (+4, +0x16), +8 from a2/a3, +6 reset (game::channels)"
+0x80031560,func_80031560,ours,0,channels,rust_verified,unit_diff,high,"channel start ([+0xC]=1, [+6]=0x8000); -1 = all four (self-call) (game::channels)"
+0x800315D8,func_800315D8,ours,0,channels,rust_verified,unit_diff,high,channel [+0xC]=0; -1 = all four (self-call) (game::channels)
+0x80031640,func_80031640,ours,0,channels,rust_verified,unit_diff,high,channel [+8]=0; -1 = all four (self-call) (game::channels)
 0x800316A8,func_800316A8,ours,11,,recomp,,,
 0x80031924,func_80031924,ours,2,,recomp,,,
 0x80031944,func_80031944,ours,3,,recomp,,,
@@ -504,7 +504,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80031AB0,func_80031AB0,ours,1,,recomp,,,
 0x80031B70,func_80031B70,ours,2,,recomp,,,
 0x80031BBC,func_80031BBC,ours,1,,recomp,,,
-0x80031BEC,func_80031BEC,ours,0,,rust_verified,unit_diff,high,[0x800DB910 + 4i] = 1 (game::misc)
+0x80031BEC,func_80031BEC,ours,0,channels,rust_verified,unit_diff,high,[0x800DB910 + 4i] = 1 (game::channels)
 0x80031C04,func_80031C04,ours,20,,recomp,,,
 0x80031F80,func_80031F80,ours,0,,rust_verified,unit_diff,high,animation dest = [p+8] (game::misc)
 0x80031F94,func_80031F94,ours,0,,rust_verified,unit_diff,high,animation dest = 0 (game::misc)
@@ -543,14 +543,14 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8003483C,func_8003483C,ours,1,,recomp,,,
 0x80034948,func_80034948,ours,1,,recomp,,,
 0x800349C4,func_800349C4,ours,2,,recomp,,,
-0x80034DA8,func_80034DA8,ours,0,,rust_verified,unit_diff,high,clear [0x800A3FF8]; DL gSPMatrix(proj) + gSPForceMatrix from 0x801134D0/D4 (game::misc)
+0x80034DA8,func_80034DA8,ours,0,render,rust_verified,unit_diff,high,clear [0x800A3FF8]; DL gSPMatrix(proj) + gSPForceMatrix from 0x801134D0/D4 (game::render)
 0x80034E20,func_80034E20,ours,1,,recomp,,,
-0x8003527C,func_8003527C,ours,0,,rust_verified,unit_diff,high,DL gSPMatrix(proj) + gSPForceMatrix from [cam+0x34]/[cam+0x38] (game::misc)
-0x800352E4,func_800352E4,ours,0,,rust_verified,unit_diff,high,DL gSPMatrix(proj) + gSPForceMatrix from 0x801134D0/D4 (game::misc)
+0x8003527C,func_8003527C,ours,0,render,rust_verified,unit_diff,high,DL gSPMatrix(proj) + gSPForceMatrix from [cam+0x34]/[cam+0x38] (game::render)
+0x800352E4,func_800352E4,ours,0,render,rust_verified,unit_diff,high,DL gSPMatrix(proj) + gSPForceMatrix from 0x801134D0/D4 (game::render)
 0x80035354,func_80035354,ours,3,,recomp,,,
 0x80035598,func_80035598,ours,3,,recomp,,,
 0x80035698,func_80035698,ours,0,,rust_verified,unit_diff,high,[0x800A3D9C] = (v == 1) (game::misc)
-0x800356BC,func_800356BC,ours,0,,rust_verified,unit_diff,high,"render mode words 0x800A3DA0/A4: ZBZB and AAEN switches, Full sets both (game::misc)"
+0x800356BC,func_800356BC,ours,0,render,rust_verified,unit_diff,high,"render mode words 0x800A3DA0/A4: ZBZB and AAEN switches, Full sets both (game::render)"
 0x800358A0,func_800358A0,ours,0,,rust_verified,unit_diff,high,"input mask: clear bits 16/17 by settings, clear or swap bits 9/10 (game::misc)"
 0x8003594C,func_8003594C,ours,0,,recomp,,,
 0x80035BF0,func_80035BF0,ours,1,,recomp,,,
@@ -574,10 +574,10 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80038D5C,func_80038D5C,ours,1,,recomp,,,
 0x80038DBC,func_80038DBC,ours,0,,rust_verified,unit_diff,high,"settings [0x800D697C] bit 6 set for 0, cleared otherwise (game::misc)"
 0x80038DF8,func_80038DF8,ours,0,,rust_verified,unit_diff,high,store nonnegative args as halfwords at 0x800A3D44..50 (game::misc)
-0x80038E58,func_80038E58,ours,0,,rust_verified,unit_diff,high,"fill Lights1 at 0x800A3DB0 (ambient, light, negated dir) (game::misc)"
-0x80038ED0,func_80038ED0,ours,0,,rust_verified,unit_diff,high,fill Lights2 slot i (of 12 at 0x800A3DC8): ambient + light 1 (game::misc)
-0x80038F68,func_80038F68,ours,0,,rust_verified,unit_diff,high,"copy Lights1 into slot i, flag 1 (game::misc)"
-0x80038FE8,func_80038FE8,ours,0,,rust_verified,unit_diff,high,slot i light 2 or flag 1; QUIRK red byte misplaced (game::misc)
+0x80038E58,func_80038E58,ours,0,render,rust_verified,unit_diff,high,"fill Lights1 at 0x800A3DB0 (ambient, light, negated dir) (game::render)"
+0x80038ED0,func_80038ED0,ours,0,render,rust_verified,unit_diff,high,fill Lights2 slot i (of 12 at 0x800A3DC8): ambient + light 1 (game::render)
+0x80038F68,func_80038F68,ours,0,render,rust_verified,unit_diff,high,"copy Lights1 into slot i, flag 1 (game::render)"
+0x80038FE8,func_80038FE8,ours,0,render,rust_verified,unit_diff,high,slot i light 2 or flag 1; QUIRK red byte misplaced (game::render)
 0x80039090,func_80039090,ours,0,,rust_verified,unit_diff,high,"empty, spills a0..a3 (game::misc)"
 0x800390A4,func_800390A4,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
 0x800390AC,func_800390AC,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
@@ -590,15 +590,15 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80039340,func_80039340,ours,17,,recomp,,,
 0x800393DC,func_800393DC,ours,17,,recomp,,,
 0x80039478,func_80039478,ours,16,,recomp,,,
-0x8003960C,func_8003960C,ours,0,,rust_verified,unit_diff,high,copy save block 0x80113680 (0x3F0 bytes) to 0x80113A70 (game::misc)
+0x8003960C,func_8003960C,ours,0,save,rust_verified,unit_diff,high,copy save block 0x80113680 (0x3F0 bytes) to 0x80113A70 (game::save)
 0x8003964C,func_8003964C,ours,18,,recomp,,,
 0x800396E0,func_800396E0,ours,18,,recomp,,,
 0x80039768,func_80039768,ours,18,,recomp,,,
 0x80039828,func_80039828,ours,19,,recomp,,,
 0x80039890,func_80039890,ours,19,,recomp,,,
 0x800398B8,func_800398B8,ours,20,,recomp,,,
-0x80039914,func_80039914,ours,0,,rust_verified,unit_diff,high,copy save record b to current record a (0x2C bytes) (game::misc)
-0x80039984,func_80039984,ours,0,,rust_verified,unit_diff,high,copy current record b to save record a (0x2C bytes) (game::misc)
+0x80039914,func_80039914,ours,0,save,rust_verified,unit_diff,high,copy save record b to current record a (0x2C bytes) (game::save)
+0x80039984,func_80039984,ours,0,save,rust_verified,unit_diff,high,copy current record b to save record a (0x2C bytes) (game::save)
 0x800399F0,func_800399F0,ours,21,,recomp,,,
 0x80039A30,framebuffers_init,ours,0,video,rust_verified,unit_diff,high,framebuffers_init: three fb addresses from osMemSize at 0x80114530 (game::misc)
 0x80039B70,func_80039B70,ours,16,,recomp,,,
@@ -608,22 +608,22 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8003A440,func_8003A440,ours,18,,recomp,,,
 0x8003A478,func_8003A478,ours,18,,recomp,,,
 0x8003A4A0,func_8003A4A0,ours,0,,recomp,,,
-0x8003A4E8,func_8003A4E8,ours,0,,rust_verified,unit_diff,high,spline point i halfword +0x40 (game::misc)
-0x8003A50C,func_8003A50C,ours,0,,rust_verified,unit_diff,high,"first point from 'from' with +0x40 == id, else -1 (game::misc)"
-0x8003A568,func_8003A568,ours,0,,rust_verified,unit_diff,high,"walker point index, or point halfword +0x42 by path bits (QUIRK) (game::misc)"
+0x8003A4E8,func_8003A4E8,ours,0,spline,rust_verified,unit_diff,high,spline point i halfword +0x40 (game::spline)
+0x8003A50C,func_8003A50C,ours,0,spline,rust_verified,unit_diff,high,"first point from 'from' with +0x40 == id, else -1 (game::spline)"
+0x8003A568,func_8003A568,ours,0,spline,rust_verified,unit_diff,high,"walker point index, or point halfword +0x42 by path bits (QUIRK) (game::spline)"
 0x8003A5D0,func_8003A5D0,ours,1,,recomp,,,
-0x8003ABA0,func_8003ABA0,ours,0,,rust_verified,unit_diff,high,"spline walker step, forward/backward, fork choice and path bits; do_break unreachable (game::misc)"
+0x8003ABA0,func_8003ABA0,ours,0,spline,rust_verified,unit_diff,high,"spline walker step, forward/backward, fork choice and path bits; do_break unreachable (game::spline)"
 0x8003AE64,func_8003AE64,ours,2,,recomp,,,
 0x8003B02C,func_8003B02C,ours,3,,recomp,,,
 0x8003B184,func_8003B184,ours,4,,recomp,,,
 0x8003B1F0,func_8003B1F0,ours,4,,recomp,,,
-0x8003B250,func_8003B250,ours,0,,rust_verified,unit_diff,high,start spline walker at p (first successors) (game::misc)
+0x8003B250,func_8003B250,ours,0,spline,rust_verified,unit_diff,high,start spline walker at p (first successors) (game::spline)
 0x8003B300,func_8003B300,ours,0,,rust_verified,unit_diff,high,four words at 0x80114540..4C (game::misc)
 0x8003B324,func_8003B324,ours,0,,recomp,,,
 0x8003B860,func_8003B860,ours,0,,recomp,,,
 0x8003BAB0,func_8003BAB0,ours,1,,recomp,,,
 0x8003D110,func_8003D110,ours,0,,recomp,,,
-0x8003D370,func_8003D370,ours,0,,rust_verified,unit_diff,high,"DL gSPTexture, combine, othermode; optional two by [0x800A4960] (game::misc)"
+0x8003D370,func_8003D370,ours,0,render,rust_verified,unit_diff,high,"DL gSPTexture, combine, othermode; optional two by [0x800A4960] (game::render)"
 0x8003D444,func_8003D444,ours,1,,recomp,,,
 0x8003D488,func_8003D488,ours,0,,rust_verified,unit_diff,high,[0x800A48D4] = v & 0xFFFF (game::misc)
 0x8003D49C,func_8003D49C,ours,0,,recomp,,,
@@ -652,21 +652,21 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8003EFDC,func_8003EFDC,ours,9,,recomp,,,
 0x8003F084,func_8003F084,ours,8,,recomp,,,
 0x8003F1C0,func_8003F1C0,ours,8,,recomp,,,
-0x8003F300,func_8003F300,ours,0,,rust_verified,unit_diff,high,"init elements of every pool with id (id, index, tag); QUIRK s16 index (game::misc)"
+0x8003F300,func_8003F300,ours,0,pools,rust_verified,unit_diff,high,"init elements of every pool with id (id, index, tag); QUIRK s16 index (game::pools)"
 0x8003F388,func_8003F388,ours,15,,recomp,,,
 0x8003F474,func_8003F474,ours,15,,recomp,,,
 0x8003F560,func_8003F560,ours,15,,recomp,,,
 0x8003F64C,func_8003F64C,ours,15,,recomp,,,
-0x8003F714,func_8003F714,ours,0,,rust_verified,unit_diff,high,first element in pools with id: +6 bit 8 clear and +4 == tag (game::misc)
-0x8003F7B8,func_8003F7B8,ours,0,,rust_verified,unit_diff,high,count of first pool with id (game::misc)
-0x8003F800,func_8003F800,ours,0,,rust_verified,unit_diff,high,"pool iteration begin at i (0x800A4AA4, 0x80118D10) (game::misc)"
-0x8003F890,func_8003F890,ours,0,,rust_verified,unit_diff,high,pool iteration next (game::misc)
+0x8003F714,func_8003F714,ours,0,pools,rust_verified,unit_diff,high,first element in pools with id: +6 bit 8 clear and +4 == tag (game::pools)
+0x8003F7B8,func_8003F7B8,ours,0,pools,rust_verified,unit_diff,high,count of first pool with id (game::pools)
+0x8003F800,func_8003F800,ours,0,pools,rust_verified,unit_diff,high,"pool iteration begin at i (0x800A4AA4, 0x80118D10) (game::pools)"
+0x8003F890,func_8003F890,ours,0,pools,rust_verified,unit_diff,high,pool iteration next (game::pools)
 0x8003F8FC,func_8003F8FC,ours,1,,recomp,,,
 0x8003F974,func_8003F974,ours,2,,recomp,,,
-0x8003F99C,func_8003F99C,ours,0,,rust_verified,unit_diff,high,"call the element's pool callback [pool+0x24](elem, arg) unless flagged (LOOKUP_FUNC) (game::misc)"
-0x8003FA24,func_8003FA24,ours,0,,rust_verified,unit_diff,high,"broadcast cb(elem, arg, arg) to pools with id or All!; 2 stops (LOOKUP_FUNC) (game::misc)"
+0x8003F99C,func_8003F99C,ours,0,pools,rust_verified,unit_diff,high,"call the element's pool callback [pool+0x24](elem, arg) unless flagged (LOOKUP_FUNC) (game::pools)"
+0x8003FA24,func_8003FA24,ours,0,pools,rust_verified,unit_diff,high,"broadcast cb(elem, arg, arg) to pools with id or All!; 2 stops (LOOKUP_FUNC) (game::pools)"
 0x8003FB34,func_8003FB34,ours,1,,recomp,,,
-0x8003FB78,func_8003FB78,ours,0,,rust_verified,unit_diff,high,set pool count and base; returns count * size (game::misc)
+0x8003FB78,func_8003FB78,ours,0,pools,rust_verified,unit_diff,high,set pool count and base; returns count * size (game::pools)
 0x8003FBD4,func_8003FBD4,ours,1,,recomp,,,
 0x8003FC94,func_8003FC94,ours,1,,recomp,,,
 0x8003FD7C,func_8003FD7C,ours,1,,recomp,,,
@@ -1069,7 +1069,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800845A0,func_800845A0,ours,7,,recomp,,,
 0x80084A3C,func_80084A3C,ours,8,,recomp,,,
 0x80084BDC,func_80084BDC,ours,2,,recomp,,,
-0x80084C30,func_80084C30,ours,0,,rust_verified,unit_diff,high,"fill the RSP graphics OSTask at [0x801488C0] (rspboot, F3DEX2 for type 5) (game::misc)"
+0x80084C30,func_80084C30,ours,0,render,rust_verified,unit_diff,high,"fill the RSP graphics OSTask at [0x801488C0] (rspboot, F3DEX2 for type 5) (game::render)"
 0x80084CC4,func_80084CC4,ours,2,,recomp,,,
 0x80084D44,func_80084D44,ours,15,,recomp,,,
 0x80084EB8,func_80084EB8,ours,2,,recomp,,,

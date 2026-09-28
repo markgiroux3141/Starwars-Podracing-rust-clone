@@ -11,7 +11,7 @@
 #![allow(non_snake_case)]
 
 use crate::imports;
-use crate::recomp::{addu, call, enter, reg::*, s32, sll, subu, RecompContext};
+use crate::recomp::{addu, call, enter, li, lw, reg::*, s32, sll, sltu, subu, RecompContext};
 
 /// Current heap level (index into [`CURSORS`]).
 pub const LEVEL: u32 = 0x800A_2868;
@@ -133,4 +133,41 @@ pub unsafe extern "C" fn func_8002FC58(rdram: *mut u8, ctx: *mut RecompContext) 
     g[T6] = s32(mem.read_u32(HEAP_END));
     g[SP] = addu(g[SP], 0x18);
     g[V0] = subu(g[T6], g[V0]);
+}
+
+/// `func_8002FB4C(p)`: the heap level whose allocations hold `p`. It scans
+/// levels `l` from `level - 1` down to 1 (level = `[0x800A2868]`, signed)
+/// and returns `l + 1` for the first with `p >= cursors[l]` (the cursors at
+/// `0x800D9DD8`; unsigned 64-bit compare with the sign-extended cursor),
+/// or 1 if none has. A level of 1 or less returns the level itself.
+///
+/// Leaves `v1 = v0 - 1`, `t6 = (level - 1) << 2`, `t7 = 0x800D9DD8`, and
+/// from the scan (if any) `t8` = the last cursor read and `at` = its test.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002FB4C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let m = &mem;
+    let g = &mut ctx.gpr;
+    g[V1] = lw(m, li(0x800A_0000), 0x2868);
+    g[T7] = li(0x800D_9DD8);
+    g[V1] = addu(g[V1], u64::MAX);
+    g[T6] = sll(g[V1], 2);
+    if (g[V1] as i64) > 0 {
+        g[V0] = addu(g[T6], g[T7]);
+        loop {
+            g[T8] = lw(m, g[V0], 0);
+            g[AT] = sltu(g[A0], g[T8]);
+            if g[AT] == 0 {
+                break;
+            }
+            g[V1] = addu(g[V1], u64::MAX);
+            g[V0] = addu(g[V0], (-4i64) as u64);
+            if (g[V1] as i64) <= 0 {
+                break;
+            }
+        }
+    }
+    g[V0] = addu(g[V1], 1);
 }

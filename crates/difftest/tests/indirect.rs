@@ -1,5 +1,5 @@
 //! The two depth-0 functions with indirect calls (LOOKUP_FUNC), in the pool
-//! registry (game::misc): func_8003F99C (one element's pool callback) and
+//! registry (game::pools): func_8003F99C (one element's pool callback) and
 //! func_8003FA24 (a broadcast to pools). The callbacks are real verified
 //! functions compiled into the oracle, reached through get_function by C
 //! and Rust alike: func_8005F31C marks an element (`+0x14` counts, `+0x18
@@ -11,7 +11,7 @@
 #![allow(non_snake_case)]
 
 use difftest::{compare, State};
-use game::misc;
+use game::pools;
 use game::recomp::{reg::*, RecompFn};
 use proptest::prelude::*;
 use std::process::Command;
@@ -127,7 +127,7 @@ proptest! {
         let target = pools.iter().position(|p| p.id == word(&s, e));
         s.ctx.gpr[A0] = if null { 0 } else { sext(e) };
         s.ctx.gpr[A1] = sext(arg);
-        let after = run("func_8003F99C", misc::func_8003F99C, &s)?;
+        let after = run("func_8003F99C", pools::func_8003F99C, &s)?;
         let marked = !null
             && !pools.is_empty()
             && target.is_some_and(|k| pools[k].callback == MARK)
@@ -147,7 +147,7 @@ proptest! {
     fn func_8003FA24(seed: u64, pools in pools(), id in prop_oneof![1u32..4, Just(ALL)], arg: u32) {
         let mut s = registry(seed, &pools);
         (s.ctx.gpr[A0], s.ctx.gpr[A1]) = (sext(id), sext(arg));
-        let after = run("func_8003FA24", misc::func_8003FA24, &s)?;
+        let after = run("func_8003FA24", pools::func_8003FA24, &s)?;
         let marked = broadcast(&pools, id);
         for k in 0..pools.len() {
             for i in 0..4u32 {
@@ -174,7 +174,7 @@ fn trap_child() {
     s.ctx.gpr[A0] = sext(elem(0, 0));
     let f = match side {
         "c" => oracle::recomp::by_name("func_8003F99C").unwrap(),
-        _ => difftest::port_under_test("func_8003F99C", misc::func_8003F99C),
+        _ => difftest::port_under_test("func_8003F99C", pools::func_8003F99C),
     };
     s.run(f);
     std::process::exit(0);

@@ -1,5 +1,5 @@
 //! Depth-0 functions with `break` (IDO's divide checks, N64Recomp's
-//! `do_break`), in game::misc. Recompiled C vs Rust on random register files
+//! `do_break`), in game::misc and game::spline. Recompiled C vs Rust on random register files
 //! and memory, each checked against its statement.
 //!
 //! Neither function can reach its `do_break` in its domain (see the ports'
@@ -12,7 +12,7 @@
 #![allow(non_snake_case)]
 
 use difftest::{compare, State};
-use game::misc;
+use game::{misc, spline};
 use game::recomp::{reg::*, RecompFn};
 use proptest::prelude::*;
 use std::process::Command;
@@ -273,7 +273,7 @@ proptest! {
     #[test]
     fn func_8003ABA0(seed: u64, w in walk_params()) {
         let s = walk_state(seed, &w);
-        let after = run("func_8003ABA0", misc::func_8003ABA0, &s)?;
+        let after = run("func_8003ABA0", spline::func_8003ABA0, &s)?;
         let want = walk(&s, &w);
         for (k, want) in want.iter().enumerate() {
             prop_assert_eq!(word(&after, W + 4 * k as u32), *want, "+{:#x}", 4 * k);

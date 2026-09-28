@@ -1,4 +1,4 @@
-//! The leaves at 0x80033B14..0x80035698 (game::misc): an object flag test,
+//! The leaves at 0x80033B14..0x80035698 (game::misc, game::render): an object flag test,
 //! two ring allocators, a counter, three display-list writers (projection
 //! matrix plus gSPForceMatrix) and a flag setter. Recompiled C vs Rust on
 //! random register files and memory, each checked against its statement.
@@ -7,7 +7,7 @@
 #![allow(non_snake_case)]
 
 use difftest::{compare, State};
-use game::misc;
+use game::{misc, render};
 use game::recomp::{reg::*, RecompFn};
 use proptest::prelude::*;
 
@@ -77,9 +77,9 @@ proptest! {
     #[test]
     fn display_lists(seed: u64, k in 0usize..3, proj: u32, mvp: u32, flag: u32) {
         let (name, port): (&str, RecompFn) = [
-            ("func_80034DA8", misc::func_80034DA8 as RecompFn),
-            ("func_8003527C", misc::func_8003527C),
-            ("func_800352E4", misc::func_800352E4),
+            ("func_80034DA8", render::func_80034DA8 as RecompFn),
+            ("func_8003527C", render::func_8003527C),
+            ("func_800352E4", render::func_800352E4),
         ][k];
         let mut s = state(seed);
         let dl = O + 0x100;

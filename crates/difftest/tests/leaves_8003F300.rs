@@ -1,4 +1,4 @@
-//! The pool registry leaves at 0x8003F300..0x8003FB78 (game::misc): element
+//! The pool registry leaves at 0x8003F300..0x8003FB78 (game::pools): element
 //! init, a search by tag, count get/set and an iterator. Recompiled C vs
 //! Rust on random registries (duplicate ids included), each checked
 //! against its statement.
@@ -7,7 +7,7 @@
 #![allow(non_snake_case)]
 
 use difftest::{compare, State};
-use game::misc;
+use game::pools;
 use game::recomp::{reg::*, RecompFn};
 use proptest::prelude::*;
 
@@ -90,7 +90,7 @@ proptest! {
     fn func_8003F300(seed: u64, pools in pools(), id in ids()) {
         let mut s = registry(seed, &pools);
         s.ctx.gpr[A0] = id;
-        let after = run("func_8003F300", misc::func_8003F300, &s)?;
+        let after = run("func_8003F300", pools::func_8003F300, &s)?;
         for (k, p) in pools.iter().enumerate() {
             for e in 0..6u32 {
                 let a = base(k) + e * p.size;
@@ -116,7 +116,7 @@ proptest! {
             }
         }
         (s.ctx.gpr[A0], s.ctx.gpr[A1]) = (id, tag as u64);
-        let after = run("func_8003F714", misc::func_8003F714, &s)?;
+        let after = run("func_8003F714", pools::func_8003F714, &s)?;
         let want = pools.iter().enumerate().filter(|(_, p)| u64::from(p.id) == id).find_map(|(k, p)| {
             (0..p.count.max(0) as u32).map(|e| base(k) + e * p.size).find(|&a| {
                 half(&s, a + 6) & 0x100 == 0 && half(&s, a + 4) as i16 as i64 == tag
@@ -131,7 +131,7 @@ proptest! {
     fn func_8003F7B8(seed: u64, pools in pools(), id in ids()) {
         let mut s = registry(seed, &pools);
         s.ctx.gpr[A0] = id;
-        let after = run("func_8003F7B8", misc::func_8003F7B8, &s)?;
+        let after = run("func_8003F7B8", pools::func_8003F7B8, &s)?;
         prop_assert_eq!(after.ctx.gpr[V0], first(&pools, id).map_or(0, |k| sext(pools[k].count as u32)));
     }
 
@@ -140,7 +140,7 @@ proptest! {
     fn iteration(seed: u64, pools in pools(), id in ids(), i in -1i64..7, steps in 0usize..8) {
         let mut s = registry(seed, &pools);
         (s.ctx.gpr[A0], s.ctx.gpr[A1]) = (id, i as u64);
-        let mut after = run("func_8003F800", misc::func_8003F800, &s)?;
+        let mut after = run("func_8003F800", pools::func_8003F800, &s)?;
         let pool = first(&pools, id).filter(|&k| i < i64::from(pools[k].count));
         let elem = |k: usize, e: i64| sext(base(k).wrapping_add((e as u32).wrapping_mul(pools[k].size)));
         prop_assert_eq!(after.ctx.gpr[V0], pool.map_or(0, |k| elem(k, i)));
@@ -149,7 +149,7 @@ proptest! {
         let mut live = pool;
         for _ in 0..steps {
             let before = after.clone();
-            after = run("func_8003F890", misc::func_8003F890, &before)?;
+            after = run("func_8003F890", pools::func_8003F890, &before)?;
             let want = match live {
                 Some(k) => {
                     e += 1;
@@ -167,7 +167,7 @@ proptest! {
     fn func_8003FB78(seed: u64, pools in pools(), id in ids(), count in 0u32..100, b: u32) {
         let mut s = registry(seed, &pools);
         (s.ctx.gpr[A0], s.ctx.gpr[A1], s.ctx.gpr[A2]) = (id, u64::from(count), sext(b));
-        let after = run("func_8003FB78", misc::func_8003FB78, &s)?;
+        let after = run("func_8003FB78", pools::func_8003FB78, &s)?;
         match first(&pools, id) {
             Some(k) => {
                 prop_assert_eq!(after.ctx.gpr[V0], u64::from(count * pools[k].size));

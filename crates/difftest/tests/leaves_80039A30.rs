@@ -1,4 +1,4 @@
-//! The leaves at 0x80039A30..0x8003E54C (game::misc): framebuffers_init, a
+//! The leaves at 0x80039A30..0x8003E54C (game::misc, game::render, game::spline): framebuffers_init, a
 //! framebuffer save/restore, spline point helpers and walker start, setters,
 //! a display-list prologue and a 190-entry list. Recompiled C vs Rust on
 //! random register files and memory, each checked against its statement.
@@ -7,7 +7,7 @@
 #![allow(non_snake_case)]
 
 use difftest::{compare, State};
-use game::misc;
+use game::{misc, render, spline};
 use game::recomp::{reg::*, RecompFn};
 use proptest::prelude::*;
 
@@ -86,7 +86,7 @@ proptest! {
     fn func_8003A4E8(seed: u64, ids in ids(), links in links(), i in 0u64..N as u64) {
         let mut s = spline_state(seed, 0, &ids, &links);
         (s.ctx.gpr[A0], s.ctx.gpr[A1]) = (sext(SPLINE), i);
-        let after = run("func_8003A4E8", misc::func_8003A4E8, &s)?;
+        let after = run("func_8003A4E8", spline::func_8003A4E8, &s)?;
         prop_assert_eq!(after.ctx.gpr[V0], ids[i as usize] as i64 as u64);
     }
 
@@ -95,7 +95,7 @@ proptest! {
     fn func_8003A50C(seed: u64, ids in ids(), links in links(), id in prop_oneof![-1i64..6, Just(0x1_0000_0002i64)], from in prop_oneof![0u64..N as u64 + 2, Just(u64::MAX)]) {
         let mut s = spline_state(seed, 0, &ids, &links);
         (s.ctx.gpr[A0], s.ctx.gpr[A1], s.ctx.gpr[A2]) = (sext(SPLINE), id as u64, from);
-        let after = run("func_8003A50C", misc::func_8003A50C, &s)?;
+        let after = run("func_8003A50C", spline::func_8003A50C, &s)?;
         let start = (from as i64).max(i64::MIN);
         let want = (start..N as i64).find(|&i| i >= 0 && i64::from(ids[i as usize]) == id);
         // A negative `from` would scan points before the array; only
@@ -114,7 +114,7 @@ proptest! {
         }
         s.rdram.mem().write_u32(W + 0x2C, bits);
         (s.ctx.gpr[A0], s.ctx.gpr[A1]) = (sext(W), k);
-        let after = run("func_8003A568", misc::func_8003A568, &s)?;
+        let after = run("func_8003A568", spline::func_8003A568, &s)?;
         let p = idx[k as usize];
         let want = if bits == 0 {
             sext(p)
@@ -130,7 +130,7 @@ proptest! {
     fn func_8003B250(seed: u64, ids in ids(), links in links(), flag in prop_oneof![Just(0i16), any::<i16>()], p in 0u64..N as u64) {
         let mut s = spline_state(seed, flag, &ids, &links);
         (s.ctx.gpr[A0], s.ctx.gpr[A1]) = (sext(W), p);
-        let after = run("func_8003B250", misc::func_8003B250, &s)?;
+        let after = run("func_8003B250", spline::func_8003B250, &s)?;
         let mut want = [p as u32; 4];
         let next = |i: u32| {
             let (count, n) = links[i as usize];
@@ -170,7 +170,7 @@ proptest! {
     fn func_80039A30(seed: u64, size in prop_oneof![Just(0x40_0000u32), Just(0x80_0000u32), Just(0x7F_FFFFu32), any::<u32>()]) {
         let mut s = state(seed);
         s.rdram.mem().write_u32(0x8000_0318, size);
-        let after = run("func_80039A30", misc::func_80039A30, &s)?;
+        let after = run("func_80039A30", render::func_80039A30, &s)?;
         let want = fb(size);
         for k in 0..3 {
             prop_assert_eq!(word(&after, 0x8011_4530 + 4 * k), want[k as usize]);
@@ -217,7 +217,7 @@ proptest! {
         let dl = 0x8030_0000;
         s.rdram.mem().write_u32(0x8012_17B0, dl);
         s.rdram.mem().write_u32(0x800A_4960, flags);
-        let after = run("func_8003D370", misc::func_8003D370, &s)?;
+        let after = run("func_8003D370", render::func_8003D370, &s)?;
         let mut want = vec![0xD700_0000, 0x8000_8000, 0xFCFF_FFFF, 0xFFFE_793C, 0xE200_1D00, 0];
         if flags & 1 != 0 {
             want.extend([0xE200_001C, 0x0F0A_4000]);
@@ -273,7 +273,7 @@ fn func_8003D370_rereads_flags() {
     let dl = 0x800A_4960 - 3 * 8 - 4;
     s.rdram.mem().write_u32(0x8012_17B0, dl);
     s.rdram.mem().write_u32(0x800A_4960, 5);
-    let after = compare("func_8003D370", misc::func_8003D370, &s).unwrap_or_else(|d| panic!("{d}"));
+    let after = compare("func_8003D370", render::func_8003D370, &s).unwrap_or_else(|d| panic!("{d}"));
     assert_eq!(word(&after, 0x800A_4960), 0x0F0A_4000);
     assert_eq!(word(&after, 0x8012_17B0), dl + 4 * 8);
 }

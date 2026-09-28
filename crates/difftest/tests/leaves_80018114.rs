@@ -1,4 +1,4 @@
-//! The leaves at 0x80018114..0x8001F48C (game::misc): field setters and
+//! The leaves at 0x80018114..0x8001F48C (game::misc, game::save): field setters and
 //! getters chosen by a selector, empty functions and two flag reads.
 //! Recompiled C vs Rust on random register files and memory, each checked
 //! against its statement.
@@ -7,7 +7,7 @@
 #![allow(non_snake_case)]
 
 use difftest::{compare, State};
-use game::misc;
+use game::{misc, save};
 use game::recomp::{reg::*, RecompFn};
 use proptest::prelude::*;
 
@@ -129,7 +129,7 @@ proptest! {
     fn func_8001F464(seed: u64, w: u32) {
         let mut s = state(seed);
         s.rdram.mem().write_u32(0x8011_3688, w);
-        let after = run("func_8001F464", misc::func_8001F464, &s)?;
+        let after = run("func_8001F464", save::func_8001F464, &s)?;
         prop_assert_eq!(after.ctx.gpr[V0], u64::from(w >> 1 & 1));
     }
 }

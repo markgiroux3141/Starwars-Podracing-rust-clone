@@ -1,4 +1,4 @@
-//! The leaves at 0x800356BC..0x80037BF0 (game::misc, skipping the two long
+//! The leaves at 0x800356BC..0x80037BF0 (game::misc, game::render, skipping the two long
 //! byte rewriters 0x8003594C and 0x8003609C): render-mode switches, an input
 //! mask adjuster, two argument spills and a setter. Recompiled C vs Rust on
 //! random register files and memory, each checked against its statement.
@@ -7,7 +7,7 @@
 #![allow(non_snake_case)]
 
 use difftest::{compare, State};
-use game::misc;
+use game::{misc, render};
 use game::recomp::{reg::*, RecompFn};
 use proptest::prelude::*;
 
@@ -48,7 +48,7 @@ proptest! {
         s.rdram.mem().write_u32(0x800A_3DA0, first);
         s.rdram.mem().write_u32(0x800A_3DA4, second);
         (s.ctx.gpr[A0], s.ctx.gpr[A1], s.ctx.gpr[A2]) = (sext(tags[tag]), a1, a2);
-        let after = run("func_800356BC", misc::func_800356BC, &s)?;
+        let after = run("func_800356BC", render::func_800356BC, &s)?;
         let want = match (tag, MODES.iter().position(|m| m.0 == first)) {
             (2, _) => (a2 as u32, a2 as u32),
             (0 | 1, Some(k)) => {

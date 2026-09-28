@@ -1,4 +1,4 @@
-//! The leaves at 0x80038DBC..0x80039984 (game::misc): a settings bit, six
+//! The leaves at 0x80038DBC..0x80039984 (game::misc, game::render, game::save): a settings bit, six
 //! optional halfwords, the Lights1/Lights2 fillers (with a QUIRK in the
 //! second light), spills, the CRC-32 table and copies of save records.
 //! Recompiled C vs Rust on random register files and memory, each checked
@@ -8,7 +8,7 @@
 #![allow(non_snake_case)]
 
 use difftest::{compare, State};
-use game::misc;
+use game::{misc, render, save};
 use game::recomp::{reg::*, RecompFn};
 use proptest::prelude::*;
 
@@ -111,7 +111,7 @@ proptest! {
     fn func_80038E58(seed: u64) {
         let mut s = state(seed);
         (s.ctx.gpr[A0], s.ctx.gpr[A1], s.ctx.gpr[A2]) = (sext(RGB), sext(RGB2), sext(DIR));
-        let after = run("func_80038E58", misc::func_80038E58, &s)?;
+        let after = run("func_80038E58", render::func_80038E58, &s)?;
         let base = 0x800A_3DB0;
         let d = direction(&s);
         for (a, b) in light_bytes(&s, base, RGB, 0).into_iter().chain(light_bytes(&s, base, RGB2, 8)).chain((0..3).map(|k| (base + 0x10 + k, d[k as usize]))) {
@@ -124,7 +124,7 @@ proptest! {
     fn func_80038ED0(seed: u64, i in slot_index()) {
         let mut s = state(seed);
         (s.ctx.gpr[A0], s.ctx.gpr[A1], s.ctx.gpr[A2], s.ctx.gpr[A3]) = (i as u64, sext(RGB), sext(RGB2), sext(DIR));
-        let after = run("func_80038ED0", misc::func_80038ED0, &s)?;
+        let after = run("func_80038ED0", render::func_80038ED0, &s)?;
         for j in 0..12 {
             let base = slot(j);
             let mut want: Vec<(u32, u8)> = (0..0x28).map(|k| (base + k, byte(&s, base + k))).collect();
@@ -146,7 +146,7 @@ proptest! {
     fn func_80038F68(seed: u64, i in slot_index()) {
         let mut s = state(seed);
         s.ctx.gpr[A0] = i as u64;
-        let after = run("func_80038F68", misc::func_80038F68, &s)?;
+        let after = run("func_80038F68", render::func_80038F68, &s)?;
         for j in 0..12 {
             for k in 0..10 {
                 let want = if j == i && k < 6 { word(&s, 0x800A_3DB0 + 4 * k) } else { word(&s, slot(j) + 4 * k) };
@@ -162,7 +162,7 @@ proptest! {
     fn func_80038FE8(seed: u64, i in slot_index(), on in prop_oneof![Just(0u64), Just(0x1_0000_0000u64), any::<u64>()]) {
         let mut s = state(seed);
         (s.ctx.gpr[A0], s.ctx.gpr[A1], s.ctx.gpr[A2], s.ctx.gpr[A3]) = (i as u64, on, sext(RGB), sext(DIR));
-        let after = run("func_80038FE8", misc::func_80038FE8, &s)?;
+        let after = run("func_80038FE8", render::func_80038FE8, &s)?;
         for j in 0..12 {
             let base = slot(j);
             let f = 0x800A_3FA8 + 4 * j as u32;
@@ -207,7 +207,7 @@ proptest! {
         s.randomise_memory(seed ^ 9, 0x8011_3680, 0x400);
         s.randomise_memory(seed ^ 10, 0x8011_3E60, 0xB0);
         (s.ctx.gpr[A0], s.ctx.gpr[A1]) = (a, b);
-        let (name, port): (&str, RecompFn) = if back { ("func_80039984", misc::func_80039984) } else { ("func_80039914", misc::func_80039914) };
+        let (name, port): (&str, RecompFn) = if back { ("func_80039984", save::func_80039984) } else { ("func_80039914", save::func_80039914) };
         let after = run(name, port, &s)?;
         let save = |r: u64| 0x8011_3694 + 0x2C * r as u32;
         let cur = |r: u64| 0x8011_3E60 + 0x2C * r as u32;
@@ -233,7 +233,7 @@ fn empties() {
 fn func_800390C0() {
     let mut s = state(3);
     s.randomise_memory(4, 0x8011_4060, 0x420);
-    let after = compare("func_800390C0", misc::func_800390C0, &s).unwrap_or_else(|d| panic!("{d}"));
+    let after = compare("func_800390C0", save::func_800390C0, &s).unwrap_or_else(|d| panic!("{d}"));
     for v in 0..256u32 {
         let mut c = v << 24;
         for _ in 0..8 {
@@ -250,7 +250,7 @@ fn func_800390C0() {
 fn func_8003960C() {
     let mut s = state(6);
     s.randomise_memory(7, 0x8011_3680, 0x800);
-    let after = compare("func_8003960C", misc::func_8003960C, &s).unwrap_or_else(|d| panic!("{d}"));
+    let after = compare("func_8003960C", save::func_8003960C, &s).unwrap_or_else(|d| panic!("{d}"));
     for k in 0..0xFC {
         assert_eq!(word(&after, 0x8011_3A70 + 4 * k), word(&s, 0x8011_3680 + 4 * k));
     }

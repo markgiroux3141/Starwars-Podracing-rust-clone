@@ -1048,3 +1048,22 @@ pub unsafe extern "C" fn func_80030574(rdram: *mut u8, ctx: *mut RecompContext) 
         g[T6] = lw(m, g[V1], 0);
     }
 }
+
+/// `func_80030B68(&a, &b, &c)`: model_load's statistics (NOTES.md, "Texture
+/// and model loaders"): `*a = [0x800D9DC8]` (model bytes), `*c =
+/// [0x800D9DCC]` (texture bytes), `*b = [0x800D9DD0]` (always 0). Leaves
+/// `t6`/`t7`/`t8` = the three words.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80030B68(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T6] = lw(m, li(0x800E_0000), -0x6238);
+    sw(m, g[A0], 0, g[T6]);
+    g[T7] = lw(m, li(0x800E_0000), -0x6234);
+    sw(m, g[A2], 0, g[T7]);
+    g[T8] = lw(m, li(0x800E_0000), -0x6230);
+    sw(m, g[A1], 0, g[T8]);
+}
