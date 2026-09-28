@@ -4,7 +4,7 @@
 // Ports keep N64Recomp's names (func_80005AFC), capitals included.
 #![allow(non_snake_case)]
 
-use crate::recomp::{addu, div, enter, fpu, lbu, lh, li, lw, multu, reg::*, s32, sb, sh, sll, sllv, slt, sltu, sra, subu, sw, RecompContext};
+use crate::recomp::{addu, div, enter, fpu, lb, lbu, lh, li, lw, multu, reg::*, s32, sb, sh, sll, sllv, slt, sltu, sra, subu, sw, RecompContext};
 
 /// `func_80005AFC`: decrement `[0x8009A29C]` if it is positive (signed).
 ///
@@ -2585,6 +2585,419 @@ pub unsafe extern "C" fn func_8002D598(rdram: *mut u8, ctx: *mut RecompContext) 
             return;
         }
         g[V1] = li(TRACK_NAMES[24]);
+    }
+    g[V0] = g[V1];
+}
+
+/// `func_8002D968(a, b)`: if bit 14 of `[0x8009B7D8]` is set, 1 when the
+/// first three bytes at `a` and `b` are equal, else 0. It stops at the first
+/// byte that differs. With the bit clear, 0 and no reads.
+///
+/// Leaves `t6`/`t7` = the word and its bit, the bytes compared in
+/// `t8`/`t9`, `t0`/`t1`, `t2`/`t3`, and `v1 = v0`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002D968(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[T6] = lw(&mem, li(0x800A_0000), -0x4828);
+    g[T7] = g[T6] & 0x4000;
+    if g[T7] == 0 {
+        g[V0] = 0;
+        return;
+    }
+    for (k, (x, y)) in [(T8, T9), (T0, T1), (T2, T3)].into_iter().enumerate() {
+        g[x] = lbu(&mem, g[A0], k as i32);
+        g[y] = lbu(&mem, g[A1], k as i32);
+        g[V1] = sltu(g[x] ^ g[y], 1);
+        g[V0] = g[V1];
+        if g[V1] == 0 {
+            return;
+        }
+    }
+}
+
+/// `func_8002D9D0(a, b)`: 4 if `(s8) a < 3` and `(u8) b < 6`, else 3.
+/// Spills both arguments to their slots `[sp]`, `[sp + 4]`.
+///
+/// Leaves `t6 = a << 24`, `t7 = (s8) a`, `t8 = b & 0xFF` and `at` = the
+/// last test made.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002D9D0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T6] = sll(g[A0], 24);
+    g[T7] = sra(g[T6], 24);
+    g[AT] = slt(g[T7], 3);
+    sw(m, g[SP], 0, g[A0]);
+    sw(m, g[SP], 4, g[A1]);
+    g[T8] = g[A1] & 0xFF;
+    g[V0] = 3;
+    if g[AT] != 0 {
+        g[AT] = slt(g[T8], 6);
+        if g[AT] != 0 {
+            g[V0] = 4;
+        }
+    }
+}
+
+/// `func_8002DAD0(p, i, bit)`: whether bit `(u8) bit` (mod 32) of the byte
+/// `table[(s8) i]` is set, 1 or 0. The table is at `0x80113E68` if the byte
+/// `[p + 0x6C]` (signed) is nonzero, else at `0x8011368C`. Spills `i` and
+/// `bit` to their slots `[sp + 4]`, `[sp + 8]`.
+///
+/// The C reads the `0x80113E68` byte first either way; only the loads'
+/// values are observable, so the port reads the one it keeps. Leaves `a2 =
+/// t8 = (u8) bit`, `t6 = i << 24`, `t7 = (s8) i`, `t9` = the flag byte, `v1`
+/// = the table byte, `t0 = 1`, `t1` = the mask.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002DAD0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    sw(m, g[SP], 4, g[A1]);
+    sw(m, g[SP], 8, g[A2]);
+    g[T9] = lb(m, g[A0], 0x6C);
+    g[T6] = sll(g[A1], 24);
+    g[T7] = sra(g[T6], 24);
+    g[T8] = g[A2] & 0xFF;
+    g[A2] = g[T8];
+    let table = if g[T9] != 0 { 0x3E68 } else { 0x368C };
+    g[V1] = lbu(m, addu(li(0x8011_0000), g[T7]), table);
+    g[T0] = 1;
+    g[T1] = sllv(g[T0], g[A2]);
+    g[V0] = g[V1] & g[T1];
+    g[T2] = sltu(0, g[V0]);
+    g[V0] = g[T2];
+}
+
+/// `func_8002DC7C(p)`: 1 or 0. If the byte `[p + 0x6C]` (signed) is
+/// nonzero: whether the halfwords at `0x80113E6C`, `0x80113E6E`,
+/// `0x80113E70` are all `0x3FFF` and the one at `0x80113E72` is `0xFF`
+/// (signed loads, so `0xBFFF` etc. don't match). Otherwise: bit 5 of
+/// `[0x80113688]`.
+///
+/// Leaves `v1 = 0x80113E60` and `t7 = 0x80110000` (or the word), then the
+/// halfwords read in `t9`, `t0`, `t1`, `t2` (up to the first mismatch), `at
+/// = 0xFF` if the last was read, `t8` = the bit.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002DC7C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let m = &mem;
+    let g = &mut ctx.gpr;
+    g[T6] = lb(m, g[A0], 0x6C);
+    g[V1] = li(0x8011_3E60);
+    g[T7] = li(0x8011_0000);
+    if g[T6] == 0 {
+        g[T7] = lw(m, g[T7], 0x3688);
+        g[T8] = g[T7] & 0x20;
+        g[V0] = u64::from(g[T8] != 0);
+        return;
+    }
+    g[V0] = 0x3FFF;
+    for (r, off) in [(T9, 0xC), (T0, 0xE), (T1, 0x10)] {
+        g[r] = lh(m, g[V1], off);
+        if g[V0] != g[r] {
+            g[V0] = 0;
+            return;
+        }
+    }
+    g[T2] = lh(m, g[V1], 0x12);
+    g[AT] = 0xFF;
+    g[V0] = u64::from(g[T2] == g[AT]);
+}
+
+/// `func_8002DFB0(a, b)`: an empty function that spills both arguments to
+/// their slots `[sp]`, `[sp + 4]`. `func_8002E034` calls it with `(0x3F,
+/// 0)` and `(0x40, 0)`, presumably a compiled-out debug hook.
+///
+/// Domain: canonical `sp` with its slots in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002DFB0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    sw(&mut mem, g[SP], 0, g[A0]);
+    sw(&mut mem, g[SP], 4, g[A1]);
+}
+
+/// `func_8002E028()`: `[0x800A268C] = 0`. Leaves `at = 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002E028(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[AT] = li(0x800A_0000);
+    sw(&mut mem, g[AT], 0x268C, 0);
+}
+
+/// `func_8002E0A8()`: `[0x800A2690] = 0`, the flag `func_8002E034` loops
+/// on (NOTES.md, "Asset heap"). Leaves `at = 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002E0A8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[AT] = li(0x800A_0000);
+    sw(&mut mem, g[AT], 0x2690, 0);
+}
+
+/// `func_8002E8D4(i)`: the word `[0x800D7498 + 4 * i]`. Unbounded; the
+/// index is shifted as a 32-bit value and the address wraps at 32 bits.
+/// Domain: the address in RDRAM. Leaves `t6 = i << 2`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002E8D4(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[T6] = sll(g[A0], 2);
+    g[V0] = lw(&mem, addu(li(0x800D_0000), g[T6]), 0x7498);
+}
+
+/// `func_8002F054()`: the word `[0x800A26F4]`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002F054(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[V0] = lw(&mem, li(0x800A_0000), 0x26F4);
+}
+
+/// `func_8002F1CC()`: `[0x800A26F8] = 0` and the byte `[0x800A26FC] = 1`.
+/// Leaves `at = 0x800A0000`, `t6 = 1`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002F1CC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[AT] = li(0x800A_0000);
+    sw(m, g[AT], 0x26F8, 0);
+    g[T6] = 1;
+    sb(m, g[AT], 0x26FC, g[T6]);
+}
+
+/// `func_8002F1E4`: empty (`jr ra`).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002F1E4(_rdram: *mut u8, _ctx: *mut RecompContext) {}
+
+/// `func_8002F440()`: fill `[0x800AE8B0, 0x80149C60)` with `0xDDEEDDEE`.
+/// That range starts where boot's BSS clear starts (NOTES.md, "Code
+/// segment"); a debug fill pattern (**guess**). The bounds are constants,
+/// so its `sltu` guard always passes.
+///
+/// Leaves `a0 = 0xDDEEDDEE`, `v0 = v1 = 0x80149C60`, `t6 = 0x800AE8B1` and
+/// `at = 0`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002F440(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V1] = li(0x8014_9C60);
+    g[T6] = li(0x800A_E8B1);
+    g[V0] = li(0x800A_E8B0);
+    g[AT] = sltu(g[V1], g[T6]);
+    if g[AT] == 0 {
+        g[A0] = li(0xDDEE_DDEE);
+        loop {
+            g[V0] = addu(g[V0], 4);
+            g[AT] = sltu(g[V0], g[V1]);
+            sw(m, g[V0], -4, g[A0]);
+            if g[AT] == 0 {
+                break;
+            }
+        }
+    }
+}
+
+/// `func_8002F480()`: fill from `0x8014D7E0`, where heap_init puts the
+/// heap's start (NOTES.md, "Asset heap"), up to the end of RDRAM (`osMemSize
+/// | 0x80000000`) with `0xBBCCBBCC`. `osMemSize` (`[0x80000318]`) is read
+/// again before each word after the first. Nothing is written unless the
+/// end is above the start (unsigned compare of the sign-extended values). A
+/// word is written wherever the fill starts below the end, so an unaligned
+/// end gets the last word in full.
+///
+/// Domain: the end within the RDRAM buffer (`osMemSize` at most 8 MB). Leaves
+/// `a1 = 0x80000318`, `a0 = 0x80000000`, `v1 = 0xBBCC0000` (`0xBBCCBBCC` if
+/// anything was written), `v0` = the start, or the address past the last
+/// word, `t6`/`t7` = `osMemSize` and the end, `t8`/`t9` the same from the
+/// last re-read, and `at = 0`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002F480(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[A1] = li(0x8000_0318);
+    g[T6] = lw(m, g[A1], 0);
+    g[A0] = li(0x8000_0000);
+    g[V0] = li(0x8014_D7E0);
+    g[T7] = g[A0] | g[T6];
+    g[AT] = sltu(g[V0], g[T7]);
+    g[V1] = li(0xBBCC_0000);
+    if g[AT] == 0 {
+        return;
+    }
+    g[V1] |= 0xBBCC;
+    sw(m, g[V0], 0, g[V1]);
+    loop {
+        g[T8] = lw(m, g[A1], 0);
+        g[V0] = addu(g[V0], 4);
+        g[T9] = g[A0] | g[T8];
+        g[AT] = sltu(g[V0], g[T9]);
+        if g[AT] == 0 {
+            break;
+        }
+        sw(m, g[V0], 0, g[V1]);
+    }
+}
+
+/// `func_8002F740`: a bare epilogue, `ra = [sp + 0x1C]` (sign-extended) and
+/// `sp += 0x20`, then return. Nothing calls or references it; probably dead
+/// code left after a function that doesn't return (**guess**).
+///
+/// Domain: canonical `sp` with `[sp + 0x1C]` in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002F740(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(&mem, g[SP], 0x1C);
+    g[SP] = addu(g[SP], 0x20);
+}
+
+/// `func_8002F9E0(a0, a1, a2, a3)`: an empty function with an 8-byte frame
+/// that spills all four arguments to the caller's slots `[sp]..[sp +
+/// 0xC]`. `sp` comes back sign-extended from its low word (two `addiu`s).
+///
+/// Domain: canonical `sp` with its slots in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002F9E0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-8i64) as u64);
+    for (k, r) in [A0, A1, A2, A3].into_iter().enumerate() {
+        sw(m, g[SP], 8 + 4 * k as i32, g[r]);
+    }
+    g[SP] = addu(g[SP], 8);
+}
+
+/// `func_8002FB4C(p)`: the heap level whose allocations hold `p`. It scans
+/// levels `l` from `level - 1` down to 1 (level = `[0x800A2868]`, signed)
+/// and returns `l + 1` for the first with `p >= cursors[l]` (the cursors at
+/// `0x800D9DD8`; unsigned 64-bit compare with the sign-extended cursor),
+/// or 1 if none has. A level of 1 or less returns the level itself.
+///
+/// Leaves `v1 = v0 - 1`, `t6 = (level - 1) << 2`, `t7 = 0x800D9DD8`, and
+/// from the scan (if any) `t8` = the last cursor read and `at` = its test.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002FB4C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let m = &mem;
+    let g = &mut ctx.gpr;
+    g[V1] = lw(m, li(0x800A_0000), 0x2868);
+    g[T7] = li(0x800D_9DD8);
+    g[V1] = addu(g[V1], u64::MAX);
+    g[T6] = sll(g[V1], 2);
+    if (g[V1] as i64) > 0 {
+        g[V0] = addu(g[T6], g[T7]);
+        loop {
+            g[T8] = lw(m, g[V0], 0);
+            g[AT] = sltu(g[A0], g[T8]);
+            if g[AT] == 0 {
+                break;
+            }
+            g[V1] = addu(g[V1], u64::MAX);
+            g[V0] = addu(g[V0], (-4i64) as u64);
+            if (g[V1] as i64) <= 0 {
+                break;
+            }
+        }
+    }
+    g[V0] = addu(g[V1], 1);
+}
+
+/// `func_8002FE80(a0, a1, a2, a3)`: an empty function that spills all four
+/// arguments to their slots `[sp]..[sp + 0xC]`.
+///
+/// Domain: canonical `sp` with its slots in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002FE80(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    for (k, r) in [A0, A1, A2, A3].into_iter().enumerate() {
+        sw(m, g[SP], 4 * k as i32, g[r]);
+    }
+}
+
+/// `func_8002FE94(n)`: `n` rounded up to a power of two, at least 16, for
+/// `1 <= n <= 2^30`. It takes the highest set bit `b` of `n` among bits
+/// 30..0 and returns `b`, or `2b` if `b < n` (signed), then at least 16.
+///
+/// QUIRKs: for `2^30 < n < 2^31` the doubled bit is `0x80000000`,
+/// sign-extended, so negative, and the result is 16. For negative `n`, `b
+/// < n` never holds, so it returns the highest set bit among bits 30..0
+/// (at least 16), e.g. `2^30` for -5.
+///
+/// Leaves `a1` = 31 minus the bits tested, `v0 = v1`, `t6` = `b / 2` (0
+/// if no bit was found), `t7 = b` (0 when `b` is bit 0) and `at` = the
+/// minimum test.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002FE94(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (_mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[V1] = li(0x4000_0000);
+    g[A1] = 0x1F;
+    g[V0] = g[V1] & g[A0];
+    loop {
+        g[T6] = sra(g[V1], 1);
+        g[V1] = g[T6];
+        g[A1] = addu(g[A1], u64::MAX);
+        if g[V0] != 0 || g[A1] == 0 {
+            break;
+        }
+        g[V0] = g[V1] & g[A0];
+    }
+    g[T7] = sll(g[V1], 1);
+    g[AT] = slt(g[T7], g[A0]);
+    g[V1] = g[T7];
+    if g[AT] != 0 {
+        g[V1] = sll(g[T7], 1);
+    }
+    g[AT] = slt(g[V1], 0x10);
+    if g[AT] != 0 {
+        g[V1] = 0x10;
     }
     g[V0] = g[V1];
 }

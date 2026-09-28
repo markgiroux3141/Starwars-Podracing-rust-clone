@@ -404,20 +404,20 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8002D4C4,func_8002D4C4,ours,3,,recomp,,,
 0x8002D598,track_name,ours,0,,rust_verified,unit_diff,high,"address of track name (25), else 0 (jump table) (game::misc)"
 0x8002D6EC,func_8002D6EC,ours,3,,recomp,,,
-0x8002D968,func_8002D968,ours,0,,recomp,,,
-0x8002D9D0,func_8002D9D0,ours,0,,recomp,,,
+0x8002D968,func_8002D968,ours,0,,rust_verified,unit_diff,high,"bit 14 of [0x8009B7D8] and first 3 bytes of a, b equal (game::misc)"
+0x8002D9D0,func_8002D9D0,ours,0,,rust_verified,unit_diff,high,"4 if (s8)a < 3 and (u8)b < 6, else 3 (game::misc)"
 0x8002DA0C,func_8002DA0C,ours,1,,recomp,,,
-0x8002DAD0,func_8002DAD0,ours,0,,recomp,,,
+0x8002DAD0,func_8002DAD0,ours,0,,rust_verified,unit_diff,high,"bit (u8)bit of byte table[(s8)i], table by [p+0x6C] (game::misc)"
 0x8002DB20,func_8002DB20,ours,1,,recomp,,,
 0x8002DBD8,func_8002DBD8,ours,1,,recomp,,,
-0x8002DC7C,func_8002DC7C,ours,0,,recomp,,,
+0x8002DC7C,func_8002DC7C,ours,0,,rust_verified,unit_diff,high,[p+0x6C] ? halfwords at 0x80113E6C all set : bit 5 of [0x80113688] (game::misc)
 0x8002DCF4,func_8002DCF4,ours,1,,recomp,,,
 0x8002DD7C,func_8002DD7C,ours,3,,recomp,,,
-0x8002DFB0,func_8002DFB0,ours,0,,recomp,,,
+0x8002DFB0,func_8002DFB0,ours,0,,rust_verified,unit_diff,high,"empty, spills a0 a1 (debug hook?) (game::misc)"
 0x8002DFBC,func_8002DFBC,ours,14,,recomp,,,
-0x8002E028,func_8002E028,ours,0,,recomp,,,
+0x8002E028,func_8002E028,ours,0,,rust_verified,unit_diff,high,[0x800A268C] = 0 (game::misc)
 0x8002E034,func_8002E034,ours,14,,recomp,,,"one-time: func_8002DFB0(0x3F,0); while [0x800A2690]: func_8002E2FC, func_8002E124; [0x800A2698] = 0; func_8002DFB0(0x40,0); [0x800A2690] = 1. Callers: rom_read_dma, func_80011BDC, heap_set_level (guarded by 0x800A68A0), 2 more"
-0x8002E0A8,func_8002E0A8,ours,0,,recomp,,,
+0x8002E0A8,func_8002E0A8,ours,0,,rust_verified,unit_diff,high,[0x800A2690] = 0 (game::misc)
 0x8002E0B4,func_8002E0B4,ours,12,,recomp,,,
 0x8002E124,func_8002E124,ours,13,,recomp,,,
 0x8002E2FC,func_8002E2FC,ours,5,,recomp,,,
@@ -428,43 +428,43 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8002E6E0,func_8002E6E0,ours,13,,recomp,,,
 0x8002E770,func_8002E770,ours,10,,recomp,,,
 0x8002E82C,func_8002E82C,ours,10,,recomp,,,
-0x8002E8D4,func_8002E8D4,ours,0,,recomp,,,
+0x8002E8D4,func_8002E8D4,ours,0,,rust_verified,unit_diff,high,[0x800D7498 + 4i] (game::misc)
 0x8002E8E8,func_8002E8E8,ours,11,,recomp,,,
 0x8002EA28,func_8002EA28,ours,0,,recomp,,,
 0x8002ECA0,func_8002ECA0,ours,1,,recomp,,,
 0x8002F000,func_8002F000,ours,0,,recomp,,,
 0x8002F024,func_8002F024,ours,6,,recomp,,,
-0x8002F054,func_8002F054,ours,0,,recomp,,,
+0x8002F054,func_8002F054,ours,0,,rust_verified,unit_diff,high,get [0x800A26F4] (game::misc)
 0x8002F060,func_8002F060,ours,0,,recomp,,,
 0x8002F06C,func_8002F06C,ours,4,,recomp,,,
 0x8002F0EC,func_8002F0EC,ours,1,,recomp,,,
 0x8002F144,func_8002F144,ours,3,,recomp,,,
 0x8002F18C,func_8002F18C,ours,5,,recomp,,,
-0x8002F1CC,func_8002F1CC,ours,0,,recomp,,,
-0x8002F1E4,func_8002F1E4,ours,0,,recomp,,,
+0x8002F1CC,func_8002F1CC,ours,0,,rust_verified,unit_diff,high,"[0x800A26F8] = 0, byte [0x800A26FC] = 1 (game::misc)"
+0x8002F1E4,func_8002F1E4,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
 0x8002F1EC,func_8002F1EC,ours,5,,recomp,,,
 0x8002F2D0,func_8002F2D0,ours,23,,recomp,,,
-0x8002F440,func_8002F440,ours,0,,recomp,,,
-0x8002F480,func_8002F480,ours,0,,recomp,,,
+0x8002F440,func_8002F440,ours,0,,rust_verified,unit_diff,high,fill 0x800AE8B0..0x80149C60 with 0xDDEEDDEE (game::misc)
+0x8002F480,func_8002F480,ours,0,,rust_verified,unit_diff,high,fill 0x8014D7E0..RDRAM end with 0xBBCCBBCC (game::misc)
 0x8002F4D0,func_8002F4D0,ours,4,,recomp,,,
 0x8002F550,func_8002F550,ours,7,,recomp,,,
-0x8002F740,func_8002F740,ours,0,,recomp,,,
+0x8002F740,func_8002F740,ours,0,,rust_verified,unit_diff,high,"bare epilogue, unreferenced (game::misc)"
 0x8002F750,func_8002F750,ours,24,,recomp,,,
 0x8002F9C0,func_8002F9C0,ours,0,,recomp,,,
-0x8002F9E0,func_8002F9E0,ours,0,,recomp,,,
+0x8002F9E0,func_8002F9E0,ours,0,,rust_verified,unit_diff,high,"empty, spills a0..a3 (game::misc)"
 0x8002FA00,heap_set_level,ours,16,asset,recomp,,low,"level = a0; cursors[a0] = cursors[a0-1]; texture_cache_trim(that cursor); func_80007E80(1); zeroes cursors above; clears 0x800A2864. First call only: func_8002E034, then [0x800A68A0] = 1. Not portable yet: func_80007E80 and func_8002E034 cannot be doubled honestly (NOTES)"
 0x8002FAC4,heap_set_cursor,ours,1,asset,rust_verified,unit_diff,high,cursors[level] = a0; heap_check(1)
 0x8002FAFC,heap_cursor,ours,0,asset,rust_verified,unit_diff,high,v0 = cursors[level] (0x800D9DD8[[0x800A2868]])
 0x8002FB18,func_8002FB18,ours,1,,recomp,,,
-0x8002FB4C,func_8002FB4C,ours,0,,recomp,,,
+0x8002FB4C,heap_level_of,ours,0,,rust_verified,unit_diff,high,heap level whose region holds p (game::misc)
 0x8002FB90,func_8002FB90,ours,6,,recomp,,,
 0x8002FC58,heap_free,ours,1,asset,rust_verified,unit_diff,high,[0x800D9DBC] heap end - heap_cursor()
 0x8002FC80,heap_check,ours,0,asset,rust_verified,unit_diff,med,stripped assert: last nonzero cursor < [0x80114538]; no stores; QUIRK: unbounded walk into texture cache
 0x8002FCD8,func_8002FCD8,ours,19,,recomp,,,
 0x8002FDBC,func_8002FDBC,ours,5,,recomp,,,
 0x8002FDF8,func_8002FDF8,ours,1,,recomp,,,
-0x8002FE80,func_8002FE80,ours,0,,recomp,,,
-0x8002FE94,func_8002FE94,ours,0,,recomp,,,
+0x8002FE80,func_8002FE80,ours,0,,rust_verified,unit_diff,high,"empty, spills a0..a3 (game::misc)"
+0x8002FE94,func_8002FE94,ours,0,,rust_verified,unit_diff,high,"round up to a power of two, min 16 (game::misc)"
 0x8002FEE4,func_8002FEE4,ours,2,,recomp,,,
 0x8002FF38,sprite_load,ours,17,asset,rust_verified,unit_diff,high,"header to the unaligned cursor, table at +0x14, palette/pages 16-aligned (NOTES Sprites); QUIRKs: no space check; CI without palette leaves the header unreserved; palette with <=0 pages reads an unloaded offset; negative count moves the cursor back"
 0x80030130,sprite_load_a1,ours,18,asset,rust_verified,unit_diff,high,sprite_load(a1); a0 only spilled. No references in code or data (dead?)
