@@ -1,12 +1,12 @@
 //! The leaves at 0x80005AFC..0x80005BB8 and the five empty functions at
-//! 0x800066DC..0x80006704 (game::misc). Recompiled C vs Rust on random
+//! 0x800066DC..0x80006704 (game::matrix, game::anim, game::misc). Recompiled C vs Rust on random
 //! register files and random globals, each checked against its statement.
 
 // Tests are named after the functions (func_8000052C), capitals included.
 #![allow(non_snake_case)]
 
 use difftest::{compare, State};
-use game::misc;
+use game::{anim, matrix, misc};
 use game::recomp::{reg::*, RecompFn};
 use proptest::prelude::*;
 
@@ -64,7 +64,7 @@ proptest! {
     fn func_80005AFC(seed: u64, v in value()) {
         let mut s = state(seed);
         s.rdram.mem().write_u32(A29C, v as u32);
-        let after = run("func_80005AFC", misc::func_80005AFC, &s)?;
+        let after = run("func_80005AFC", matrix::func_80005AFC, &s)?;
         let want = if v > 0 { v - 1 } else { v };
         prop_assert_eq!(word(&after, A29C), want as u32);
         prop_assert_eq!(after.ctx.gpr[V0], v as i64 as u64);
@@ -138,7 +138,7 @@ fn func_80005B80() {
     for seed in 0..8 {
         let mut s = state(seed);
         s.randomise_memory(seed, 0x800A_F400, 0x800);
-        let after = compare("func_80005B80", misc::func_80005B80, &s).unwrap_or_else(|d| panic!("{d}"));
+        let after = compare("func_80005B80", anim::func_80005B80, &s).unwrap_or_else(|d| panic!("{d}"));
         assert_eq!(word(&after, 0x8009_A2A0), 0);
         for a in (0x800A_F400..0x800A_FC00).step_by(4) {
             let want = if (0x800A_F4C0..0x800A_F970).contains(&a) { 0 } else { word(&s, a) };

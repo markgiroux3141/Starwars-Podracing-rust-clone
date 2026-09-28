@@ -15,6 +15,7 @@
 //! symbols: the oracle does in the tests. Tools that only need data formats
 //! use the `assets` crate, which doesn't depend on this one.
 
+pub mod anim;
 pub mod asset;
 pub mod channels;
 pub mod heap;
@@ -22,6 +23,7 @@ pub mod imports;
 pub mod libultra;
 pub mod loader;
 pub mod math;
+pub mod matrix;
 pub mod misc;
 pub mod pools;
 pub mod recomp;
@@ -61,20 +63,30 @@ pub const PORTED: &[Ported] = &[
     Ported { vram: 0x8000_1D34, name: "func_80001D34", func: math::func_80001D34 },
     Ported { vram: 0x8000_2BD4, name: "func_80002BD4", func: misc::func_80002BD4 },
     Ported { vram: 0x8000_2E2C, name: "func_80002E2C", func: misc::func_80002E2C },
-    Ported { vram: 0x8000_5AFC, name: "func_80005AFC", func: misc::func_80005AFC },
+    Ported { vram: 0x8000_550C, name: "func_8000550C", func: matrix::func_8000550C },
+    Ported { vram: 0x8000_556C, name: "func_8000556C", func: matrix::func_8000556C },
+    Ported { vram: 0x8000_59A8, name: "func_800059A8", func: matrix::func_800059A8 },
+    Ported { vram: 0x8000_5AFC, name: "func_80005AFC", func: matrix::func_80005AFC },
     Ported { vram: 0x8000_5B1C, name: "func_80005B1C", func: misc::func_80005B1C },
     Ported { vram: 0x8000_5B44, name: "func_80005B44", func: misc::func_80005B44 },
-    Ported { vram: 0x8000_5B80, name: "func_80005B80", func: misc::func_80005B80 },
+    Ported { vram: 0x8000_5B80, name: "func_80005B80", func: anim::func_80005B80 },
+    Ported { vram: 0x8000_5BB8, name: "func_80005BB8", func: anim::func_80005BB8 },
+    Ported { vram: 0x8000_5CAC, name: "func_80005CAC", func: anim::func_80005CAC },
     Ported { vram: 0x8000_66DC, name: "func_800066DC", func: misc::func_800066DC },
     Ported { vram: 0x8000_66E4, name: "func_800066E4", func: misc::func_800066E4 },
     Ported { vram: 0x8000_66EC, name: "func_800066EC", func: misc::func_800066EC },
     Ported { vram: 0x8000_66F4, name: "func_800066F4", func: misc::func_800066F4 },
     Ported { vram: 0x8000_66FC, name: "func_800066FC", func: misc::func_800066FC },
-    Ported { vram: 0x8000_6D5C, name: "func_80006D5C", func: misc::func_80006D5C },
-    Ported { vram: 0x8000_6E50, name: "func_80006E50", func: misc::func_80006E50 },
-    Ported { vram: 0x8000_6E60, name: "func_80006E60", func: misc::func_80006E60 },
+    Ported { vram: 0x8000_6704, name: "func_80006704", func: anim::func_80006704 },
+    Ported { vram: 0x8000_6D5C, name: "func_80006D5C", func: anim::func_80006D5C },
+    Ported { vram: 0x8000_6DE8, name: "func_80006DE8", func: anim::func_80006DE8 },
+    Ported { vram: 0x8000_6E50, name: "func_80006E50", func: anim::func_80006E50 },
+    Ported { vram: 0x8000_6E60, name: "func_80006E60", func: anim::func_80006E60 },
+    Ported { vram: 0x8000_6EB4, name: "func_80006EB4", func: anim::func_80006EB4 },
+    Ported { vram: 0x8000_6F28, name: "func_80006F28", func: anim::func_80006F28 },
     Ported { vram: 0x8000_6F34, name: "func_80006F34", func: misc::func_80006F34 },
     Ported { vram: 0x8000_6F3C, name: "func_80006F3C", func: misc::func_80006F3C },
+    Ported { vram: 0x8000_6F4C, name: "func_80006F4C", func: misc::func_80006F4C },
     Ported { vram: 0x8000_6FD4, name: "func_80006FD4", func: misc::func_80006FD4 },
     Ported { vram: 0x8000_6FDC, name: "func_80006FDC", func: misc::func_80006FDC },
     Ported { vram: 0x8000_758C, name: "func_8000758C", func: misc::func_8000758C },

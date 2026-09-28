@@ -13,7 +13,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80000D80,func_80000D80,ours,2,,recomp,,,
 0x80000E94,func_80000E94,ours,3,,recomp,,,
 0x80001864,func_80001864,ours,4,,recomp,,,
-0x80001D34,func_80001D34,ours,0,,rust_verified,unit_diff,high,"ray/plane hit t in f0 or -1.0; |n.v| band [-1e-4,1e-4] in double; out = v*t + o (game::math)"
+0x80001D34,func_80001D34,ours,0,math,rust_verified,unit_diff,high,"ray/plane hit t in f0 or -1.0; |n.v| band [-1e-4,1e-4] in double; out = v*t + o (game::math)"
 0x80001E80,func_80001E80,ours,2,,recomp,,,
 0x800020D8,func_800020D8,ours,3,,recomp,,,
 0x800026BC,func_800026BC,ours,3,,recomp,,,
@@ -35,16 +35,16 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80004FB0,func_80004FB0,ours,4,,recomp,,,
 0x80005134,func_80005134,ours,4,,recomp,,,
 0x80005240,func_80005240,ours,2,,recomp,,,
-0x8000550C,func_8000550C,ours,0,,recomp,,,
-0x8000556C,func_8000556C,ours,0,,recomp,,,
-0x800059A8,func_800059A8,ours,0,,recomp,,,
-0x80005AFC,func_80005AFC,ours,0,,rust_verified,unit_diff,high,decrement [0x8009A29C] if > 0 (game::misc)
+0x8000550C,func_8000550C,ours,0,matrix,rust_verified,unit_diff,high,"matrix stack reset: depth [0x8009A29C] = 0, stack[0] = identity (game::matrix)"
+0x8000556C,func_8000556C,ours,0,matrix,rust_verified,unit_diff,high,"push: depth < 32 (signed): depth++, top = M * old top (sums in code order) (game::matrix)"
+0x800059A8,func_800059A8,ours,0,matrix,rust_verified,unit_diff,high,copy top matrix to a0; re-reads depth per word (QUIRK) (game::matrix)
+0x80005AFC,func_80005AFC,ours,0,matrix,rust_verified,unit_diff,high,decrement [0x8009A29C] if > 0 (game::matrix)
 0x80005B1C,func_80005B1C,ours,0,,rust_verified,unit_diff,high,a0 == 3: [0x8009A290] = a1; a0 == 5: [0x8009A28C] = a1; 64-bit compares (game::misc)
 0x80005B44,func_80005B44,ours,0,,rust_verified,unit_diff,high,"getter for func_80005B1C: 3/5 -> the word, else -1 (game::misc)"
-0x80005B80,func_80005B80,ours,0,,rust_verified,unit_diff,high,[0x8009A2A0] = 0; zero 300 words 0x800AF4C0..0x800AF970 (game::misc)
-0x80005BB8,func_80005BB8,ours,0,,recomp,,,
+0x80005B80,func_80005B80,ours,0,anim,rust_verified,unit_diff,high,[0x8009A2A0] = 0; zero 300 words 0x800AF4C0..0x800AF970 (game::anim)
+0x80005BB8,func_80005BB8,ours,0,anim,rust_verified,unit_diff,high,"add o to 0x800AF4C0 table, start: +F0=0, +F4=+10C/+108 by bit 5, kind 8 clears target bit 3, flags |= 1<<24 (game::anim)"
 0x80005C54,func_80005C54,ours,1,,recomp,,,
-0x80005CAC,func_80005CAC,ours,0,,recomp,,,
+0x80005CAC,func_80005CAC,ours,0,anim,rust_verified,unit_diff,high,"(x - k[i]) / (k[i+1] - k[i]), k = [o+0x11C] (game::anim)"
 0x80005CD4,func_80005CD4,ours,1,,recomp,,,
 0x80005DA8,func_80005DA8,ours,1,,recomp,,,
 0x80005F54,func_80005F54,ours,3,,recomp,,,
@@ -58,21 +58,21 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800066EC,func_800066EC,ours,0,,rust_verified,unit_diff,high,empty; spills a0 to [sp] (game::misc)
 0x800066F4,func_800066F4,ours,0,,rust_verified,unit_diff,high,empty; spills a0 to [sp] (game::misc)
 0x800066FC,func_800066FC,ours,0,,rust_verified,unit_diff,high,empty; spills a0 to [sp] (game::misc)
-0x80006704,func_80006704,ours,0,,recomp,,,
+0x80006704,func_80006704,ours,0,anim,rust_verified,unit_diff,high,key segment of time +0x114 among n=+0x104 keys; n < 2 scans below k (QUIRK) (game::anim)
 0x80006790,func_80006790,ours,1,,recomp,,,
 0x80006848,func_80006848,ours,1,,recomp,,,
 0x80006C00,func_80006C00,ours,5,,recomp,,,
-0x80006D5C,func_80006D5C,ours,0,,rust_verified,unit_diff,high,"find o in table 0x800AF4C0 (first [0x8009A2A0]): flags [o+0x100] bit31 clear, &0xF == a1, [o+0x124] == a0 (64-bit); a0 == 0 -> 0; QUIRK: count unbounded (game::misc)"
-0x80006DE8,func_80006DE8,ours,0,,recomp,,,
-0x80006E50,func_80006E50,ours,0,,rust_verified,unit_diff,high,[a0+0x100] |= a1 (game::misc)
-0x80006E60,func_80006E60,ours,0,,rust_verified,unit_diff,high,[a0+0x100] &= ~a1 (game::misc)
+0x80006D5C,func_80006D5C,ours,0,anim,rust_verified,unit_diff,high,"find o in table 0x800AF4C0 (first [0x8009A2A0]): flags [o+0x100] bit31 clear, &0xF == a1, [o+0x124] == a0 (64-bit); a0 == 0 -> 0; QUIRK: count unbounded (game::anim)"
+0x80006DE8,func_80006DE8,ours,0,anim,rust_verified,unit_diff,high,range +F0/+F4/+F8 clamped at 0; b < a hangs (pause_self) (game::anim)
+0x80006E50,func_80006E50,ours,0,anim,rust_verified,unit_diff,high,[a0+0x100] |= a1 (game::anim)
+0x80006E60,func_80006E60,ours,0,anim,rust_verified,unit_diff,high,[a0+0x100] &= ~a1 (game::anim)
 0x80006E74,func_80006E74,ours,1,,recomp,,,
-0x80006EB4,func_80006EB4,ours,0,,recomp,,,
+0x80006EB4,func_80006EB4,ours,0,anim,rust_verified,unit_diff,high,[o+0x110] = f (a1) (game::anim)
 0x80006EC0,func_80006EC0,ours,1,,recomp,,,
-0x80006F28,func_80006F28,ours,0,,recomp,,,
+0x80006F28,func_80006F28,ours,0,anim,rust_verified,unit_diff,high,[o+0xDC] = f (a1) (game::anim)
 0x80006F34,func_80006F34,ours,0,,rust_verified,unit_diff,high,empty; spills a0 (game::misc)
 0x80006F3C,func_80006F3C,ours,0,,rust_verified,unit_diff,high,"empty; spills a0, a1; returns 0 (game::misc)"
-0x80006F4C,func_80006F4C,ours,0,,recomp,,,
+0x80006F4C,func_80006F4C,ours,0,,rust_verified,unit_diff,high,spills f12 to [sp] (game::misc)
 0x80006F60,func_80006F60,ours,6,,recomp,,,
 0x80006FD4,func_80006FD4,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
 0x80006FDC,func_80006FDC,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
@@ -1168,18 +1168,18 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8008A690,func_8008A690,ours,1,,recomp,,,
 0x8008A6B4,sprintf,libultra,5,,recomp,,high,_Printf (0x80093180) with proutSprintf 0x8008A690 (indirect call)
 0x8008A710,func_8008A710,ours,7,,recomp,,,
-0x8008A750,cosf,libultra,0,,rust_verified,unit_diff,high,"libultra cosf, confirmed (model vs std cos within 2e-6); constants at 0x800ADDD0 (game::libultra)"
-0x8008A8C0,sinf,libultra,0,,rust_verified,unit_diff,high,"libultra sinf, confirmed (model vs std sin within 2e-6); constants at 0x800ADE20 (game::libultra)"
-0x8008AAE0,__ull_rshift,libultra,0,,rust_verified,unit_diff,high,"ll.c, shape-confirmed (game::libultra)"
-0x8008AB0C,__ull_rem,libultra,0,,rust_verified,unit_diff,high,ll.c (game::libultra)
-0x8008AB48,__ull_div,libultra,0,,rust_verified,unit_diff,high,ll.c; break 7 unreachable (host divide faults first) (game::libultra)
-0x8008AB84,__ll_lshift,libultra,0,,rust_verified,unit_diff,high,ll.c (game::libultra)
-0x8008ABB0,__ll_rem,libultra,0,,rust_verified,unit_diff,high,ll.c; unsigned remainder as in the source (game::libultra)
-0x8008ABEC,__ll_div,libultra,0,,rust_verified,unit_diff,high,ll.c; INT64_MIN/-1 reaches do_break (game::libultra)
-0x8008AC48,__ll_mul,libultra,0,,rust_verified,unit_diff,high,ll.c (game::libultra)
-0x8008AC78,__ull_divremi,libultra,0,,rust_verified,unit_diff,high,ll.c; QUIRK lh divisor (game::libultra)
-0x8008ACD8,__ll_mod,libultra,0,,rust_verified,unit_diff,high,ll.c; INT64_MIN mod -1 reaches do_break (game::libultra)
-0x8008AD74,__ll_rshift,libultra,0,,rust_verified,unit_diff,high,ll.c (game::libultra)
+0x8008A750,cosf,libultra,0,os,rust_verified,unit_diff,high,"libultra cosf, confirmed (model vs std cos within 2e-6); constants at 0x800ADDD0 (game::libultra)"
+0x8008A8C0,sinf,libultra,0,os,rust_verified,unit_diff,high,"libultra sinf, confirmed (model vs std sin within 2e-6); constants at 0x800ADE20 (game::libultra)"
+0x8008AAE0,__ull_rshift,libultra,0,os,rust_verified,unit_diff,high,"ll.c, shape-confirmed (game::libultra)"
+0x8008AB0C,__ull_rem,libultra,0,os,rust_verified,unit_diff,high,ll.c (game::libultra)
+0x8008AB48,__ull_div,libultra,0,os,rust_verified,unit_diff,high,ll.c; break 7 unreachable (host divide faults first) (game::libultra)
+0x8008AB84,__ll_lshift,libultra,0,os,rust_verified,unit_diff,high,ll.c (game::libultra)
+0x8008ABB0,__ll_rem,libultra,0,os,rust_verified,unit_diff,high,ll.c; unsigned remainder as in the source (game::libultra)
+0x8008ABEC,__ll_div,libultra,0,os,rust_verified,unit_diff,high,ll.c; INT64_MIN/-1 reaches do_break (game::libultra)
+0x8008AC48,__ll_mul,libultra,0,os,rust_verified,unit_diff,high,ll.c (game::libultra)
+0x8008AC78,__ull_divremi,libultra,0,os,rust_verified,unit_diff,high,ll.c; QUIRK lh divisor (game::libultra)
+0x8008ACD8,__ll_mod,libultra,0,os,rust_verified,unit_diff,high,ll.c; INT64_MIN mod -1 reaches do_break (game::libultra)
+0x8008AD74,__ll_rshift,libultra,0,os,rust_verified,unit_diff,high,ll.c (game::libultra)
 0x8008ADA0,osAiGetLength,libultra,0,,recomp,,high,AI_LEN_REG 0xA450000C
 0x8008ADB0,func_8008ADB0,ours,1,,recomp,,,
 0x8008AE30,func_8008AE30,ours,1,,recomp,,,

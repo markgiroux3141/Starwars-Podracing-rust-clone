@@ -497,24 +497,6 @@ pub unsafe extern "C" fn func_80002E2C(rdram: *mut u8, ctx: *mut RecompContext) 
     g[SP] = addu(g[SP], 0x28);
 }
 
-/// `func_80005AFC`: decrement `[0x8009A29C]` if it is positive (signed).
-///
-/// Leaves `v1 = 0x8009A29C`, `v0` = the old value and `t6` = old - 1 (the
-/// `blez` delay slot computes it either way).
-///
-/// # Safety
-/// N64Recomp entry point: see [`crate::recomp::enter`].
-pub unsafe extern "C" fn func_80005AFC(rdram: *mut u8, ctx: *mut RecompContext) {
-    let (mut mem, ctx) = enter(rdram, ctx);
-    let g = &mut ctx.gpr;
-    g[V1] = li(0x8009_A29C);
-    g[V0] = lw(&mem, g[V1], 0);
-    g[T6] = addu(g[V0], u64::MAX); // blez delay slot: addiu t6, v0, -1
-    if (g[V0] as i64) > 0 {
-        sw(&mut mem, g[V1], 0, g[T6]);
-    }
-}
-
 /// `func_80005B1C(which, value)`: `which == 3` stores `value` in
 /// `[0x8009A290]`, `which == 5` in `[0x8009A28C]`; anything else does
 /// nothing. `which` is compared as a full 64-bit register.
@@ -561,35 +543,6 @@ pub unsafe extern "C" fn func_80005B44(rdram: *mut u8, ctx: *mut RecompContext) 
     if g[A0] == g[AT] {
         g[V0] = li(0x800A_0000);
         g[V0] = lw(&mem, g[V0], -0x5D74); // jr delay slot
-    }
-}
-
-/// `func_80005B80`: `[0x8009A2A0] = 0`, then zero the 300 words from
-/// `0x800AF4C0` up to `0x800AF970`, four per iteration.
-///
-/// Leaves `at = 0x800A0000` and `v0 = v1 = 0x800AF970`.
-///
-/// # Safety
-/// N64Recomp entry point: see [`crate::recomp::enter`].
-pub unsafe extern "C" fn func_80005B80(rdram: *mut u8, ctx: *mut RecompContext) {
-    let (mut mem, ctx) = enter(rdram, ctx);
-    let m = &mut mem;
-    let g = &mut ctx.gpr;
-    g[AT] = li(0x800A_0000);
-    g[V1] = li(0x800B_0000);
-    g[V0] = li(0x800B_0000);
-    sw(m, g[AT], -0x5D60, 0);
-    g[V0] = addu(g[V0], (-0x690i64) as u64);
-    g[V1] = addu(g[V1], (-0xB40i64) as u64);
-    loop {
-        g[V1] = addu(g[V1], 0x10);
-        sw(m, g[V1], -0xC, 0);
-        sw(m, g[V1], -0x8, 0);
-        sw(m, g[V1], -0x4, 0);
-        sw(m, g[V1], -0x10, 0); // bne delay slot
-        if g[V1] == g[V0] {
-            break;
-        }
     }
 }
 
@@ -644,105 +597,6 @@ pub unsafe extern "C" fn func_800066FC(rdram: *mut u8, ctx: *mut RecompContext) 
     spill_a0(rdram, ctx)
 }
 
-/// Object table searched by [`func_80006D5C`] (300 words, cleared by
-/// [`func_80005B80`]); `[0x8009A2A0]` is the number of entries in use.
-pub const OBJECTS: u32 = 0x800A_F4C0;
-
-/// `func_80006D5C(id, kind)`: find an object in [`OBJECTS`] by id and kind.
-///
-/// `id == 0` returns 0 at once. Otherwise it visits the first `[0x8009A2A0]`
-/// (signed) entries and returns the first nonzero `o` whose flags word
-/// `[o + 0x100]` has bit 31 clear, `flags & 0xF == kind` and `[o + 0x124] ==
-/// id`, else 0. Both equalities compare full 64-bit registers (the loaded
-/// words sign-extended), so a `kind` or `id` with a nonstandard upper half
-/// never matches. QUIRK: nothing bounds the count by the table's 300 entries.
-///
-/// `s0` holds `kind` and is restored from its low word; the loop's
-/// temporaries (`v1` count, `a1` last entry, `a2` next slot, `a3`, `t0`,
-/// `t6`-`t8`, `at`) are left as the original leaves them.
-///
-/// Domain: canonical `sp` with its 8-byte frame in RDRAM; nonzero entries
-/// canonical pointers to objects in RDRAM.
-///
-/// # Safety
-/// N64Recomp entry point: see [`crate::recomp::enter`].
-pub unsafe extern "C" fn func_80006D5C(rdram: *mut u8, ctx: *mut RecompContext) {
-    let (mut mem, ctx) = enter(rdram, ctx);
-    let m = &mut mem;
-    let g = &mut ctx.gpr;
-    g[SP] = addu(g[SP], (-8i64) as u64);
-    sw(m, g[SP], 4, g[S0]);
-    g[S0] = g[A1]; // bnez delay slot
-    'found: {
-        if g[A0] == 0 {
-            g[V0] = 0;
-            break 'found;
-        }
-        g[V1] = lw(m, li(0x800A_0000), -0x5D60);
-        g[A2] = li(OBJECTS);
-        g[V0] = 0; // blez delay slot
-        if (g[V1] as i64) > 0 {
-            g[T0] = li(0x8000_0000);
-            loop {
-                g[A1] = lw(m, g[A2], 0);
-                g[V0] = addu(g[V0], 1);
-                g[AT] = u64::from((g[V0] as i64) < (g[V1] as i64));
-                if g[A1] != 0 {
-                    g[A3] = lw(m, g[A1], 0x100);
-                    g[T6] = g[A3] & g[T0];
-                    g[T7] = g[A3] & 0xF; // bnez delay slot
-                    if g[T6] == 0 && g[S0] == g[T7] {
-                        g[T8] = lw(m, g[A1], 0x124);
-                        if g[A0] == g[T8] {
-                            g[V0] = g[A1]; // b delay slot
-                            break 'found;
-                        }
-                    }
-                }
-                // L_80006DD0: bnez at / (delay) addiu a2, a2, 4
-                g[A2] = addu(g[A2], 4);
-                if g[AT] == 0 {
-                    break;
-                }
-            }
-        }
-        // L_80006DD8
-        g[V0] = 0;
-    }
-    // L_80006DDC
-    g[S0] = lw(m, g[SP], 4);
-    g[SP] = addu(g[SP], 8);
-}
-
-/// `func_80006E50(o, bits)`: `[o + 0x100] |= bits` (an object's flags).
-///
-/// Domain: canonical `o` with `o + 0x100` in RDRAM.
-///
-/// # Safety
-/// N64Recomp entry point: see [`crate::recomp::enter`].
-pub unsafe extern "C" fn func_80006E50(rdram: *mut u8, ctx: *mut RecompContext) {
-    let (mut mem, ctx) = enter(rdram, ctx);
-    let g = &mut ctx.gpr;
-    g[T6] = lw(&mem, g[A0], 0x100);
-    g[T7] = g[T6] | g[A1];
-    sw(&mut mem, g[A0], 0x100, g[T7]);
-}
-
-/// `func_80006E60(o, bits)`: `[o + 0x100] &= !bits`.
-///
-/// Domain: canonical `o` with `o + 0x100` in RDRAM.
-///
-/// # Safety
-/// N64Recomp entry point: see [`crate::recomp::enter`].
-pub unsafe extern "C" fn func_80006E60(rdram: *mut u8, ctx: *mut RecompContext) {
-    let (mut mem, ctx) = enter(rdram, ctx);
-    let g = &mut ctx.gpr;
-    g[T6] = lw(&mem, g[A0], 0x100);
-    g[T7] = !g[A1]; // nor t7, a1, zero: all 64 bits
-    g[T8] = g[T6] & g[T7];
-    sw(&mut mem, g[A0], 0x100, g[T8]);
-}
-
 /// `func_80006F34`: spills `a0` to `[sp]` and returns (see [`spill_a0`]).
 ///
 /// # Safety
@@ -764,6 +618,16 @@ pub unsafe extern "C" fn func_80006F3C(rdram: *mut u8, ctx: *mut RecompContext) 
     sw(&mut mem, g[SP], 0, g[A0]);
     sw(&mut mem, g[SP], 4, g[A1]);
     g[V0] = 0;
+}
+
+/// `func_80006F4C`: spills `f12` (a float argument) to its slot `[sp]` and
+/// returns.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80006F4C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    sw(&mut mem, ctx.gpr[SP], 0, u64::from(ctx.fpr[12].u32l()));
 }
 
 /// `func_80006FD4`: returns at once.

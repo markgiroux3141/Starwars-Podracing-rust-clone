@@ -1,4 +1,4 @@
-//! The leaves at 0x80006D5C..0x80007D44 (game::misc): an object search, flag
+//! The leaves at 0x80006D5C..0x80007D44 (game::anim, game::misc): an object search, flag
 //! set/clear, empty functions, the audio DMA "new" hook, a record clear and
 //! a handle lookup. Recompiled C vs Rust on random register files and random
 //! memory, each checked against its statement.
@@ -7,7 +7,8 @@
 #![allow(non_snake_case)]
 
 use difftest::{compare, Rng, State};
-use game::misc::{self, OBJECTS};
+use game::anim::{self, OBJECTS};
+use game::misc;
 use game::recomp::{reg::*, RecompFn};
 use proptest::prelude::*;
 
@@ -102,7 +103,7 @@ proptest! {
         objects(&mut s, seed, count);
         s.ctx.gpr[A0] = id;
         s.ctx.gpr[A1] = kind;
-        let after = run("func_80006D5C", misc::func_80006D5C, &s)?;
+        let after = run("func_80006D5C", anim::func_80006D5C, &s)?;
         prop_assert_eq!(after.ctx.gpr[V0], find(&s, id, kind));
         prop_assert_eq!(after.ctx.gpr[S0], sext(s.ctx.gpr[S0] as u32), "s0 restored from its low word");
     }
@@ -112,7 +113,7 @@ proptest! {
         let mut s = state(seed);
         s.ctx.gpr[A0] = o;
         s.ctx.gpr[A1] = bits;
-        let after = run("func_80006E50", misc::func_80006E50, &s)?;
+        let after = run("func_80006E50", anim::func_80006E50, &s)?;
         let at = o as u32 + 0x100;
         prop_assert_eq!(word(&after, at), word(&s, at) | bits as u32);
     }
@@ -122,7 +123,7 @@ proptest! {
         let mut s = state(seed);
         s.ctx.gpr[A0] = o;
         s.ctx.gpr[A1] = bits;
-        let after = run("func_80006E60", misc::func_80006E60, &s)?;
+        let after = run("func_80006E60", anim::func_80006E60, &s)?;
         let at = o as u32 + 0x100;
         prop_assert_eq!(word(&after, at), word(&s, at) & !(bits as u32));
     }
