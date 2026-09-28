@@ -1,0 +1,10 @@
+[package]
+name = "translate"
+version = "0.1.0"
+description = "Draft Rust ports from N64Recomp's generated C (cargo xtask translate)"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Deliberately no dependency on `game` (NOTES.md, "How ports call other
+# functions"): xtask uses this crate, and so does game's build script.

@@ -12,5 +12,10 @@ game.workspace = true
 oracle.workspace = true
 assets.workspace = true
 
+[features]
+# Run the difftests against the translate crate's drafts instead of the ports
+# (`cargo test -p difftest --features translated`).
+translated = ["game/translated"]
+
 [dev-dependencies]
 proptest.workspace = true

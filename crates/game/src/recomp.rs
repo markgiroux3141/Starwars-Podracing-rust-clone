@@ -159,10 +159,119 @@ pub fn lbu(mem: &Mem, base: u64, offset: i32) -> u64 {
     u64::from(mem.read_u8((base as u32).wrapping_add(offset as u32)))
 }
 
+/// `lhu`: the zero-extended halfword at `base + offset` (`MEM_HU`).
+#[inline]
+pub fn lhu(mem: &Mem, base: u64, offset: i32) -> u64 {
+    u64::from(mem.read_u16((base as u32).wrapping_add(offset as u32)))
+}
+
+/// `lb`: the sign-extended byte at `base + offset` (`MEM_B`).
+#[inline]
+pub fn lb(mem: &Mem, base: u64, offset: i32) -> u64 {
+    mem.read_u8((base as u32).wrapping_add(offset as u32)) as i8 as i64 as u64
+}
+
 /// `sw`: store the low word of `value` at `base + offset`.
 #[inline]
 pub fn sw(mem: &mut Mem, base: u64, offset: i32, value: u64) {
     mem.write_u32((base as u32).wrapping_add(offset as u32), value as u32)
+}
+
+/// `sh`: store the low halfword of `value` at `base + offset`.
+#[inline]
+pub fn sh(mem: &mut Mem, base: u64, offset: i32, value: u64) {
+    mem.write_u16((base as u32).wrapping_add(offset as u32), value as u16)
+}
+
+/// `sb`: store the low byte of `value` at `base + offset`.
+#[inline]
+pub fn sb(mem: &mut Mem, base: u64, offset: i32, value: u64) {
+    mem.write_u8((base as u32).wrapping_add(offset as u32), value as u8)
+}
+
+/// `sra rd, rt, sa`: N64Recomp's `S32(SIGNED(rt) >> sa)`, an arithmetic shift
+/// of the **whole 64-bit register**, then truncated and sign-extended. For a
+/// non-canonical `rt`, upper-half bits reach the low word (on hardware the
+/// result is undefined); ports follow the C (NOTES.md, session 5).
+#[inline]
+pub fn sra(rt: u64, sa: u32) -> u64 {
+    s32(((rt as i64) >> sa) as u32)
+}
+
+/// `srl rd, rt, sa`: `S32(U32(rt) >> sa)`, a logical shift of the low word.
+#[inline]
+pub fn srl(rt: u64, sa: u32) -> u64 {
+    s32((rt as u32) >> sa)
+}
+
+/// `sllv rd, rt, rs`: [`sll`] by the low 5 bits of `rs`.
+#[inline]
+pub fn sllv(rt: u64, rs: u64) -> u64 {
+    sll(rt, (rs & 31) as u32)
+}
+
+/// `srav rd, rt, rs`: [`sra`] (whole-register, as in the C) by the low 5 bits of `rs`.
+#[inline]
+pub fn srav(rt: u64, rs: u64) -> u64 {
+    sra(rt, (rs & 31) as u32)
+}
+
+/// `srlv rd, rt, rs`: [`srl`] by the low 5 bits of `rs`.
+#[inline]
+pub fn srlv(rt: u64, rs: u64) -> u64 {
+    srl(rt, (rs & 31) as u32)
+}
+
+/// `slt`/`slti`: 1 if `a < b` as signed **64-bit** values (`SIGNED(a) < SIGNED(b)`),
+/// else 0. Immediates arrive sign-extended.
+#[inline]
+pub fn slt(a: u64, b: u64) -> u64 {
+    u64::from((a as i64) < (b as i64))
+}
+
+/// `sltu`/`sltiu`: 1 if `a < b` as unsigned 64-bit values, else 0. An
+/// `sltiu` immediate arrives sign-extended, as C converts it.
+#[inline]
+pub fn sltu(a: u64, b: u64) -> u64 {
+    u64::from(a < b)
+}
+
+/// `mult`: `(lo, hi)` of the signed 64-bit product of the low words, each
+/// half sign-extended. In N64Recomp, `lo`/`hi` are locals of the generated
+/// function (starting at 0), not `ctx->lo`/`ctx->hi`.
+#[inline]
+pub fn mult(a: u64, b: u64) -> (u64, u64) {
+    let p = i64::from(a as i32).wrapping_mul(i64::from(b as i32)) as u64;
+    (s32(p as u32), s32((p >> 32) as u32))
+}
+
+/// `multu`: [`mult`] with the low words as unsigned.
+#[inline]
+pub fn multu(a: u64, b: u64) -> (u64, u64) {
+    let p = u64::from(a as u32) * u64::from(b as u32);
+    (s32(p as u32), s32((p >> 32) as u32))
+}
+
+/// `div`: `(lo, hi)` = quotient and remainder of the low words as signed,
+/// computed in 64 bits as the C does (so `i32::MIN / -1` gives `i32::MIN`,
+/// remainder 0), each sign-extended.
+///
+/// A zero divisor is undefined behaviour in the C (it faults on the hosts
+/// N64Recomp supports), not the hardware's defined garbage: callers' domains
+/// must exclude it. The game guards its divisions with `break 7`.
+#[inline]
+pub fn div(a: u64, b: u64) -> (u64, u64) {
+    let (a, b) = (i64::from(a as i32), i64::from(b as i32));
+    assert!(b != 0, "div by zero: undefined in N64Recomp's C");
+    (s32((a / b) as u32), s32((a % b) as u32))
+}
+
+/// `divu`: [`div`] with the low words as unsigned; same zero-divisor caveat.
+#[inline]
+pub fn divu(a: u64, b: u64) -> (u64, u64) {
+    let (a, b) = (a as u32, b as u32);
+    assert!(b != 0, "divu by zero: undefined in N64Recomp's C");
+    (s32(a / b), s32(a % b))
 }
 
 /// `lui` + `ori`/`addiu`: a 32-bit constant, sign-extended.
@@ -267,6 +376,37 @@ mod tests {
         assert_eq!(sll(0xFFFF_FFFF_0000_0001, 2), 4);
         assert_eq!(subu(0, 1), u64::MAX);
         assert_eq!(subu(0x8000_0000, 1), 0x7FFF_FFFF);
+    }
+
+    #[test]
+    fn shifts_compares_and_muldiv_match_recomp_macros() {
+        // sra shifts the whole register (S32(SIGNED(x) >> n)).
+        assert_eq!(sra(0xFFFF_FFFF_8000_0000, 4), 0xFFFF_FFFF_F800_0000);
+        assert_eq!(sra(0x0000_0001_0000_0000, 4), 0x1000_0000);
+        assert_eq!(srl(0xFFFF_FFFF_8000_0000, 4), 0x0800_0000);
+        assert_eq!(sllv(1, 33), 2);
+        assert_eq!(slt(u64::MAX, 0), 1);
+        assert_eq!(sltu(u64::MAX, 0), 0);
+        // multu: U64(U32(a)) * U64(U32(b)), halves sign-extended.
+        assert_eq!(multu(0xFFFF_FFFF, 0xFFFF_FFFF), (1, 0xFFFF_FFFF_FFFF_FFFE));
+        assert_eq!(mult(u64::MAX, 2), (u64::MAX - 1, u64::MAX));
+        // div in 64 bits: i32::MIN / -1 doesn't trap.
+        assert_eq!(div(0xFFFF_FFFF_8000_0000, u64::MAX), (0xFFFF_FFFF_8000_0000, 0));
+        assert_eq!(div((-7i64) as u64, 2), ((-3i64) as u64, u64::MAX));
+        assert_eq!(divu(0xFFFF_FFFF, 2), (0x7FFF_FFFF, 1));
+    }
+
+    #[test]
+    fn byte_and_halfword_access() {
+        let mut r = n64mem::Rdram::new();
+        let mut m = r.mem();
+        sw(&mut m, s32(0x8000_1000), 0, 0x1234_80FF);
+        assert_eq!(lb(&m, s32(0x8000_1000), 3), u64::MAX);
+        assert_eq!(lbu(&m, s32(0x8000_1000), 2), 0x80);
+        assert_eq!(lhu(&m, s32(0x8000_1000), 2), 0x80FF);
+        sh(&mut m, s32(0x8000_1000), 0, 0xAAAA_5678);
+        sb(&mut m, s32(0x8000_1000), 3, 0x01);
+        assert_eq!(lw(&m, s32(0x8000_1000), 0), 0x5678_8001);
     }
 
     #[test]

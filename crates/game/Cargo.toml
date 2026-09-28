@@ -8,3 +8,12 @@ publish.workspace = true
 
 [dependencies]
 n64mem.workspace = true
+
+[features]
+# Validation of the translator: build `game::translated` from generated/ (the
+# translate crate's drafts of every ported function). difftest's feature of
+# the same name runs the existing difftests against those drafts.
+translated = ["dep:translate"]
+
+[build-dependencies]
+translate = { workspace = true, optional = true }

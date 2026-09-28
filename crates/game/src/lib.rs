@@ -23,6 +23,16 @@ pub mod misc;
 pub mod recomp;
 pub mod util;
 
+/// The translate crate's drafts of every ported function, built from
+/// generated/ with the `translated` feature (see build.rs). difftest's
+/// `translated` feature swaps them in for the ports, which validates the
+/// translator against the existing difftests. Never committed.
+#[cfg(all(feature = "translated", not(test)))]
+#[allow(non_snake_case, unused_mut, unused_variables, unused_assignments)]
+pub mod translated {
+    include!(concat!(env!("OUT_DIR"), "/translated.rs"));
+}
+
 use recomp::RecompFn;
 
 /// A ported function and the original it replaces.

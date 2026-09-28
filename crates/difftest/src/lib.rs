@@ -243,9 +243,30 @@ pub fn diff_states(c: &State, rust: &State) -> Vec<Diff> {
     out
 }
 
+/// The Rust side a test runs for `name`: `port`, or with the `translated`
+/// feature the translate crate's draft of `name` (validating the translator
+/// against the existing tests). A function the translator refused fails
+/// the test with the reason.
+pub fn port_under_test(name: &str, port: RecompFn) -> RecompFn {
+    #[cfg(feature = "translated")]
+    {
+        let _ = port;
+        if let Some((_, why)) = game::translated::REFUSED.iter().find(|(n, _)| *n == name) {
+            panic!("translated: {name} was refused: {why}");
+        }
+        game::translated::by_name(name).unwrap_or_else(|| panic!("translated: no draft of {name}"))
+    }
+    #[cfg(not(feature = "translated"))]
+    {
+        let _ = name;
+        port
+    }
+}
+
 /// Run the oracle's `name` and `port` on copies of `input`; Ok with the
 /// post-run state if they agree on everything.
 pub fn compare(name: &str, port: RecompFn, input: &State) -> Result<State, Divergence> {
+    let port = port_under_test(name, port);
     let c_fn = oracle::recomp::by_name(name)
         .unwrap_or_else(|| panic!("{name} is not compiled into the oracle; add it to crates/oracle/functions.txt"));
     let mut c = input.clone();

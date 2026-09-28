@@ -94,7 +94,7 @@ fn hang_child() {
     let mut s = before(7);
     let f = match side {
         "c" => oracle::recomp::by_name("func_8003043C").unwrap(),
-        "rust" => loader::func_8003043C,
+        "rust" => difftest::port_under_test("func_8003043C", loader::func_8003043C),
         _ => unreachable!(),
     };
     s.run(f);

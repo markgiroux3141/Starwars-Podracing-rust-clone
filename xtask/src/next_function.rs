@@ -64,7 +64,7 @@ impl Func {
 
 /// Minimal CSV reader: comma-separated, fields optionally double-quoted
 /// (with "" for a quote inside), as Python's csv module writes them.
-fn parse_csv(text: &str) -> Vec<BTreeMap<String, String>> {
+pub(crate) fn parse_csv(text: &str) -> Vec<BTreeMap<String, String>> {
     fn fields(line: &str) -> Vec<String> {
         let mut out = vec![String::new()];
         let mut quoted = false;

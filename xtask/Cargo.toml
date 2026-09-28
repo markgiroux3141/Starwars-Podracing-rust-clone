@@ -9,3 +9,4 @@ publish.workspace = true
 png = "0.18"
 racer-rom.workspace = true
 assets.workspace = true
+translate.workspace = true

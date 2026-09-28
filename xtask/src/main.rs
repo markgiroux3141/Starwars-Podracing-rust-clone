@@ -2,6 +2,7 @@
 
 mod extract;
 mod next_function;
+mod translate;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -25,7 +26,12 @@ commands:
   next-function [-n N] [--subsystem S] [--toward func_XXXXXXXX]
                       Propose port targets: status recomp, no indirect calls,
                       every callee verified. Lowest depth first, preferring S.
-                      --toward limits it to what the given function reaches.";
+                      --toward limits it to what the given function reaches.
+  translate func_XXXXXXXX...
+                      Print a draft Rust port of each function from generated/
+                      (integer code only; refuses floats, jump tables, ...).
+  translate --survey [--depth N] [--list KIND]
+                      Try every game-side function and count what translates.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -35,6 +41,7 @@ fn main() -> ExitCode {
         Some("recomp") => recomp(),
         Some("extract") => check_baserom(&repo_root()).and_then(|rom| extract::run(&repo_root(), &rom)),
         Some("next-function") => next_function::run(&repo_root(), &args[1..]),
+        Some("translate") => translate::run(&repo_root(), &args[1..]),
         _ => {
             eprintln!("{USAGE}");
             return ExitCode::from(2);
