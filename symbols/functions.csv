@@ -87,7 +87,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80007728,func_80007728,ours,5,,recomp,,,
 0x80007818,func_80007818,ours,3,,recomp,,,
 0x8000787C,func_8000787C,ours,0,,rust_verified,unit_diff,high,if [0x8009A2B8]: [0x8009A328] = trunc.w.s(f12 * 32000) (game::misc)
-0x800078B4,func_800078B4,ours,0,,recomp,,,
+0x800078B4,func_800078B4,ours,0,,rust_verified,unit_diff,high,if [0x8009A2B8]: 8 records at 0x800D2038: +0x18 = trunc(f32(+0x18)*[0x800A81C4]) unless +4 == 0x4E; clamp < 0 to 0 (game::misc)
 0x80007A44,func_80007A44,ours,0,,rust_verified,unit_diff,high,if [0x8009A2B8]: zero +0x18 of 8 x 0x20-byte records at 0x800D2038 (game::misc)
 0x80007A80,func_80007A80,ours,3,,recomp,,,
 0x80007B10,func_80007B10,ours,7,,recomp,,,
@@ -113,9 +113,9 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80008BC4,func_80008BC4,ours,4,,recomp,,,
 0x80008C58,func_80008C58,ours,3,,recomp,,,
 0x80008F28,func_80008F28,ours,14,,recomp,,,
-0x80008F58,func_80008F58,ours,0,,recomp,,,
+0x80008F58,func_80008F58,ours,0,,rust_verified,unit_diff,high,"[0x8009AD08] = f12, [0x8009AD0C] = f14 (game::misc)"
 0x80008F6C,func_80008F6C,ours,0,,rust_verified,unit_diff,high,(kind<<24)|(a1<<16)|table[kind][index]|0x8000 or -1; jump table on kind (game::misc)
-0x80009134,func_80009134,ours,0,,recomp,,,
+0x80009134,func_80009134,ours,0,,rust_verified,unit_diff,high,"0.0 < F[i] (0x8009AD30) for k 0/1 (64-bit), else 0.0 < G[k] (0x8009AD10) (game::misc)"
 0x800091B0,func_800091B0,ours,2,,recomp,,,
 0x80009278,func_80009278,ours,0,,rust_verified,unit_diff,high,push to the 3-entry recent list 0x8009ADF4; QUIRK unbounded slot (game::misc)
 0x800092B0,func_800092B0,ours,0,,rust_verified,unit_diff,high,1 if a0 is in the recent list (game::misc)
@@ -134,14 +134,14 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80009FA0,func_80009FA0,ours,3,,recomp,,,
 0x8000A330,func_8000A330,ours,4,,recomp,,,
 0x8000A418,func_8000A418,ours,0,,rust_verified,unit_diff,high,append to the 64-word list 0x800D3A90 (count 0x8009B774) (game::misc)
-0x8000A44C,func_8000A44C,ours,0,,recomp,,,
+0x8000A44C,func_8000A44C,ours,0,,rust_verified,unit_diff,high,"init record id (s16, < 200; negatives pass: QUIRK) at 0x800D2190, count [0x8009B770] raised to id+1 (game::misc)"
 0x8000A4D8,func_8000A4D8,ours,1,,recomp,,,
 0x8000A53C,func_8000A53C,ours,5,,recomp,,,
 0x8000A920,func_8000A920,ours,0,,rust_verified,unit_diff,high,"on/off: globals for ids -201/-103/-104, else RECORDS[id] bit 0x20 (game::misc)"
-0x8000AA04,func_8000AA04,ours,0,,recomp,,,
+0x8000AA04,func_8000AA04,ours,0,,rust_verified,unit_diff,high,"id -201: floats [0x8009B784/88] = x, y; id >= 0: record halfwords +0/+2 (game::misc)"
 0x8000AA78,func_8000AA78,ours,0,,rust_verified,unit_diff,high,RECORDS[id] +4/+6 halfwords (game::misc)
-0x8000AAC0,func_8000AAC0,ours,0,,recomp,,,
-0x8000AAF8,func_8000AAF8,ours,0,,recomp,,,
+0x8000AAC0,func_8000AAC0,ours,0,,rust_verified,unit_diff,high,record id >= 0: floats +8/+C = a1/a2 (game::misc)
+0x8000AAF8,func_8000AAF8,ours,0,,rust_verified,unit_diff,high,record id >= 0: float +0x10 = a1 (game::misc)
 0x8000AB24,func_8000AB24,ours,0,,rust_verified,unit_diff,high,four bytes to globals -103/-104 or RECORDS[id]+0x18 (game::misc)
 0x8000ABD4,func_8000ABD4,ours,0,,rust_verified,unit_diff,high,RECORDS[id]+0x1C pointer's +8; QUIRK no id check (game::misc)
 0x8000AC0C,func_8000AC0C,ours,0,,rust_verified,unit_diff,high,set RECORDS[id]+0x1C (game::misc)
@@ -152,8 +152,8 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8000AEB4,func_8000AEB4,ours,0,,rust_verified,unit_diff,high,ENTRIES[k] flags (game::misc)
 0x8000AED4,func_8000AED4,ours,0,,rust_verified,unit_diff,high,ENTRIES[k] flags |= bits (game::misc)
 0x8000AEFC,func_8000AEFC,ours,0,,rust_verified,unit_diff,high,ENTRIES[id] +6/+4/+8 (game::misc)
-0x8000AF4C,func_8000AF4C,ours,0,,recomp,,,
-0x8000AFD4,func_8000AFD4,ours,0,,recomp,,,
+0x8000AF4C,func_8000AF4C,ours,0,,rust_verified,unit_diff,high,"entry id (0x7C, [0x8009B790]): floats +0x54..+0x68 from a1..a3 and 3 stack args; pointer re-read per field (game::misc)"
+0x8000AFD4,func_8000AFD4,ours,0,,rust_verified,unit_diff,high,entry id: floats +0x6C..+0x74 from a1..a3 (game::misc)
 0x8000B02C,func_8000B02C,ours,0,,rust_verified,unit_diff,high,ENTRIES[id] +0xC/+0x10 (game::misc)
 0x8000B06C,func_8000B06C,ours,0,,rust_verified,unit_diff,high,ENTRIES[id] +0x78 (game::misc)
 0x8000B098,func_8000B098,ours,0,,rust_verified,unit_diff,high,ENTRIES[id] selected bit (game::misc)
@@ -168,8 +168,8 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8000C540,func_8000C540,ours,8,,recomp,,,
 0x8000C5F0,func_8000C5F0,ours,0,,rust_verified,unit_diff,high,"push current id (0x8009B800) saving its word; QUIRK unbounded, ids >= 3 alias (game::misc)"
 0x8000C658,func_8000C658,ours,0,,rust_verified,unit_diff,high,pop current id; QUIRK no decrement at depth <= 0 (game::misc)
-0x8000C6C8,func_8000C6C8,ours,0,,recomp,,,
-0x8000C724,func_8000C724,ours,0,,recomp,,,
+0x8000C6C8,func_8000C6C8,ours,0,,rust_verified,unit_diff,high,"*p += x*y (floats), then clamp to lo (a3), then hi (stack) (game::misc)"
+0x8000C724,func_8000C724,ours,0,,rust_verified,unit_diff,high,"*p = trunc(f32(*p) + x*y), clamp lo (64-bit a3), hi (stack); returns v (game::misc)"
 0x8000C77C,func_8000C77C,ours,6,,recomp,,,
 0x8000CC1C,func_8000CC1C,ours,1,,recomp,,,
 0x8000D130,func_8000D130,ours,6,,recomp,,,

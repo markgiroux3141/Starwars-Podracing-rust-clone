@@ -881,6 +881,20 @@ pub unsafe extern "C" fn func_80008750(rdram: *mut u8, ctx: *mut RecompContext) 
     sb(m, g[AT], -0x5CDC, g[A0]);
 }
 
+/// `func_80008F58(x, y)` with the floats in `f12`/`f14`: `[0x8009AD08] =
+/// x`, `[0x8009AD0C] = y`. Leaves `at = 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80008F58(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[AT] = li(0x800A_0000);
+    sw(m, g[AT], -0x52F8, u64::from(ctx.fpr[12].u32l()));
+    sw(m, g[AT], -0x52F4, u64::from(ctx.fpr[14].u32l()));
+}
+
 /// The eight halfword tables [`func_80008F6C`] indexes, by kind: the table's
 /// length (the bound on the index), its offset from `0x800A0000` and the
 /// temporary the index's byte offset goes through. They sit back to back
@@ -962,6 +976,39 @@ pub unsafe extern "C" fn func_80008F6C(rdram: *mut u8, ctx: *mut RecompContext) 
     g[T7] = sll(g[A1], 16);
     g[V1] = g[T6] | g[T7];
     g[V0] = g[V1] | 0x8000;
+}
+
+/// `func_80009134(k, i)`: whether a float is positive (`0.0 < x`, so false
+/// for NaN and zeros): `x = [0x8009AD30 + 4i]` for `k` 0 or 1, else `x =
+/// [0x8009AD10 + 4k]` (full 64-bit compares of `k`; both indices
+/// unbounded, 32-bit address arithmetic).
+///
+/// Leaves `at` = the address or 1, `t6 = 4i` or `t7 = 4k`, `f4`/`f6` or
+/// `f8`/`f10` = 0.0 and `x`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80009134(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let m = &mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    g[AT] = 1;
+    if g[A0] != 0 {
+        g[T7] = sll(g[A0], 2);
+        if g[A0] != g[AT] {
+            g[AT] = addu(li(0x800A_0000), g[T7]);
+            f[10].set_u32l(lw(m, g[AT], -0x52F0) as u32);
+            f[8].set_u32l(0);
+            g[V0] = u64::from(f[8].fl() < f[10].fl());
+            return;
+        }
+    }
+    g[T6] = sll(g[A1], 2);
+    g[AT] = addu(li(0x800A_0000), g[T6]);
+    f[6].set_u32l(lw(m, g[AT], -0x52D0) as u32);
+    f[4].set_u32l(0);
+    g[V0] = u64::from(f[4].fl() < f[6].fl());
 }
 
 /// The last three values pushed by [`func_80009278`] (halfwords), searched
@@ -1122,6 +1169,63 @@ pub unsafe extern "C" fn func_8000A418(rdram: *mut u8, ctx: *mut RecompContext) 
     }
 }
 
+/// `func_8000A44C(id, p)`: initialise record `id` of [`RECORDS`] (`a0`'s
+/// low halfword, signed; spilled to `[sp]` first) if `id < 200`: raise the
+/// count `[0x8009B770]` to `id + 1` unless `id < count` (signed), then
+/// halfwords `+0`, `+2` = 0, flags `+0x14` = 1, the four bytes `+0x18..` =
+/// 0xFF, `+0x1C = p`, floats `+8 = +0xC = 1.0`, `+0x10 = 0.0`. QUIRK:
+/// negative ids pass the bound and write below the records.
+///
+/// Leaves `a0` = the id (sign-extended), `t6 = a0 << 16`, `t7` = the id,
+/// `at` = the bound test (or `0x3F800000` past it), and past it `v0` = the
+/// record, `v1 = 0xFF`, `t8` = the old count, `t0 = 32 * id`, `t1 =
+/// RECORDS`, `t2 = 1`, `f0 = 1.0`, `f4 = 0.0` (`t9 = id + 1` if the count
+/// was raised).
+///
+/// Domain: `id >= -26764`, so the record is in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000A44C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    g[T6] = sll(g[A0], 16);
+    g[T7] = sra(g[T6], 16);
+    sw(m, g[SP], 0, g[A0]);
+    g[AT] = slt(g[T7], 0xC8);
+    g[A0] = g[T7];
+    if g[AT] == 0 {
+        return;
+    }
+    g[V0] = li(0x8009_B770);
+    g[T8] = lw(m, g[V0], 0);
+    g[V1] = 0xFF;
+    g[T0] = sll(g[A0], 5);
+    g[AT] = slt(g[T7], g[T8]);
+    if g[AT] == 0 {
+        g[T9] = addu(g[T7], 1);
+        sw(m, g[V0], 0, g[T9]);
+    }
+    g[T1] = li(RECORDS);
+    g[V0] = addu(g[T0], g[T1]);
+    g[AT] = li(0x3F80_0000);
+    f[0].set_u32l(g[AT] as u32);
+    f[4].set_u32l(0);
+    g[T2] = 1;
+    sh(m, g[V0], 0, 0);
+    sh(m, g[V0], 2, 0);
+    sw(m, g[V0], 0x14, g[T2]);
+    for off in 0x18..0x1C {
+        sb(m, g[V0], off, g[V1]);
+    }
+    sw(m, g[V0], 0x1C, g[A1]);
+    sw(m, g[V0], 8, u64::from(f[0].u32l()));
+    sw(m, g[V0], 0xC, u64::from(f[0].u32l()));
+    sw(m, g[V0], 0x10, u64::from(f[4].u32l()));
+}
+
 /// 32-byte records indexed by a signed 16-bit id: `+4`/`+6` halfwords
 /// ([`func_8000AA78`]), `+0x14` flags with bit `0x20` an "on" bit
 /// ([`func_8000A920`], [`func_8000AC34`], [`func_8000AC60`]), four bytes at
@@ -1198,6 +1302,53 @@ pub unsafe extern "C" fn func_8000A920(rdram: *mut u8, ctx: *mut RecompContext) 
     }
 }
 
+/// `func_8000AA04(id, x, y)`: set record `id`'s halfwords `+0 = x`, `+2 =
+/// y` for `id >= 0`, or for `id == -201` the floats `[0x8009B784] = x`,
+/// `[0x8009B788] = y` (converted). All three are the low halfwords of the
+/// arguments, signed; the full arguments are spilled to `[sp..sp + 0xC)`
+/// first. No bound above (QUIRK, as for the other record setters).
+///
+/// Leaves `a0`/`a1`/`a2` = the halfwords (sign-extended), `t6`/`t8`/`t0` =
+/// the arguments `<< 16`, `at = -201` (or `0x800A0000` for -201), and
+/// `t2 = 32 * id`, `t3 = RECORDS`, `v0` = the record, or `f4`/`f8` = the
+/// halfwords and `f6`/`f10` = the floats.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000AA04(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    sw(m, g[SP], 0, g[A0]);
+    g[T6] = sll(g[A0], 16);
+    g[A0] = sra(g[T6], 16);
+    sw(m, g[SP], 4, g[A1]);
+    g[T8] = sll(g[A1], 16);
+    sw(m, g[SP], 8, g[A2]);
+    g[T0] = sll(g[A2], 16);
+    g[AT] = (-0xC9i64) as u64;
+    g[A2] = sra(g[T0], 16);
+    g[A1] = sra(g[T8], 16);
+    if g[A0] == g[AT] {
+        f[4].set_u32l(g[A1] as u32);
+        f[8].set_u32l(g[A2] as u32);
+        g[AT] = li(0x800A_0000);
+        f[6].set_fl(fpu::cvt_s_w(f[4].u32l(), fpu::NEAREST));
+        f[10].set_fl(fpu::cvt_s_w(f[8].u32l(), fpu::NEAREST));
+        sw(m, g[AT], -0x487C, u64::from(f[6].u32l()));
+        sw(m, g[AT], -0x4878, u64::from(f[10].u32l()));
+        return;
+    }
+    g[T2] = sll(g[A0], 5);
+    if (g[A0] as i64) >= 0 {
+        g[T3] = li(RECORDS);
+        g[V0] = addu(g[T2], g[T3]);
+        sh(m, g[V0], 0, g[A1]);
+        sh(m, g[V0], 2, g[A2]);
+    }
+}
+
 /// `func_8000AA78(id, x, y)`: for `id >= 0` (`a0`'s low halfword, signed),
 /// store the low halfwords of `x` and `y` at `RECORDS[id] + 4` and `+ 6`.
 /// Negative ids do nothing.
@@ -1229,6 +1380,59 @@ pub unsafe extern "C" fn func_8000AA78(rdram: *mut u8, ctx: *mut RecompContext) 
         g[V0] = addu(g[T2], g[T3]);
         sh(m, g[V0], 4, g[T9]);
         sh(m, g[V0], 6, g[T1]);
+    }
+}
+
+/// `func_8000AAC0(id, x, y)` with the floats in `a1`/`a2`: for `id >= 0`
+/// (`a0`'s low halfword, signed; `a0` spilled to `[sp]`), record `id`'s
+/// floats `+8 = x`, `+0xC = y`. No bound above.
+///
+/// Leaves `t6 = a0 << 16`, `t7` = the id, `f12`/`f14` = the floats, and
+/// for `id >= 0` `t8 = 32 * id`, `t9 = RECORDS`, `v0` = the record.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000AAC0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    g[T6] = sll(g[A0], 16);
+    g[T7] = sra(g[T6], 16);
+    f[12].set_u32l(g[A1] as u32);
+    f[14].set_u32l(g[A2] as u32);
+    sw(m, g[SP], 0, g[A0]);
+    if (g[T7] as i64) >= 0 {
+        g[T9] = li(RECORDS);
+        g[T8] = sll(g[T7], 5);
+        g[V0] = addu(g[T8], g[T9]);
+        sw(m, g[V0], 8, u64::from(f[12].u32l()));
+        sw(m, g[V0], 0xC, u64::from(f[14].u32l()));
+    }
+}
+
+/// `func_8000AAF8(id, x)` with the float in `a1`: for `id >= 0` (`a0`'s low
+/// halfword, signed; `a0` spilled to `[sp]`), record `id`'s float `+0x10 =
+/// x`. No bound above.
+///
+/// Leaves `t6 = a0 << 16`, `t7` = the id, `f12 = x`, and for `id >= 0` `t8
+/// = 32 * id`, `at = 0x800D0000 + t8`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000AAF8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    g[T6] = sll(g[A0], 16);
+    g[T7] = sra(g[T6], 16);
+    f[12].set_u32l(g[A1] as u32);
+    sw(m, g[SP], 0, g[A0]);
+    if (g[T7] as i64) >= 0 {
+        g[T8] = sll(g[T7], 5);
+        g[AT] = addu(li(0x800D_0000), g[T8]);
+        sw(m, g[AT], 0x21A0, u64::from(f[12].u32l()));
     }
 }
 
@@ -1493,6 +1697,82 @@ pub unsafe extern "C" fn func_8000AEFC(rdram: *mut u8, ctx: *mut RecompContext) 
     sw(m, g[T7], 8, g[A2]);
 }
 
+/// Where one float field of [`entry_floats`] comes from.
+#[derive(Clone, Copy)]
+enum FloatArg {
+    /// An argument register (`mtc1`).
+    Reg(usize),
+    /// A stack argument slot (`lwc1`).
+    Stack(i32),
+}
+
+/// The shared body of [`func_8000AF4C`] and [`func_8000AFD4`]: store float
+/// arguments into entry `id` of [`ENTRIES`] (`a0`'s low halfword, signed;
+/// `0x7C * id`, no bounds). `a0` goes to `[sp]` and `a3` to `[sp + 0xC]`
+/// first. The entry array pointer is re-read before every field (QUIRK:
+/// a store over [`ENTRIES`] redirects the rest). Field `k` uses the
+/// temporaries `TEMPS[2k]`, `TEMPS[2k + 1]` for the pointer and address.
+fn entry_floats(m: &mut Mem, g: &mut [u64; 32], f: &mut [crate::recomp::Fpr; 32], fields: &[(usize, FloatArg, i32)]) {
+    const TEMPS: [usize; 12] = [T8, T9, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9];
+    g[T6] = sll(g[A0], 16);
+    g[V1] = li(ENTRIES);
+    g[T7] = sra(g[T6], 16);
+    // The first field's pointer is read before the spills.
+    g[TEMPS[0]] = lw(m, g[V1], 0);
+    g[V0] = sll(g[T7], 5);
+    g[V0] = subu(g[V0], g[T7]);
+    g[V0] = sll(g[V0], 2);
+    sw(m, g[SP], 0, g[A0]);
+    sw(m, g[SP], 0xC, g[A3]);
+    for (k, &(fr, src, off)) in fields.iter().enumerate() {
+        let (base, at) = (TEMPS[2 * k], TEMPS[2 * k + 1]);
+        if k > 0 {
+            g[base] = lw(m, g[V1], 0);
+        }
+        let bits = match src {
+            FloatArg::Reg(r) => g[r] as u32,
+            FloatArg::Stack(s) => lw(m, g[SP], s) as u32,
+        };
+        f[fr].set_u32l(bits);
+        g[at] = addu(g[base], g[V0]);
+        sw(m, g[at], off, u64::from(f[fr].u32l()));
+    }
+}
+
+/// `func_8000AF4C(id, a, b, c, d, e, f)`: entry `id` of [`ENTRIES`] gets
+/// the six floats at `+0x54..+0x6C` (`a`, `b` in `a1`/`a2`, `c` in `a3`,
+/// through its spill, `d`..`f` from the stack arguments at `sp + 0x10..`),
+/// through [`entry_floats`].
+///
+/// Leaves `v1 = ENTRIES`, `v0 = 0x7C * id`, `t0`..`t9` = the pointer and
+/// field addresses, `f12`, `f14`, `f4`..`f10` = the floats.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000AF4C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    use FloatArg::{Reg, Stack};
+    entry_floats(&mut mem, &mut ctx.gpr, &mut ctx.fpr, &[
+        (12, Reg(A1), 0x54), (14, Reg(A2), 0x58), (4, Stack(0xC), 0x5C),
+        (6, Stack(0x10), 0x60), (8, Stack(0x14), 0x64), (10, Stack(0x18), 0x68),
+    ]);
+}
+
+/// `func_8000AFD4(id, a, b, c)`: entry `id` of [`ENTRIES`] gets the floats
+/// `+0x6C = a`, `+0x70 = b` (`a1`/`a2`) and `+0x74 = c` (`a3`, through its
+/// spill), through [`entry_floats`].
+///
+/// Leaves `v1 = ENTRIES`, `v0 = 0x7C * id`, `t6 = a0 << 16`, `t7` = the id,
+/// `t8`..`t3` = the pointer and field addresses, `f12`, `f14`, `f4`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000AFD4(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    use FloatArg::{Reg, Stack};
+    entry_floats(&mut mem, &mut ctx.gpr, &mut ctx.fpr, &[(12, Reg(A1), 0x6C), (14, Reg(A2), 0x70), (4, Stack(0xC), 0x74)]);
+}
+
 /// `func_8000B02C(id, w, h)`: entry `id` (low halfword, signed) gets `+0xC
 /// = h` (halfword) then `+0x10 = w`, reloading the array pointer between.
 ///
@@ -1667,6 +1947,65 @@ pub unsafe extern "C" fn func_8000787C(rdram: *mut u8, ctx: *mut RecompContext) 
     sw(m, g[AT], -0x5CD8, g[T8]);
 }
 
+/// `func_800078B4()`: if the flag `[0x8009A2B8]` is set (**guess**: audio
+/// running), scale the word `+0x18` of each of the eight 0x20-byte records
+/// at `0x800D2038` by the float `K = [0x800A81C4]`: for records whose `+4`
+/// isn't `0x4E`, `+0x18 = trunc(f32(+0x18) * K)` (a C cast: out of range
+/// or NaN gives `0x80000000`); then for every record, `+0x18 = 0` if it is
+/// negative. Each step re-reads the word.
+///
+/// Leaves `v1 = 0x800D2038` and `at = 0x800B0000`, `t6` = the flag; with
+/// the flag set, `v1 = a0 = 0x800D2138`, `v0 = 0x4E`, `f0 = K`, `f2 = 0`,
+/// and the temporaries of the last two records (`t7 t8 t0 t1` for even
+/// records, `t2 t3 t5 t6` for odd ones; `f4`..`f18`).
+///
+/// Domain: `K` not NaN (the product is guarded).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800078B4(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    g[T6] = lw(m, li(0x800A_0000), -0x5D48);
+    g[V1] = li(0x800D_2038);
+    g[AT] = li(0x800B_0000);
+    if g[T6] == 0 {
+        return;
+    }
+    g[A0] = li(0x800D_2138);
+    f[2].set_u32l(0);
+    f[0].set_u32l(lw(m, g[AT], -0x7E3C) as u32);
+    g[V0] = 0x4E;
+    loop {
+        for r in 0..4 {
+            let off = 0x20 * r;
+            let [tag, old, new, word] = if r % 2 == 0 { [T7, T8, T0, T1] } else { [T2, T3, T5, T6] };
+            g[tag] = lw(m, g[V1], off + 4);
+            if g[V0] != g[tag] {
+                g[old] = lw(m, g[V1], off + 0x18);
+                f[4].set_u32l(g[old] as u32);
+                f[6].set_fl(fpu::cvt_s_w(f[4].u32l(), fpu::NEAREST));
+                f[8].set_fl(f[6].fl() * f[0].fl());
+                f[10].set_u32l(fpu::trunc_w_s(f[8].fl()));
+                g[new] = s32(f[10].u32l());
+                sw(m, g[V1], off + 0x18, g[new]);
+            }
+            g[word] = lw(m, g[V1], off + 0x18);
+            f[16].set_u32l(g[word] as u32);
+            f[18].set_fl(fpu::cvt_s_w(f[16].u32l(), fpu::NEAREST));
+            if f[18].fl() < f[2].fl() {
+                sw(m, g[V1], off + 0x18, 0);
+            }
+        }
+        g[V1] = addu(g[V1], 0x80);
+        if g[V1] == g[A0] {
+            break;
+        }
+    }
+}
+
 /// `func_8000C530`: returns at once.
 ///
 /// # Safety
@@ -1770,6 +2109,84 @@ pub unsafe extern "C" fn func_8000C658(rdram: *mut u8, ctx: *mut RecompContext) 
     g[T7] = lw(m, g[T5], 0);
     sw(m, g[A0], 0, g[T2]);
     sw(m, g[A1], 0, g[T7]);
+}
+
+/// `func_8000C6C8(p, x, y, lo, hi)` with the floats `x`, `y` in `a1`/`a2`,
+/// `lo` in `a3` and `hi` on the stack (`sp + 0x10`): `*p += x * y` (not
+/// fused), then `*p = lo` if `*p < lo`, then `*p = hi` if `hi < *p`, each
+/// test re-reading `*p`. So `hi` wins if `hi < lo`; a NaN sum is stored and
+/// stays (both compares false). `a3` is spilled to `[sp + 0xC]` first.
+///
+/// Leaves `f12 = x`, `f14 = y`, `f4` = the old value, `f6 = x * y`, `f8` =
+/// the sum, `f10 = lo`, `f0` = `*p` before the last test, `f2 = hi`.
+///
+/// Domain: `x`, `y`, the old `*p` and the product not NaN; `lo`, `hi` any.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000C6C8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    f[12].set_u32l(g[A1] as u32);
+    f[14].set_u32l(g[A2] as u32);
+    sw(m, g[SP], 0xC, g[A3]);
+    f[4].set_u32l(lw(m, g[A0], 0) as u32);
+    f[6].set_fl(f[12].fl() * f[14].fl());
+    f[8].set_fl(f[4].fl() + f[6].fl());
+    sw(m, g[A0], 0, u64::from(f[8].u32l()));
+    f[10].set_u32l(lw(m, g[SP], 0xC) as u32);
+    f[0].set_u32l(lw(m, g[A0], 0) as u32);
+    if f[0].fl() < f[10].fl() {
+        sw(m, g[A0], 0, u64::from(f[10].u32l()));
+        f[0].set_u32l(lw(m, g[A0], 0) as u32);
+    }
+    f[2].set_u32l(lw(m, g[SP], 0x10) as u32);
+    if f[2].fl() < f[0].fl() {
+        sw(m, g[A0], 0, u64::from(f[2].u32l()));
+    }
+}
+
+/// `func_8000C724(p, x, y, lo, hi)`: the integer version of
+/// [`func_8000C6C8`]: `v = trunc(f32(*p) + x * y)` (a C cast: `0x80000000`
+/// out of range), stored; if `v < lo` (64-bit signed, `lo` = the whole
+/// `a3`), `*p = lo` and `v = lo`; then if `hi < v` (`hi` = the word at `sp +
+/// 0x10`, sign-extended), `*p = hi`. Returns `v` (before the `hi` clamp).
+///
+/// Leaves `t6` = the old `*p`, `f12 = x`, `f14 = y`, `f4`/`f6` = it as an
+/// int and a float, `f8 = x * y`, `f10` = the sum, `f16` = the truncation,
+/// `v1 = hi`, `at` = the last test.
+///
+/// Domain: `x`, `y` and the product not NaN.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000C724(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    g[T6] = lw(m, g[A0], 0);
+    f[12].set_u32l(g[A1] as u32);
+    f[14].set_u32l(g[A2] as u32);
+    f[4].set_u32l(g[T6] as u32);
+    f[8].set_fl(f[12].fl() * f[14].fl());
+    f[6].set_fl(fpu::cvt_s_w(f[4].u32l(), fpu::NEAREST));
+    f[10].set_fl(f[6].fl() + f[8].fl());
+    f[16].set_u32l(fpu::trunc_w_s(f[10].fl()));
+    g[V0] = s32(f[16].u32l());
+    g[AT] = slt(g[V0], g[A3]);
+    sw(m, g[A0], 0, g[V0]);
+    if g[AT] != 0 {
+        sw(m, g[A0], 0, g[A3]);
+        g[V0] = g[A3];
+    }
+    g[V1] = lw(m, g[SP], 0x10);
+    g[AT] = slt(g[V1], g[V0]);
+    if g[AT] != 0 {
+        sw(m, g[A0], 0, g[V1]);
+    }
 }
 
 /// `func_8000DA6C()`: returns `[0x8009B7E4]`.
