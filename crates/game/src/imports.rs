@@ -45,6 +45,14 @@ pub mod runtime {
         /// `div`: a zero divisor, `INT_MIN / -1`), with the instruction's
         /// address. The generated C carries on after it if it returns.
         pub fn do_break(vram: u32);
+
+        /// N64Recomp's `LOOKUP_FUNC`: the function starting at `vram` (the
+        /// register's low word), for an indirect call (`jalr`). Ports call
+        /// what it returns with [`crate::recomp::call`], as the generated C
+        /// does. In the oracle it resolves like a direct call (the
+        /// compiled-in C, or a stub running a double) and traps for an
+        /// address where no function starts.
+        pub fn get_function(vram: i32) -> Option<crate::recomp::RecompFn>;
     }
 
     #[cfg(test)]
@@ -58,6 +66,13 @@ pub mod runtime {
     #[no_mangle]
     pub unsafe extern "C" fn switch_error(_func: *const core::ffi::c_char, _vram: u32, _jtbl: u32) {
         eprintln!("switch_error is only linked in the oracle or the game build, not game's unit tests");
+        std::process::abort();
+    }
+
+    #[cfg(test)]
+    #[no_mangle]
+    pub unsafe extern "C" fn get_function(_vram: i32) -> Option<crate::recomp::RecompFn> {
+        eprintln!("get_function is only linked in the oracle or the game build, not game's unit tests");
         std::process::abort();
     }
 

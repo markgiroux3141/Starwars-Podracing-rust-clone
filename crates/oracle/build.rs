@@ -73,6 +73,29 @@ fn main() {
         writeln!(stubs, "RECOMP_FUNC void {c}(uint8_t* rdram, recomp_context* ctx) {{ oracle_callee(\"{c}\", rdram, ctx); }}")
             .unwrap();
     }
+    // Every function by its start address, for the stub runtime's
+    // get_function (LOOKUP_FUNC): it resolves to the compiled-in C or the
+    // stub above, exactly as a direct call would.
+    let mut table: Vec<(u32, &str)> = all
+        .iter()
+        .filter_map(|c| {
+            let vram = match c.strip_prefix("func_") {
+                Some(h) => u32::from_str_radix(h, 16).ok()?,
+                None if c == "recomp_entrypoint" => 0x8000_0400,
+                None => return None,
+            };
+            Some((vram, c.as_str()))
+        })
+        .collect();
+    table.sort_unstable();
+    for c in &selected {
+        writeln!(stubs, "RECOMP_FUNC void {c}(uint8_t* rdram, recomp_context* ctx);").unwrap();
+    }
+    writeln!(stubs, "const struct oracle_function {{ uint32_t vram; recomp_func_t* func; }} oracle_functions[] = {{").unwrap();
+    for (vram, c) in &table {
+        writeln!(stubs, "    {{ 0x{vram:08X}u, {c} }},").unwrap();
+    }
+    writeln!(stubs, "}};\nconst size_t oracle_function_count = {};", table.len()).unwrap();
     let stubs_path = out.join("oracle_callee_stubs.c");
     fs::write(&stubs_path, stubs).unwrap();
 

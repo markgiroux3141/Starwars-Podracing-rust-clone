@@ -115,6 +115,9 @@ pub enum Op {
     MfLo(u8),
     MfHi(u8),
     Call(String),
+    /// `LOOKUP_FUNC(v)(rdram, ctx)`: an indirect call (`jalr`) to the
+    /// function the runtime's `get_function` finds at `v`'s low word.
+    CallIndirect(Val),
     /// The runtime's `pause_self`, N64Recomp's translation of `b .`.
     PauseSelf,
     /// `let jr_addend_JR = rN;`: a jump table's index register (byte
@@ -233,7 +236,7 @@ impl Op {
     }
 
     pub fn is_call(&self) -> bool {
-        matches!(self, Op::Call(_) | Op::PauseSelf)
+        matches!(self, Op::Call(_) | Op::CallIndirect(_) | Op::PauseSelf)
     }
 }
 
@@ -805,6 +808,19 @@ pub fn ops_of_line(stmts: &[crate::c::Stmt]) -> Result<Vec<Op>, Refusal> {
                 E::Call(n, args) if n == "pause_self" && args.as_slice() == [E::Ident("rdram".into())] => {
                     out.push(Op::PauseSelf)
                 }
+                E::Call(n, args)
+                    if n.starts_with("(LOOKUP_FUNC(")
+                        && args.as_slice() == [E::Ident("rdram".into()), E::Ident("ctx".into())] =>
+                {
+                    // The parser names a call of a call by the callee's text.
+                    let inner = crate::c::tokenize(&n[1..n.len() - 1]).map_err(|e| Refusal::new("indirect call", e))?;
+                    let mut p = crate::c::Parser::new(&inner);
+                    let target = p.expr().map_err(|e| Refusal::new("indirect call", e))?;
+                    match (call1(&target, "LOOKUP_FUNC").and_then(val), p.at_end()) {
+                        (Some(v), true) => out.push(Op::CallIndirect(v)),
+                        _ => return Err(refusal_for_name(n, e)),
+                    }
+                }
                 E::Call(n, args) if n == "do_break" => match args.as_slice() {
                     [E::Num(v)] if u32::try_from(*v).is_ok() => out.push(Op::Break(*v as u32)),
                     _ => return Err(refusal_for_name(n, e)),
@@ -1003,7 +1019,9 @@ mod tests {
     fn refusals() {
         assert_eq!(ops("CHECK_FR(ctx, 9);").unwrap_err().kind, "float");
         assert_eq!(ops("ctx->f0.u64 = CVT_L_S(ctx->f2.fl);").unwrap_err().kind, "float");
-        assert_eq!(ops("LOOKUP_FUNC(ctx->r25)(rdram, ctx);").unwrap_err().kind, "indirect call");
+        assert_eq!(ops("LOOKUP_FUNC(ctx->r25)(rdram, ctx);").unwrap(), [Op::CallIndirect(Val::R(25))]);
+        assert_eq!(ops("LOOKUP_FUNC(0X80012340)(rdram, ctx);").unwrap(), [Op::CallIndirect(Val::I(0x8001_2340))]);
+        assert_eq!(ops("LOOKUP_FUNC(ctx->r25 + 4)(rdram, ctx);").unwrap_err().kind, "indirect call");
         assert_eq!(ops("do_break(ctx->r4);").unwrap_err().kind, "break");
         assert_eq!(ops("ctx->r1 = do_lwr(rdram, ctx->r1, ctx->r14, 0X12);").unwrap_err().kind, "unaligned access");
     }

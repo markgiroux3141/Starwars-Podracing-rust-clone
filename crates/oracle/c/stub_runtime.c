@@ -22,8 +22,26 @@ static void trap(const char* fmt, ...) {
     oracle_trap(buf);
 }
 
+/* Every recompiled function by start address (build.rs: the compiled-in
+ * C, or the stub that runs a test double or traps), sorted. */
+struct oracle_function { uint32_t vram; recomp_func_t* func; };
+extern const struct oracle_function oracle_functions[];
+extern const size_t oracle_function_count;
+
+/* LOOKUP_FUNC: resolves an indirect call the way a direct call to the same
+ * function resolves. Only function starts are valid targets. */
 recomp_func_t* get_function(int32_t vram) {
-    trap("LOOKUP_FUNC(0x%08X): indirect call; the oracle has no function table", (uint32_t)vram);
+    uint32_t v = (uint32_t)vram;
+    size_t lo = 0, hi = oracle_function_count;
+    while (lo < hi) {
+        size_t mid = lo + (hi - lo) / 2;
+        if (oracle_functions[mid].vram < v) lo = mid + 1;
+        else hi = mid;
+    }
+    if (lo < oracle_function_count && oracle_functions[lo].vram == v) {
+        return oracle_functions[lo].func;
+    }
+    trap("LOOKUP_FUNC(0x%08X): indirect call to an address where no function starts", v);
     return NULL;
 }
 

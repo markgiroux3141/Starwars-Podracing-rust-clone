@@ -195,6 +195,12 @@ fn op_uses(o: &Op, u: &mut Uses) {
             h.insert("call");
             u.callees.insert(f.clone());
         }
+        Op::CallIndirect(v) => {
+            u.stores = true;
+            u.runtime = true;
+            h.insert("call");
+            val_uses(*v, u);
+        }
         Op::PauseSelf => {
             u.stores = true;
             u.runtime = true;
@@ -303,7 +309,7 @@ fn insert_rebinds(code: &mut Vec<S>) {
     for mut s in code.drain(..) {
         let mut after = false;
         match &mut s {
-            S::Op(o) if matches!(o, Op::Call(_)) => after = true,
+            S::Op(o) if matches!(o, Op::Call(_) | Op::CallIndirect(_)) => after = true,
             S::If(_, t, e) => {
                 insert_rebinds(t);
                 insert_rebinds(e);
@@ -551,6 +557,13 @@ fn op(o: &Op, fcr31: bool) -> String {
         Op::MfLo(d) => format!("{} = lo;", r(*d)),
         Op::MfHi(d) => format!("{} = hi;", r(*d)),
         Op::Call(f) => format!("call(imports::{f}, m, ctx);"),
+        Op::CallIndirect(v) => {
+            let target = match v {
+                Val::R(_) => format!("{} as i32", val(*v)),
+                Val::I(n) => format!("{:#X}u32 as i32", *n as u32),
+            };
+            format!("call(imports::runtime::get_function({target}).expect(\"LOOKUP_FUNC\"), m, ctx);")
+        }
         Op::PauseSelf => "imports::runtime::pause_self(m.as_mut_ptr());".into(),
         Op::Break(vram) => format!("imports::runtime::do_break({});", hex(u64::from(*vram))),
         Op::JrAddend(jr, reg) => format!("let jr_addend_{jr:08X} = {};", r(*reg)),
