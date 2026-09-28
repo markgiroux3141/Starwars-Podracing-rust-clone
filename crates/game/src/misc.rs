@@ -4,7 +4,7 @@
 // Ports keep N64Recomp's names (func_80005AFC), capitals included.
 #![allow(non_snake_case)]
 
-use crate::recomp::{addu, div, enter, lbu, lh, li, lw, multu, reg::*, s32, sb, sh, sll, slt, sltu, sra, subu, sw, RecompContext};
+use crate::recomp::{addu, div, enter, fpu, lbu, lh, li, lw, multu, reg::*, s32, sb, sh, sll, slt, sltu, sra, subu, sw, RecompContext};
 
 /// `func_80005AFC`: decrement `[0x8009A29C]` if it is positive (signed).
 ///
@@ -1192,4 +1192,37 @@ pub unsafe extern "C" fn func_8000B1B0(rdram: *mut u8, ctx: *mut RecompContext) 
     g[T7] = g[T6] | 1;
     sw(m, g[V1], 0, g[T7]);
     sw(m, g[AT], -0x4864, 0);
+}
+
+/// `func_8000787C(x)`: if the flag `[0x8009A2B8]` (also tested by
+/// [`func_80007A44`]) is set, `[0x8009A328] = trunc(x * 32000.0)`, with `x`
+/// the float argument in `f12`. The scale suggests an audio volume
+/// (**guess**). The conversion is `trunc.w.s`, N64Recomp's C cast: NaN or a
+/// product outside `i32` stores `0x80000000` (host behaviour, NOTES.md,
+/// "Floats"; the hardware would trap, FCR31.EV).
+///
+/// Leaves `t6` = the flag and `at = 0x46FA0000` (32000.0), and when the flag
+/// is set `at = 0x800A0000`, `f4 = 32000.0`, `f6` = the product, `f8` and
+/// `t8` = the stored word.
+///
+/// Domain: `x` not NaN (the oracle asserts on NaN operands).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000787C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    g[T6] = lw(m, li(0x800A_0000), -0x5D48);
+    g[AT] = li(0x46FA_0000);
+    if g[T6] == 0 {
+        return;
+    }
+    f[4].set_u32l(g[AT] as u32);
+    g[AT] = li(0x800A_0000);
+    f[6].set_fl(f[12].fl() * f[4].fl());
+    f[8].set_u32l(fpu::trunc_w_s(f[6].fl()));
+    g[T8] = s32(f[8].u32l());
+    sw(m, g[AT], -0x5CD8, g[T8]);
 }

@@ -86,7 +86,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80007710,audio_dma_new,ours,0,audio,rust_verified,unit_diff,med,*a0 = 0x800AFAC0; returns 0x80007594 (the audio DMA callback): ALDMANew shape (game::misc)
 0x80007728,func_80007728,ours,5,,recomp,,,
 0x80007818,func_80007818,ours,3,,recomp,,,
-0x8000787C,func_8000787C,ours,0,,recomp,,,
+0x8000787C,func_8000787C,ours,0,,rust_verified,unit_diff,high,if [0x8009A2B8]: [0x8009A328] = trunc.w.s(f12 * 32000) (game::misc)
 0x800078B4,func_800078B4,ours,0,,recomp,,,
 0x80007A44,func_80007A44,ours,0,,rust_verified,unit_diff,high,if [0x8009A2B8]: zero +0x18 of 8 x 0x20-byte records at 0x800D2038 (game::misc)
 0x80007A80,func_80007A80,ours,3,,recomp,,,
@@ -250,12 +250,12 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80014D4C,func_80014D4C,ours,0,,recomp,,,
 0x80014F2C,func_80014F2C,ours,1,,recomp,,,
 0x80014F54,func_80014F54,ours,0,,recomp,,,
-0x8001514C,func_8001514C,ours,0,,recomp,,,
-0x80015170,func_80015170,ours,0,,recomp,,,
+0x8001514C,vec2_add,ours,0,math,rust_verified,unit_diff,high,out = b + a (2 floats) (game::math)
+0x80015170,vec2_scale,ours,0,math,rust_verified,unit_diff,high,"out = v * s, s in a1 (game::math)"
 0x80015190,func_80015190,ours,0,,recomp,,,
-0x800151C0,func_800151C0,ours,0,,recomp,,,
+0x800151C0,vec2_length,ours,0,math,rust_verified,unit_diff,high,sqrt(y*y + x*x) in f0 (game::math)
 0x800151E0,func_800151E0,ours,1,,recomp,,,
-0x8001523C,func_8001523C,ours,0,,recomp,,,
+0x8001523C,vec2_dist_sq,ours,0,math,rust_verified,unit_diff,high,(a-b).(a-b) in f0 (game::math)
 0x80015268,func_80015268,ours,0,,recomp,,,
 0x80015288,func_80015288,ours,0,,recomp,,,
 0x800152A4,func_800152A4,ours,0,,recomp,,,

@@ -19,6 +19,7 @@ pub mod asset;
 pub mod heap;
 pub mod imports;
 pub mod loader;
+pub mod math;
 pub mod misc;
 pub mod recomp;
 pub mod util;
@@ -68,6 +69,7 @@ pub const PORTED: &[Ported] = &[
     Ported { vram: 0x8000_6FDC, name: "func_80006FDC", func: misc::func_80006FDC },
     Ported { vram: 0x8000_758C, name: "func_8000758C", func: misc::func_8000758C },
     Ported { vram: 0x8000_7710, name: "func_80007710", func: misc::func_80007710 },
+    Ported { vram: 0x8000_787C, name: "func_8000787C", func: misc::func_8000787C },
     Ported { vram: 0x8000_7A44, name: "func_80007A44", func: misc::func_80007A44 },
     Ported { vram: 0x8000_7CE4, name: "func_80007CE4", func: misc::func_80007CE4 },
     Ported { vram: 0x8000_803C, name: "func_8000803C", func: misc::func_8000803C },
@@ -98,6 +100,10 @@ pub const PORTED: &[Ported] = &[
     Ported { vram: 0x8000_B098, name: "func_8000B098", func: misc::func_8000B098 },
     Ported { vram: 0x8000_B1B0, name: "func_8000B1B0", func: misc::func_8000B1B0 },
     Ported { vram: 0x8001_1940, name: "func_80011940", func: asset::func_80011940 },
+    Ported { vram: 0x8001_514C, name: "func_8001514C", func: math::func_8001514C },
+    Ported { vram: 0x8001_5170, name: "func_80015170", func: math::func_80015170 },
+    Ported { vram: 0x8001_51C0, name: "func_800151C0", func: math::func_800151C0 },
+    Ported { vram: 0x8001_523C, name: "func_8001523C", func: math::func_8001523C },
     Ported { vram: 0x8002_FAC4, name: "func_8002FAC4", func: heap::func_8002FAC4 },
     Ported { vram: 0x8002_FAFC, name: "func_8002FAFC", func: heap::func_8002FAFC },
     Ported { vram: 0x8002_FC58, name: "func_8002FC58", func: heap::func_8002FC58 },
