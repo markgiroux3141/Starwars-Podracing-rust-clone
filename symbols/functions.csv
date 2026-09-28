@@ -213,28 +213,28 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80010EA0,func_80010EA0,ours,3,,recomp,,,
 0x800116E8,func_800116E8,ours,1,,recomp,,,
 0x80011764,func_80011764,ours,0,,recomp,,,
-0x80011778,func_80011778,ours,0,,recomp,,,
+0x80011778,func_80011778,ours,0,,rust_verified,unit_diff,high,four bytes at 0x8009B874 from a0-a3 (game::misc)
 0x800117A4,func_800117A4,ours,2,,recomp,,,
 0x800117E4,func_800117E4,ours,0,,recomp,,,
 0x800117F0,func_800117F0,ours,2,,recomp,,,
-0x80011814,func_80011814,ours,0,,recomp,,,
-0x80011824,func_80011824,ours,0,,recomp,,,
-0x80011838,func_80011838,ours,0,,recomp,,,
+0x80011814,func_80011814,ours,0,,rust_verified,unit_diff,high,byte [0x8009B870] = 1 (game::misc)
+0x80011824,func_80011824,ours,0,,rust_verified,unit_diff,high,[0x800D6140 + 4k] = v; QUIRK unbounded (game::misc)
+0x80011838,func_80011838,ours,0,,rust_verified,unit_diff,high,"0x800D6140 words = -1, 0x800D68C0 bytes = 0 (game::misc)"
 0x80011888,func_80011888,ours,10,,recomp,,,
 0x800118F8,func_800118F8,ours,1,,recomp,,,
-0x80011918,func_80011918,ours,0,,recomp,,,
-0x80011928,func_80011928,ours,0,,recomp,,,
+0x80011918,func_80011918,ours,0,,rust_verified,unit_diff,high,[0x8009B810] = 1 (game::misc)
+0x80011928,func_80011928,ours,0,,rust_verified,unit_diff,high,[0x8009B810] = 0 (game::misc)
 0x80011940,comp_decompress,ours,0,asset,rust_verified,unit_diff,high,"Comp/Wolf LZSS (NOTES); QUIRK: window = src-0x1000, uninitialised"
 0x80011B18,rom_read_dma,ours,15,asset,recomp,,med,osPiStartDma + polled osRecvMesg; one-time init func_8002E034
 0x80011BDC,func_80011BDC,ours,15,,recomp,,,
 0x80011CDC,rom_read,ours,16,asset,recomp,,med,rom_read_dma in 0x800-byte chunks
 0x80011D60,rom_read_small,ours,16,asset,recomp,,med,as rom_read via func_80011BDC; headers/tables
-0x80011DF0,func_80011DF0,ours,0,,recomp,,,
-0x80011E54,func_80011E54,ours,0,,recomp,,,
+0x80011DF0,func_80011DF0,ours,0,,rust_verified,unit_diff,high,pointer table 0x800D6940 = 7 fixed pointers (game::misc)
+0x80011E54,func_80011E54,ours,0,,rust_verified,unit_diff,high,select pointer k clamped to 0..count (game::misc)
 0x80011EA4,func_80011EA4,ours,1,,recomp,,,
-0x80011ECC,func_80011ECC,ours,0,,recomp,,,
-0x80011EE8,func_80011EE8,ours,0,,recomp,,,
-0x80011F04,func_80011F04,ours,0,,recomp,,,
+0x80011ECC,func_80011ECC,ours,0,,rust_verified,unit_diff,high,"halfword pair 0x800A1CD0 = (x, y) (game::misc)"
+0x80011EE8,func_80011EE8,ours,0,,rust_verified,unit_diff,high,"*x, *y = halfword pair (game::misc)"
+0x80011F04,func_80011F04,ours,0,,rust_verified,unit_diff,high,four bytes at 0x800A1CCC; [0x800D6938] = 0 (game::misc)
 0x80011F38,func_80011F38,ours,0,,recomp,,,
 0x800125E4,func_800125E4,ours,0,,recomp,,,
 0x800129B8,func_800129B8,ours,1,,recomp,,,

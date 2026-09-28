@@ -1606,3 +1606,253 @@ pub unsafe extern "C" fn func_8001004C(rdram: *mut u8, ctx: *mut RecompContext) 
     g[T3] = sllv(g[T1], g[T2]);
     g[V0] = addu(g[T4], g[T3]);
 }
+
+/// `func_80011778(r, g, b, a)`: the four bytes at `0x8009B874` = the low
+/// bytes of `a0`-`a3`; spills them to their argument slots first. Leaves
+/// `v0 = 0x8009B874`.
+///
+/// Domain: canonical `sp` with its argument slots in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80011778(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V0] = li(0x8009_B874);
+    sw(m, g[SP], 0, g[A0]);
+    sw(m, g[SP], 4, g[A1]);
+    sw(m, g[SP], 8, g[A2]);
+    sw(m, g[SP], 0xC, g[A3]);
+    sb(m, g[V0], 0, g[A0]);
+    sb(m, g[V0], 1, g[A1]);
+    sb(m, g[V0], 2, g[A2]);
+    sb(m, g[V0], 3, g[A3]);
+}
+
+/// `func_80011814()`: the byte at `0x8009B870` = 1. Leaves `t6 = 1`, `at =
+/// 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80011814(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[T6] = 1;
+    g[AT] = li(0x800A_0000);
+    sb(&mut mem, g[AT], -0x4790, g[T6]);
+}
+
+/// Words indexed by [`func_80011824`], reset with [`func_80011838`].
+pub const WORD_TABLE_6140: u32 = 0x800D_6140;
+
+/// `func_80011824(k, v)`: `WORD_TABLE_6140[k] = v`. QUIRK: `k` is unbounded.
+/// Leaves `t6 = 4k`, `at = 0x800D0000 + 4k`.
+///
+/// Domain: the word in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80011824(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[T6] = sll(g[A0], 2);
+    g[AT] = addu(li(0x800D_0000), g[T6]);
+    sw(&mut mem, g[AT], 0x6140, g[A1]);
+}
+
+/// `func_80011838()`: the 80 words of [`WORD_TABLE_6140`] = -1 and the 80
+/// bytes at `0x800D68C0` = 0, four of each per iteration, interleaved.
+/// Leaves `a0 = a1 = 0x800D6910`, `v1 = 0x800D6280`, `v0 = -1`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80011838(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[A1] = li(0x800D_6910);
+    g[A0] = li(0x800D_68C0);
+    g[V1] = li(WORD_TABLE_6140);
+    g[V0] = u64::MAX;
+    loop {
+        g[A0] = addu(g[A0], 4);
+        sw(m, g[V1], 4, g[V0]);
+        sb(m, g[A0], -3, 0);
+        sw(m, g[V1], 8, g[V0]);
+        sb(m, g[A0], -2, 0);
+        sw(m, g[V1], 0xC, g[V0]);
+        sb(m, g[A0], -1, 0);
+        g[V1] = addu(g[V1], 0x10);
+        sw(m, g[V1], -0x10, g[V0]);
+        sb(m, g[A0], -4, 0);
+        if g[A0] == g[A1] {
+            break;
+        }
+    }
+}
+
+/// `func_80011918()`: `[0x8009B810] = 1`. Leaves `t6 = 1`, `at = 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80011918(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[T6] = 1;
+    g[AT] = li(0x800A_0000);
+    sw(&mut mem, g[AT], -0x47F0, g[T6]);
+}
+
+/// `func_80011928()`: `[0x8009B810] = 0`. Leaves `at = 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80011928(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    ctx.gpr[AT] = li(0x800A_0000);
+    sw(&mut mem, ctx.gpr[AT], -0x47F0, 0);
+}
+
+/// Pointers selected by [`func_80011E54`], filled by [`func_80011DF0`].
+pub const POINTER_TABLE_6940: u32 = 0x800D_6940;
+/// How many of them there are (7 after [`func_80011DF0`]).
+pub const POINTER_COUNT: u32 = 0x800A_1D88;
+/// The selected one.
+pub const POINTER_SELECTED: u32 = 0x800A_1D8C;
+
+/// `func_80011DF0()`: `POINTER_COUNT = 7`, the seven words of
+/// [`POINTER_TABLE_6940`] = `0x800A1BDC 0x800A1B78 0x800A1B14 0x800A1B78
+/// 0x800A1C40 0x800A1BDC 0x800A1AB0`, and `POINTER_SELECTED = 0x800A1BDC`.
+///
+/// Leaves `t6 = 7`, `v0` = the table, `v1 = 0x800A1BDC`, `a0 = 0x800A1B78`,
+/// `t7 = 0x800A1B14`, `t8 = 0x800A1C40`, `t9 = 0x800A1AB0`, `at =
+/// 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80011DF0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T6] = 7;
+    g[AT] = li(0x800A_0000);
+    sw(m, g[AT], 0x1D88, g[T6]);
+    g[V0] = li(POINTER_TABLE_6940);
+    g[V1] = li(0x800A_1BDC);
+    g[A0] = li(0x800A_1B78);
+    g[T7] = li(0x800A_1B14);
+    g[T8] = li(0x800A_1C40);
+    g[T9] = li(0x800A_1AB0);
+    sw(m, g[V0], 0, g[V1]);
+    sw(m, g[V0], 4, g[A0]);
+    sw(m, g[V0], 8, g[T7]);
+    sw(m, g[V0], 0xC, g[A0]);
+    sw(m, g[V0], 0x10, g[T8]);
+    sw(m, g[V0], 0x14, g[V1]);
+    sw(m, g[V0], 0x18, g[T9]);
+    sw(m, g[AT], 0x1D8C, g[V1]);
+}
+
+/// `func_80011E54(k)`: `POINTER_SELECTED = POINTER_TABLE_6940[k]`, with `k`
+/// the low halfword of `a0`, signed, clamped: `k >= count` becomes the low
+/// halfword of `count - 1`, then a negative `k` becomes 0 (so a count of 0
+/// selects entry 0). Spills `a0`.
+///
+/// Leaves `v0` = the count, `a0 = k`, `t6`, `t8` (when clamping high), `at
+/// = 0x800A0000`, `t0 = 4k`, `t1` = the entry.
+///
+/// Domain: canonical `sp` with `[sp]` in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80011E54(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V0] = lw(m, li(POINTER_COUNT), 0);
+    sw(m, g[SP], 0, g[A0]);
+    g[T6] = sll(g[A0], 16);
+    g[A0] = sra(g[T6], 16);
+    g[AT] = slt(g[A0], g[V0]);
+    g[T1] = li(0x800D_0000);
+    if g[AT] == 0 {
+        g[A0] = addu(g[V0], u64::MAX);
+        g[T8] = sll(g[A0], 16);
+        g[A0] = sra(g[T8], 16);
+    }
+    if (g[A0] as i64) < 0 {
+        g[A0] = 0;
+    }
+    g[T0] = sll(g[A0], 2);
+    g[T1] = addu(g[T1], g[T0]);
+    g[T1] = lw(m, g[T1], 0x6940);
+    g[AT] = li(0x800A_0000);
+    sw(m, g[AT], 0x1D8C, g[T1]);
+}
+
+/// A pair of halfwords, set by [`func_80011ECC`] and read by
+/// [`func_80011EE8`] (a position, by the look of it: **guess**).
+pub const HALF_PAIR: u32 = 0x800A_1CD0;
+
+/// `func_80011ECC(x, y)`: `HALF_PAIR = (x, y)` (low halfwords); spills
+/// `a0`, `a1`. Leaves `v0 = HALF_PAIR`.
+///
+/// Domain: canonical `sp` with its argument slots in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80011ECC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V0] = li(HALF_PAIR);
+    sw(m, g[SP], 0, g[A0]);
+    sw(m, g[SP], 4, g[A1]);
+    sh(m, g[V0], 0, g[A0]);
+    sh(m, g[V0], 2, g[A1]);
+}
+
+/// `func_80011EE8(&x, &y)`: `*x = HALF_PAIR.0`, `*y = HALF_PAIR.1`
+/// (halfwords; `y` is read after `*x` is written). Leaves `v0 = HALF_PAIR`,
+/// `t6`, `t7` = the values sign-extended.
+///
+/// Domain: canonical `x`, `y` in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80011EE8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V0] = li(HALF_PAIR);
+    g[T6] = lh(m, g[V0], 0);
+    sh(m, g[A0], 0, g[T6]);
+    g[T7] = lh(m, g[V0], 2);
+    sh(m, g[A1], 0, g[T7]);
+}
+
+/// `func_80011F04(r, g, b, a)`: the four bytes at `0x800A1CCC` = the low
+/// bytes of `a0`-`a3`, then spills them, then `[0x800D6938] = 0`. Leaves
+/// `v0 = 0x800A1CCC`, `at = 0x800D0000`.
+///
+/// Domain: canonical `sp` with its argument slots in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80011F04(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V0] = li(0x800A_1CCC);
+    sb(m, g[V0], 0, g[A0]);
+    sb(m, g[V0], 1, g[A1]);
+    sb(m, g[V0], 2, g[A2]);
+    sb(m, g[V0], 3, g[A3]);
+    g[AT] = li(0x800D_0000);
+    sw(m, g[SP], 0, g[A0]);
+    sw(m, g[SP], 4, g[A1]);
+    sw(m, g[SP], 8, g[A2]);
+    sw(m, g[SP], 0xC, g[A3]);
+    sw(m, g[AT], 0x6938, 0);
+}
