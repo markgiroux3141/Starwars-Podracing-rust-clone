@@ -368,7 +368,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80022798,func_80022798,ours,8,,recomp,,,
 0x800228C0,func_800228C0,ours,25,,recomp,,,
 0x80024070,func_80024070,ours,26,,recomp,,,
-0x80024704,func_80024704,ours,0,,recomp,,,
+0x80024704,func_80024704,ours,0,,rust_verified,unit_diff,high,"track selection state at 0x8011A240 (circuits, unlocked tracks, clamp, left/right) (game::misc)"
 0x80024874,func_80024874,ours,1,,recomp,,,
 0x80024954,func_80024954,ours,25,,recomp,,,
 0x80025148,func_80025148,ours,25,,recomp,,,
@@ -379,7 +379,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80027D24,func_80027D24,ours,22,,recomp,,,
 0x80028070,func_80028070,ours,1,,recomp,,,
 0x800280D8,func_800280D8,ours,22,,recomp,,,
-0x800281F0,func_800281F0,ours,0,,recomp,,,
+0x800281F0,func_800281F0,ours,0,,rust_verified,unit_diff,high,racer list at 0x800D6CD8 from the profile's unlock mask | 0x22E01; count to 0x8011A26C (game::misc)
 0x80028320,func_80028320,ours,25,,recomp,,,
 0x80028498,func_80028498,ours,5,,recomp,,,
 0x80028D60,func_80028D60,ours,4,,recomp,,,
