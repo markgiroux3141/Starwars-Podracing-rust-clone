@@ -3868,6 +3868,407 @@ pub unsafe extern "C" fn func_80037BF0(rdram: *mut u8, ctx: *mut RecompContext) 
     sw(&mut mem, ctx.gpr[SP], 0, ctx.gpr[A0]);
 }
 
+/// `func_80038DBC(off)`: bit 6 of the settings word `[0x800D697C]` (the
+/// one [`func_800358A0`] reads): set if `off == 0` (full 64-bit test),
+/// cleared otherwise. Leaves `v0 = 0x800D6960`, the old word in `t6` or
+/// `t8`, the new one in `t7` or `t9`, and `at = !0x40` when clearing.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80038DBC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V0] = li(0x800D_6960);
+    if g[A0] == 0 {
+        g[T8] = lw(m, g[V0], 0x1C);
+        g[T9] = g[T8] | 0x40;
+        sw(m, g[V0], 0x1C, g[T9]);
+    } else {
+        g[T6] = lw(m, g[V0], 0x1C);
+        g[AT] = (-0x41i64) as u64;
+        g[T7] = g[T6] & g[AT];
+        sw(m, g[V0], 0x1C, g[T7]);
+    }
+}
+
+/// `func_80038DF8(a, b, c, d, e, f)`: store each argument that isn't
+/// negative (signed 64-bit test; `e`, `f` from the stack slots `[sp +
+/// 0x10]`, `[sp + 0x14]`, signed words) as a halfword: `a` at `0x800A3D4C`,
+/// `b` at `0x800A3D50`, and `c`..`f` at `0x800A3D44`..`0x800A3D4A`.
+/// Leaves `at = 0x800A0000`, `v1 = 0x800A3D44`, `v0 = f`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80038DF8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[AT] = li(0x800A_0000);
+    if (g[A0] as i64) >= 0 {
+        sh(m, g[AT], 0x3D4C, g[A0]);
+    }
+    if (g[A1] as i64) >= 0 {
+        sh(m, g[AT], 0x3D50, g[A1]);
+    }
+    g[V1] = li(0x800A_3D44);
+    if (g[A2] as i64) >= 0 {
+        sh(m, g[V1], 0, g[A2]);
+    }
+    if (g[A3] as i64) >= 0 {
+        sh(m, g[V1], 2, g[A3]);
+    }
+    g[V0] = lw(m, g[SP], 0x10);
+    if (g[V0] as i64) >= 0 {
+        sh(m, g[V1], 4, g[V0]);
+    }
+    g[V0] = lw(m, g[SP], 0x14);
+    if (g[V0] as i64) >= 0 {
+        sh(m, g[V1], 6, g[V0]);
+    }
+}
+
+/// Write one light at `[base]` as F3DEX2's `Light` wants it: the colour
+/// from the low bytes of the three halfwords at `rgb` (bytes 1, 3, 5) into
+/// `col` (`+0..+2`) and `colc` (`+4..+6`), through `v0`. `dir`, if given,
+/// is three halfwords, negated and stored as bytes at `+0x10..+0x12`
+/// through the temporary pairs `temps` (load, negation).
+fn write_light(m: &mut Mem, g: &mut [u64; 32], base: usize, offs: [i32; 3], rgb: usize) {
+    for (k, off) in offs.into_iter().enumerate() {
+        g[V0] = lbu(m, g[rgb], 1 + 2 * k as i32);
+        sb(m, g[base], off, g[V0]);
+        sb(m, g[base], off + 4, g[V0]);
+    }
+}
+
+fn write_direction(m: &mut Mem, g: &mut [u64; 32], base: usize, at: i32, dir: usize, temps: [(usize, usize); 3]) {
+    for (k, (t, n)) in temps.into_iter().enumerate() {
+        g[t] = lh(m, g[dir], 2 * k as i32);
+        g[n] = subu(0, g[t]);
+        sb(m, g[base], at + k as i32, g[n]);
+    }
+}
+
+/// `func_80038E58(ambient, diffuse, dir)`: fill the `Lights1` at
+/// `0x800A3DB0`: the ambient colour (`+0`, `+4`) and the light colour (`+8`,
+/// `+0xC`) from the low bytes of each argument's three halfwords
+/// ([`write_light`]), and the direction (`+0x10`) as the negated low bytes
+/// of `dir`'s halfwords. Leaves `v1 = 0x800A3DB0`, `v0` = the last colour
+/// byte, `t6`..`t1` = the direction halfwords and their negations.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80038E58(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V1] = li(0x800A_3DB0);
+    write_light(m, g, V1, [0, 1, 2], A0);
+    write_light(m, g, V1, [8, 9, 0xA], A1);
+    write_direction(m, g, V1, 0x10, A2, [(T6, T7), (T8, T9), (T0, T1)]);
+}
+
+/// The twelve 0x28-byte `Lights2` slots at `0x800A3DC8` (ambient, two
+/// lights) that [`func_80038ED0`], [`func_80038F68`] and [`func_80038FE8`]
+/// fill, with a word per slot at `0x800A3FA8`: 1 for one light, 2 for two.
+pub const LIGHT_SLOTS: u32 = 0x800A_3DC8;
+
+/// The slot's address as the code computes it: `((i << 2) + i) << 3`.
+fn light_slot(g: &mut [u64; 32], t: usize, base: usize, dst: usize) {
+    g[t] = addu(g[t], g[A0]);
+    g[base] = li(LIGHT_SLOTS);
+    g[t] = sll(g[t], 3);
+    g[dst] = addu(g[t], g[base]);
+}
+
+/// `func_80038ED0(i, ambient, diffuse, dir)`: for `0 <= i < 12` (signed),
+/// fill light slot `i`'s ambient and first light like [`func_80038E58`];
+/// anything else does nothing. Leaves `at` = the bound test, `t6` =
+/// `4 * i` (then `40 * i`), `t7 = LIGHT_SLOTS`, `v1` = the slot, `v0`,
+/// `t8`..`t3` as the writes left them.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80038ED0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[AT] = slt(g[A0], 0xC);
+    if (g[A0] as i64) < 0 {
+        return;
+    }
+    g[T6] = sll(g[A0], 2);
+    if g[AT] == 0 {
+        return;
+    }
+    light_slot(g, T6, T7, V1);
+    write_light(m, g, V1, [0, 1, 2], A1);
+    write_light(m, g, V1, [8, 9, 0xA], A2);
+    write_direction(m, g, V1, 0x10, A3, [(T8, T9), (T0, T1), (T2, T3)]);
+}
+
+/// `func_80038F68(i)`: for `0 <= i < 12`, copy the `Lights1` at `0x800A3DB0`
+/// (24 bytes) into light slot `i` and set its word at `0x800A3FA8` to 1 (one
+/// light). Leaves the copy's words in `at`, `t0`, `t3`, `t8 = 0x800A3DB0`,
+/// `t1 = 0x800A3DB8`, `v0` = the slot, `t4 = 1`, `t5 = 4 * i`, `at =
+/// 0x800A0000 + 4 * i`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80038F68(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[AT] = slt(g[A0], 0xC);
+    if (g[A0] as i64) < 0 {
+        return;
+    }
+    g[T6] = sll(g[A0], 2);
+    if g[AT] == 0 {
+        return;
+    }
+    g[T8] = li(0x800A_3DB0);
+    g[AT] = lw(m, g[T8], 0);
+    light_slot(g, T6, T7, V0);
+    sw(m, g[V0], 0, g[AT]);
+    g[T0] = lw(m, g[T8], 4);
+    g[T1] = li(0x800A_3DB8);
+    sw(m, g[V0], 4, g[T0]);
+    g[AT] = lw(m, g[T1], 0);
+    g[T5] = sll(g[A0], 2);
+    g[T4] = 1;
+    sw(m, g[V0], 8, g[AT]);
+    g[T3] = lw(m, g[T1], 4);
+    sw(m, g[V0], 0xC, g[T3]);
+    g[AT] = lw(m, g[T1], 8);
+    sw(m, g[V0], 0x10, g[AT]);
+    g[T3] = lw(m, g[T1], 0xC);
+    g[AT] = addu(li(0x800A_0000), g[T5]);
+    sw(m, g[V0], 0x14, g[T3]);
+    sw(m, g[AT], 0x3FA8, g[T4]);
+}
+
+/// `func_80038FE8(i, on, colour, dir)`: for `0 <= i < 12`, light slot `i`'s
+/// second light. With `on == 0` (64-bit) the slot's word at `0x800A3FA8`
+/// becomes 1 (one light); otherwise 2, and the second light (`+0x18`) gets
+/// `colour` and the negated `dir` like [`func_80038E58`].
+///
+/// QUIRK: the red byte goes to `+0x19`, where green overwrites it, and
+/// `+0x18` is never written (`colc` at `+0x1C` gets all three right).
+/// Leaves `at` = the bound test or `0x800A0000 + 4 * i`, `t6 = 1` or `t8 =
+/// 2`, and with a light `v1` = the slot, `v0`, `t0`..`t7` as the writes
+/// left them.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80038FE8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[AT] = slt(g[A0], 0xC);
+    if (g[A0] as i64) < 0 || g[AT] == 0 {
+        return;
+    }
+    g[T8] = 2;
+    if g[A1] == 0 {
+        g[T7] = sll(g[A0], 2);
+        g[AT] = addu(li(0x800A_0000), g[T7]);
+        g[T6] = 1;
+        sw(m, g[AT], 0x3FA8, g[T6]);
+        return;
+    }
+    g[T9] = sll(g[A0], 2);
+    g[AT] = addu(li(0x800A_0000), g[T9]);
+    sw(m, g[AT], 0x3FA8, g[T8]);
+    g[T0] = sll(g[A0], 2);
+    g[V0] = lbu(m, g[A2], 1);
+    light_slot(g, T0, T1, V1);
+    sb(m, g[V1], 0x19, g[V0]); // QUIRK: +0x18 in a correct light
+    sb(m, g[V1], 0x1C, g[V0]);
+    g[V0] = lbu(m, g[A2], 3);
+    sb(m, g[V1], 0x19, g[V0]);
+    sb(m, g[V1], 0x1D, g[V0]);
+    g[V0] = lbu(m, g[A2], 5);
+    sb(m, g[V1], 0x1A, g[V0]);
+    sb(m, g[V1], 0x1E, g[V0]);
+    write_direction(m, g, V1, 0x20, A3, [(T2, T3), (T4, T5), (T6, T7)]);
+}
+
+/// `func_80039090(a0, a1, a2, a3)`: an empty function that spills all four
+/// arguments to their slots `[sp]..[sp + 0xC]`. Domain: canonical `sp` with
+/// its slots in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80039090(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    for (k, r) in [A0, A1, A2, A3].into_iter().enumerate() {
+        sw(&mut mem, g[SP], 4 * k as i32, g[r]);
+    }
+}
+
+/// `func_800390A4`: empty (`jr ra`).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800390A4(_rdram: *mut u8, _ctx: *mut RecompContext) {}
+
+/// `func_800390AC`: empty (`jr ra`).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800390AC(_rdram: *mut u8, _ctx: *mut RecompContext) {}
+
+/// `func_800390C0()` = `crc32_table_init`: fill the 256 words at
+/// `0x80114070` with the table of the MSB-first CRC-32 (polynomial
+/// `0x04C11DB7`): entry `v` is `v << 24` shifted left eight times, XORing
+/// the polynomial after each shift out of bit 31. The compiler unrolled the
+/// eight steps into two passes of four, each step with its own temporaries.
+///
+/// Leaves, from the last entry (255): `v0 = 0x100 = t0`, `a1 = 0x80114470`,
+/// `a2 = 0x80000000`, `a3` = the polynomial, `a0 = 0`, `v1` = the entry,
+/// and the steps' temporaries `t1`..`t9`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800390C0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[A1] = li(0x8011_4070);
+    g[A3] = li(0x04C1_1DB7);
+    g[V0] = 0;
+    g[T0] = 0x100;
+    g[A2] = li(0x8000_0000);
+    loop {
+        g[V1] = sll(g[V0], 24);
+        g[A0] = 8;
+        g[T6] = g[V1] & g[A2];
+        loop {
+            g[A0] = addu(g[A0], (-4i64) as u64);
+            // Step 1: test t6, shift in t7 (bit set) or t8.
+            if g[T6] == 0 {
+                g[T8] = sll(g[V1], 1);
+                g[V1] = g[T8];
+            } else {
+                g[T7] = sll(g[V1], 1);
+                g[V1] = g[T7] ^ g[A3];
+            }
+            // Steps 2-4: test, the plain shift (always made), the XOR shift.
+            for (test, plain, xor) in [(T9, T2, T1), (T3, T5, T4), (T6, T8, T7)] {
+                g[test] = g[V1] & g[A2];
+                g[plain] = sll(g[V1], 1);
+                if g[test] == 0 {
+                    g[V1] = g[plain];
+                } else {
+                    g[xor] = sll(g[V1], 1);
+                    g[V1] = g[xor] ^ g[A3];
+                }
+            }
+            if g[A0] == 0 {
+                break;
+            }
+            g[T6] = g[V1] & g[A2];
+        }
+        g[V0] = addu(g[V0], 1);
+        g[A1] = addu(g[A1], 4);
+        sw(m, g[A1], -4, g[V1]);
+        if g[V0] == g[T0] {
+            break;
+        }
+    }
+}
+
+/// Copy `words` words (a multiple of 3, plus `tail` = 0 or 2 more) from
+/// `[src]` to `[dst]`, three per iteration as the compiler unrolled it,
+/// through `at` (the tail's second word through `tail_reg`). Leaves `src`
+/// and `dst` advanced past the triples, `end` = the end of the triples.
+fn copy_words(m: &mut Mem, g: &mut [u64; 32], (src, dst, end): (usize, usize, usize), tail: Option<usize>) {
+    loop {
+        g[AT] = lw(m, g[src], 0);
+        g[src] = addu(g[src], 0xC);
+        g[dst] = addu(g[dst], 0xC);
+        sw(m, g[dst], -0xC, g[AT]);
+        g[AT] = lw(m, g[src], -8);
+        sw(m, g[dst], -8, g[AT]);
+        g[AT] = lw(m, g[src], -4);
+        sw(m, g[dst], -4, g[AT]);
+        if g[src] == g[end] {
+            break;
+        }
+    }
+    if let Some(t) = tail {
+        g[AT] = lw(m, g[src], 0);
+        sw(m, g[dst], 0, g[AT]);
+        g[t] = lw(m, g[src], 4);
+        sw(m, g[dst], 4, g[t]);
+    }
+}
+
+/// `func_8003960C()`: copy the 0x3F0-byte block at `0x80113680` (the save
+/// data, **guess**; its flags at `+8` are read by [`func_8001F464`] and
+/// [`func_8002DC7C`]) to `0x80113A70`. Leaves `t7 = t0 = 0x80113A70`, `t6
+/// = 0x80113E60`, `at` = the last word.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003960C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[T7] = li(0x8011_3680);
+    g[T6] = li(0x8011_3A70);
+    g[T0] = addu(g[T7], 0x3F0);
+    copy_words(&mut mem, g, (T7, T6, T0), None);
+}
+
+/// `func_80039914(a, b)`: copy the 0x2C-byte record `b` of the save data
+/// (`0x80113694 + 0x2C * b`) to record `a` at `0x80113E60` (the current
+/// profiles, **guess**). The multiplies keep only the low 32 bits.
+/// Leaves `v0 = 0x2C`, `t6`/`t9` = the products, `t1 = 0x80113680`, `t7 =
+/// 0x80113E60`, `t0 = 0x2C * b + 0x14`, `t2`/`t8` past the triples, `t5` =
+/// the last word, `at` the one before.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80039914(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[V0] = 0x2C;
+    g[T1] = li(0x8011_3680);
+    g[T7] = li(0x8011_3E60);
+    g[T6] = multu(g[A0], g[V0]).0;
+    g[T8] = addu(g[T6], g[T7]);
+    g[T9] = multu(g[A1], g[V0]).0;
+    g[T0] = addu(g[T9], 0x14);
+    g[T2] = addu(g[T0], g[T1]);
+    g[T5] = addu(g[T2], 0x24);
+    copy_words(&mut mem, g, (T2, T8, T5), Some(T5));
+}
+
+/// `func_80039984(a, b)`: the reverse of [`func_80039914`], record `b` at
+/// `0x80113E60` to record `a` of the save data at `0x80113694`. Leaves `v0 =
+/// 0x2C`, `t6`/`t0` = the products, `t1 = 0x80113E60`, `t8 =
+/// 0x80113680`, `t7 = 0x2C * a + 0x14`, `t2`/`t9` past the triples, `t5` =
+/// the last word, `at` the one before.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80039984(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[V0] = 0x2C;
+    g[T1] = li(0x8011_3E60);
+    g[T8] = li(0x8011_3680);
+    g[T6] = multu(g[A0], g[V0]).0;
+    g[T7] = addu(g[T6], 0x14);
+    g[T9] = addu(g[T7], g[T8]);
+    g[T0] = multu(g[A1], g[V0]).0;
+    g[T2] = addu(g[T0], g[T1]);
+    g[T5] = addu(g[T2], 0x24);
+    copy_words(&mut mem, g, (T2, T9, T5), Some(T5));
+}
+
 /// `func_8003ABA0(spline, dir, w)`: step the spline walker `w` one point,
 /// forward if `(s16) dir == 1`, otherwise backward. `spline` is a loaded
 /// spline header (`+0` the flag halfword F, `+0xC` the points; NOTES.md,

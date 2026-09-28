@@ -572,16 +572,16 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80038950,func_80038950,ours,2,,recomp,,,
 0x80038C3C,func_80038C3C,ours,2,,recomp,,,
 0x80038D5C,func_80038D5C,ours,1,,recomp,,,
-0x80038DBC,func_80038DBC,ours,0,,recomp,,,
-0x80038DF8,func_80038DF8,ours,0,,recomp,,,
-0x80038E58,func_80038E58,ours,0,,recomp,,,
-0x80038ED0,func_80038ED0,ours,0,,recomp,,,
-0x80038F68,func_80038F68,ours,0,,recomp,,,
-0x80038FE8,func_80038FE8,ours,0,,recomp,,,
-0x80039090,func_80039090,ours,0,,recomp,,,
-0x800390A4,func_800390A4,ours,0,,recomp,,,
-0x800390AC,func_800390AC,ours,0,,recomp,,,
-0x800390C0,func_800390C0,ours,0,,recomp,,,
+0x80038DBC,func_80038DBC,ours,0,,rust_verified,unit_diff,high,"settings [0x800D697C] bit 6 set for 0, cleared otherwise (game::misc)"
+0x80038DF8,func_80038DF8,ours,0,,rust_verified,unit_diff,high,store nonnegative args as halfwords at 0x800A3D44..50 (game::misc)
+0x80038E58,func_80038E58,ours,0,,rust_verified,unit_diff,high,"fill Lights1 at 0x800A3DB0 (ambient, light, negated dir) (game::misc)"
+0x80038ED0,func_80038ED0,ours,0,,rust_verified,unit_diff,high,fill Lights2 slot i (of 12 at 0x800A3DC8): ambient + light 1 (game::misc)
+0x80038F68,func_80038F68,ours,0,,rust_verified,unit_diff,high,"copy Lights1 into slot i, flag 1 (game::misc)"
+0x80038FE8,func_80038FE8,ours,0,,rust_verified,unit_diff,high,slot i light 2 or flag 1; QUIRK red byte misplaced (game::misc)
+0x80039090,func_80039090,ours,0,,rust_verified,unit_diff,high,"empty, spills a0..a3 (game::misc)"
+0x800390A4,func_800390A4,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
+0x800390AC,func_800390AC,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
+0x800390C0,crc32_table_init,ours,0,,rust_verified,unit_diff,high,MSB-first CRC-32 table (poly 0x04C11DB7) at 0x80114070 (game::misc)
 0x80039178,func_80039178,ours,1,,recomp,,,
 0x800391F4,func_800391F4,ours,15,,recomp,,,
 0x800392A4,func_800392A4,ours,5,,recomp,,,
@@ -590,15 +590,15 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80039340,func_80039340,ours,17,,recomp,,,
 0x800393DC,func_800393DC,ours,17,,recomp,,,
 0x80039478,func_80039478,ours,16,,recomp,,,
-0x8003960C,func_8003960C,ours,0,,recomp,,,
+0x8003960C,func_8003960C,ours,0,,rust_verified,unit_diff,high,copy save block 0x80113680 (0x3F0 bytes) to 0x80113A70 (game::misc)
 0x8003964C,func_8003964C,ours,18,,recomp,,,
 0x800396E0,func_800396E0,ours,18,,recomp,,,
 0x80039768,func_80039768,ours,18,,recomp,,,
 0x80039828,func_80039828,ours,19,,recomp,,,
 0x80039890,func_80039890,ours,19,,recomp,,,
 0x800398B8,func_800398B8,ours,20,,recomp,,,
-0x80039914,func_80039914,ours,0,,recomp,,,
-0x80039984,func_80039984,ours,0,,recomp,,,
+0x80039914,func_80039914,ours,0,,rust_verified,unit_diff,high,copy save record b to current record a (0x2C bytes) (game::misc)
+0x80039984,func_80039984,ours,0,,rust_verified,unit_diff,high,copy current record b to save record a (0x2C bytes) (game::misc)
 0x800399F0,func_800399F0,ours,21,,recomp,,,
 0x80039A30,framebuffers_init,ours,0,video,recomp,,med,"3 framebuffers from the top of RDRAM at 0x80114530..38: stride w*240*bpp + 2*(4*w) (8 MB: 640, 4 bpp)"
 0x80039B70,func_80039B70,ours,16,,recomp,,,
