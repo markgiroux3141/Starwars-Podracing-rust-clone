@@ -5299,6 +5299,160 @@ pub unsafe extern "C" fn func_8003F890(rdram: *mut u8, ctx: *mut RecompContext) 
     g[V0] = addu(g[T9], g[T1]);
 }
 
+/// `func_8003F99C(elem, arg)`: call the callback `[pool + 0x24]` of the
+/// first pool whose id equals the element's `[elem + 0]`, as `cb(elem,
+/// arg)`, unless `elem` is 0, no pool matches, the callback is 0, or bit 8
+/// of the element's halfword `+6` is set. The callback is reached through
+/// `LOOKUP_FUNC` (`imports::runtime::get_function`), so it may be any
+/// function. `arg` is spilled to its slot and read back into `a1` (and
+/// `a2`); `ra` is saved in a 0x18-byte frame.
+///
+/// Leaves (without a call) `a3 = elem`, `v0`/`v1` = the search's slot and
+/// descriptor or the callback, `a1` = the element's id or `arg`, `t6`..`t8`
+/// from the tests; with a call, the callee's registers.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003F99C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    sw(m, g[SP], 0x1C, g[A1]);
+    g[A3] = g[A0];
+    'done: {
+        if g[A0] == 0 {
+            break 'done;
+        }
+        g[V0] = lw(m, li(0x800A_0000), 0x2170);
+        g[V1] = lw(m, g[V0], 0);
+        if g[V1] == 0 {
+            break 'done;
+        }
+        g[A1] = lw(m, g[A0], 0);
+        loop {
+            g[T6] = lw(m, g[V1], 0);
+            if g[A1] == g[T6] {
+                break;
+            }
+            g[V1] = lw(m, g[V0], 4);
+            g[V0] = addu(g[V0], 4);
+            if g[V1] == 0 {
+                break 'done;
+            }
+        }
+        g[V0] = lw(m, g[V1], 0x24);
+        if g[V0] == 0 {
+            break 'done;
+        }
+        g[T7] = lh(m, g[A3], 6);
+        g[A2] = lw(m, g[SP], 0x1C);
+        g[T8] = g[T7] & 0x100;
+        g[A1] = g[A2];
+        if g[T8] != 0 {
+            break 'done;
+        }
+        g[A0] = g[A3];
+        call(imports::runtime::get_function(g[V0] as i32).expect("LOOKUP_FUNC"), m, ctx);
+    }
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x18);
+}
+
+/// `func_8003FA24(id, arg)`: send `arg` to the elements of the pools with
+/// this id, or of every pool if `id` is `"All!"` (`0x416C6C21`): for each
+/// pool, its callback `[pool + 0x24]` (if nonzero, through `LOOKUP_FUNC`)
+/// is called as `cb(elem, arg, arg)` on each element whose halfword `+6`
+/// has bit 8 clear, the count and element size re-read after each. A
+/// callback returning 2 stops everything. With a single id, the first
+/// matching pool is the last visited.
+///
+/// `s0`..`s7`, `fp` and `ra` are saved in a 0x40-byte frame and come back
+/// sign-extended from their low words. Leaves `v0` = the last callback's
+/// result or list word, `a0`/`a1`/`a2` = the last element and `arg`, and
+/// the loop's loads in `t0`, `t1`, `t6`..`t9`, `at`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003FA24(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x40i64) as u64);
+    sw(m, g[SP], 0x30, g[S6]);
+    g[S6] = lw(m, li(0x800A_0000), 0x2170);
+    for (off, r) in [(0x3C, RA), (0x38, FP), (0x34, S7), (0x2C, S5), (0x28, S4), (0x24, S3), (0x20, S2), (0x1C, S1), (0x18, S0)] {
+        sw(m, g[SP], off, g[r]);
+    }
+    g[V0] = lw(m, g[S6], 0);
+    g[S3] = g[A1];
+    g[S7] = g[A0];
+    g[FP] = li(0x416C_0000);
+    'done: {
+        if g[V0] == 0 {
+            break 'done;
+        }
+        g[FP] |= 0x6C21; // "All!"
+        g[S5] = 2;
+        loop {
+            let g = &mut ctx.gpr;
+            g[T6] = lw(m, g[V0], 0);
+            g[S2] = g[V0];
+            if g[S7] == g[T6] || g[S7] == g[FP] {
+                g[V0] = lw(m, g[S2], 0x24);
+                if g[V0] != 0 {
+                    g[T7] = lw(m, g[S2], 8);
+                    g[S4] = g[V0];
+                    g[S0] = lw(m, g[S2], 0x10);
+                    g[S1] = 0;
+                    if (g[T7] as i64) > 0 {
+                        loop {
+                            let g = &mut ctx.gpr;
+                            g[T8] = lh(m, g[S0], 6);
+                            g[A0] = g[S0];
+                            g[A1] = g[S3];
+                            g[T9] = g[T8] & 0x100;
+                            if g[T9] == 0 {
+                                g[A2] = g[S3];
+                                call(imports::runtime::get_function(g[S4] as i32).expect("LOOKUP_FUNC"), m, ctx);
+                                if ctx.gpr[V0] == ctx.gpr[S5] {
+                                    break 'done;
+                                }
+                            }
+                            let g = &mut ctx.gpr;
+                            g[T1] = lw(m, g[S2], 8);
+                            g[T0] = lw(m, g[S2], 0xC);
+                            g[S1] = addu(g[S1], 1);
+                            g[AT] = slt(g[S1], g[T1]);
+                            g[S0] = addu(g[S0], g[T0]);
+                            if g[AT] == 0 {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if ctx.gpr[S7] != ctx.gpr[FP] {
+                    break 'done;
+                }
+            }
+            let g = &mut ctx.gpr;
+            g[V0] = lw(m, g[S6], 4);
+            g[S6] = addu(g[S6], 4);
+            if g[V0] == 0 {
+                break;
+            }
+        }
+    }
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x3C);
+    for (off, r) in [(0x18, S0), (0x1C, S1), (0x20, S2), (0x24, S3), (0x28, S4), (0x2C, S5), (0x30, S6), (0x34, S7), (0x38, FP)] {
+        g[r] = lw(m, g[SP], off);
+    }
+    g[SP] = addu(g[SP], 0x40);
+}
+
 /// `func_8003FB78(id, count, base)`: set the first pool with this id to
 /// `count` elements at `base` (`+8`, `+0x10`) and return `count * size`
 /// (low 32 bits), or 0 if there is none. Leaves `a3 = id`, `v1` = the
