@@ -62,36 +62,36 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80006790,func_80006790,ours,1,,recomp,,,
 0x80006848,func_80006848,ours,1,,recomp,,,
 0x80006C00,func_80006C00,ours,5,,recomp,,,
-0x80006D5C,func_80006D5C,ours,0,,recomp,,,
+0x80006D5C,func_80006D5C,ours,0,,rust_verified,unit_diff,high,"find o in table 0x800AF4C0 (first [0x8009A2A0]): flags [o+0x100] bit31 clear, &0xF == a1, [o+0x124] == a0 (64-bit); a0 == 0 -> 0; QUIRK: count unbounded (game::misc)"
 0x80006DE8,func_80006DE8,ours,0,,recomp,,,
-0x80006E50,func_80006E50,ours,0,,recomp,,,
-0x80006E60,func_80006E60,ours,0,,recomp,,,
+0x80006E50,func_80006E50,ours,0,,rust_verified,unit_diff,high,[a0+0x100] |= a1 (game::misc)
+0x80006E60,func_80006E60,ours,0,,rust_verified,unit_diff,high,[a0+0x100] &= ~a1 (game::misc)
 0x80006E74,func_80006E74,ours,1,,recomp,,,
 0x80006EB4,func_80006EB4,ours,0,,recomp,,,
 0x80006EC0,func_80006EC0,ours,1,,recomp,,,
 0x80006F28,func_80006F28,ours,0,,recomp,,,
-0x80006F34,func_80006F34,ours,0,,recomp,,,
-0x80006F3C,func_80006F3C,ours,0,,recomp,,,
+0x80006F34,func_80006F34,ours,0,,rust_verified,unit_diff,high,empty; spills a0 (game::misc)
+0x80006F3C,func_80006F3C,ours,0,,rust_verified,unit_diff,high,"empty; spills a0, a1; returns 0 (game::misc)"
 0x80006F4C,func_80006F4C,ours,0,,recomp,,,
 0x80006F60,func_80006F60,ours,6,,recomp,,,
-0x80006FD4,func_80006FD4,ours,0,,recomp,,,
-0x80006FDC,func_80006FDC,ours,0,,recomp,,,
+0x80006FD4,func_80006FD4,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
+0x80006FDC,func_80006FDC,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
 0x80006FE4,func_80006FE4,ours,1,,recomp,,,
 0x80007034,func_80007034,ours,5,,recomp,,,
 0x80007218,func_80007218,ours,8,,recomp,,,
 0x800073A4,func_800073A4,ours,13,,recomp,,,
 0x80007488,func_80007488,ours,7,,recomp,,,
-0x8000758C,func_8000758C,ours,0,,recomp,,,
+0x8000758C,func_8000758C,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
 0x80007594,func_80007594,ours,6,,recomp,,,
-0x80007710,func_80007710,ours,0,,recomp,,,
+0x80007710,audio_dma_new,ours,0,audio,rust_verified,unit_diff,med,*a0 = 0x800AFAC0; returns 0x80007594 (the audio DMA callback): ALDMANew shape (game::misc)
 0x80007728,func_80007728,ours,5,,recomp,,,
 0x80007818,func_80007818,ours,3,,recomp,,,
 0x8000787C,func_8000787C,ours,0,,recomp,,,
 0x800078B4,func_800078B4,ours,0,,recomp,,,
-0x80007A44,func_80007A44,ours,0,,recomp,,,
+0x80007A44,func_80007A44,ours,0,,rust_verified,unit_diff,high,if [0x8009A2B8]: zero +0x18 of 8 x 0x20-byte records at 0x800D2038 (game::misc)
 0x80007A80,func_80007A80,ours,3,,recomp,,,
 0x80007B10,func_80007B10,ours,7,,recomp,,,
-0x80007CE4,func_80007CE4,ours,0,,recomp,,,
+0x80007CE4,func_80007CE4,ours,0,,rust_verified,unit_diff,high,"handle: bit15 clear -> [0x800AFA54]; k = byte 3: 0/1 -> [0x8009A32C + 4*byte2], else [0x8009A388 + 4*k]; QUIRK: unbounded indices (game::misc)"
 0x80007D44,func_80007D44,ours,17,,recomp,,,
 0x80007E80,func_80007E80,ours,15,,recomp,,,"only caller heap_set_level. For each nonzero word in 0x8009A32C..A388 and A388..A3A8: func_80007A80, func_80007A44, zero it; if any: [0x800B05B0] = 0 and func_80008F28 until another thread raises it to 5"
 0x80007F5C,func_80007F5C,ours,1,,recomp,,,
