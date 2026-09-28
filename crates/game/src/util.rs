@@ -1,6 +1,9 @@
-//! Small memory utilities.
+//! Small memory utilities, and the leaves around them at 0x80000520.
 
-use crate::recomp::{addu, enter, reg::*, sll, RecompContext};
+// Ports keep N64Recomp's names (func_8000052C), capitals included.
+#![allow(non_snake_case)]
+
+use crate::recomp::{addu, enter, li, lw, reg::*, sll, sw, RecompContext};
 
 /// `func_80000554`: zero `a1` consecutive words starting at `a0`; nothing if
 /// `a1 <= 0` (signed, full 64-bit register).
@@ -77,4 +80,55 @@ pub unsafe extern "C" fn func_80000554(rdram: *mut u8, ctx: *mut RecompContext) 
         }
     }
     g[V1] = v1;
+}
+
+/// `func_80000520`: `[0x8009A270] = a0` (low word). Leaves `at = 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80000520(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[AT] = li(0x800A_0000);
+    sw(&mut mem, g[AT], -0x5D90, g[A0]);
+}
+
+/// `func_8000052C`: `[0x8009A280] = 0`. Leaves `at = 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000052C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[AT] = li(0x800A_0000);
+    sw(&mut mem, g[AT], -0x5D80, 0);
+}
+
+/// `func_80000538`: `v0 = [0x8009A280]`, the word [`func_8000052C`] clears.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80000538(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[V0] = li(0x800A_0000);
+    g[V0] = lw(&mem, g[V0], -0x5D80);
+}
+
+/// `func_80000544`: returns at once (an empty function).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80000544(_rdram: *mut u8, _ctx: *mut RecompContext) {}
+
+/// `func_8000054C`: an empty function of one argument. It spills `a0` to its
+/// argument slot, `[sp]`, and returns.
+///
+/// Domain: canonical `sp` with `[sp]` in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000054C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    sw(&mut mem, ctx.gpr[SP], 0, ctx.gpr[A0]);
 }

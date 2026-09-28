@@ -1,11 +1,11 @@
 vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80000400,func_80000400,ours,0,,recomp,,,indirect jr
 0x80000450,func_80000450,ours,5,,recomp,,,
-0x80000520,func_80000520,ours,0,,recomp,,,
-0x8000052C,func_8000052C,ours,0,,recomp,,,
-0x80000538,func_80000538,ours,0,,recomp,,,
-0x80000544,func_80000544,ours,0,,recomp,,,
-0x8000054C,func_8000054C,ours,0,,recomp,,,
+0x80000520,func_80000520,ours,0,,rust_verified,unit_diff,high,[0x8009A270] = a0 (game::util)
+0x8000052C,func_8000052C,ours,0,,rust_verified,unit_diff,high,[0x8009A280] = 0 (game::util)
+0x80000538,func_80000538,ours,0,,rust_verified,unit_diff,high,v0 = [0x8009A280] (game::util)
+0x80000544,func_80000544,ours,0,,rust_verified,unit_diff,high,empty (game::util)
+0x8000054C,func_8000054C,ours,0,,rust_verified,unit_diff,high,empty; spills a0 to [sp] (game::util)
 0x80000554,func_80000554,ours,0,util,rust_verified,unit_diff,high,zero a1 words at a0 (game::util)
 0x800005B4,func_800005B4,ours,1,,recomp,,,
 0x8000097C,func_8000097C,ours,0,,recomp,,,
@@ -38,10 +38,10 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8000550C,func_8000550C,ours,0,,recomp,,,
 0x8000556C,func_8000556C,ours,0,,recomp,,,
 0x800059A8,func_800059A8,ours,0,,recomp,,,
-0x80005AFC,func_80005AFC,ours,0,,recomp,,,
-0x80005B1C,func_80005B1C,ours,0,,recomp,,,
-0x80005B44,func_80005B44,ours,0,,recomp,,,
-0x80005B80,func_80005B80,ours,0,,recomp,,,
+0x80005AFC,func_80005AFC,ours,0,,rust_verified,unit_diff,high,decrement [0x8009A29C] if > 0 (game::misc)
+0x80005B1C,func_80005B1C,ours,0,,rust_verified,unit_diff,high,a0 == 3: [0x8009A290] = a1; a0 == 5: [0x8009A28C] = a1; 64-bit compares (game::misc)
+0x80005B44,func_80005B44,ours,0,,rust_verified,unit_diff,high,"getter for func_80005B1C: 3/5 -> the word, else -1 (game::misc)"
+0x80005B80,func_80005B80,ours,0,,rust_verified,unit_diff,high,[0x8009A2A0] = 0; zero 300 words 0x800AF4C0..0x800AF970 (game::misc)
 0x80005BB8,func_80005BB8,ours,0,,recomp,,,
 0x80005C54,func_80005C54,ours,1,,recomp,,,
 0x80005CAC,func_80005CAC,ours,0,,recomp,,,
@@ -53,11 +53,11 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8000630C,func_8000630C,ours,4,,recomp,,,
 0x8000646C,func_8000646C,ours,1,,recomp,,,
 0x8000651C,func_8000651C,ours,2,,recomp,,,
-0x800066DC,func_800066DC,ours,0,,recomp,,,
-0x800066E4,func_800066E4,ours,0,,recomp,,,
-0x800066EC,func_800066EC,ours,0,,recomp,,,
-0x800066F4,func_800066F4,ours,0,,recomp,,,
-0x800066FC,func_800066FC,ours,0,,recomp,,,
+0x800066DC,func_800066DC,ours,0,,rust_verified,unit_diff,high,empty; spills a0 to [sp] (game::misc)
+0x800066E4,func_800066E4,ours,0,,rust_verified,unit_diff,high,empty; spills a0 to [sp] (game::misc)
+0x800066EC,func_800066EC,ours,0,,rust_verified,unit_diff,high,empty; spills a0 to [sp] (game::misc)
+0x800066F4,func_800066F4,ours,0,,rust_verified,unit_diff,high,empty; spills a0 to [sp] (game::misc)
+0x800066FC,func_800066FC,ours,0,,rust_verified,unit_diff,high,empty; spills a0 to [sp] (game::misc)
 0x80006704,func_80006704,ours,0,,recomp,,,
 0x80006790,func_80006790,ours,1,,recomp,,,
 0x80006848,func_80006848,ours,1,,recomp,,,

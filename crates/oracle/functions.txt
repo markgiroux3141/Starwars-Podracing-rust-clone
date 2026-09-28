@@ -2,7 +2,21 @@
 # Each must exist as generated/<name>.c (run `cargo xtask recomp`).
 # Calls from these to functions not listed here are linked to stubs that trap.
 
+func_80000520  # [0x8009A270] = a0 (util::func_80000520)
+func_8000052C  # [0x8009A280] = 0 (util::func_8000052C)
+func_80000538  # v0 = [0x8009A280] (util::func_80000538)
+func_80000544  # empty (util::func_80000544)
+func_8000054C  # empty, spills a0 (util::func_8000054C)
 func_80000554  # zero n words (util::func_80000554)
+func_80005AFC  # decrement [0x8009A29C] if > 0 (misc::func_80005AFC)
+func_80005B1C  # set [0x8009A290]/[0x8009A28C] by a0 = 3/5 (misc::func_80005B1C)
+func_80005B44  # get [0x8009A290]/[0x8009A28C] by a0 = 3/5, else -1 (misc::func_80005B44)
+func_80005B80  # zero [0x8009A2A0] and 0x800AF4C0..0x800AF970 (misc::func_80005B80)
+func_800066DC  # empty, spills a0 (misc::func_800066DC)
+func_800066E4  # empty, spills a0 (misc::func_800066E4)
+func_800066EC  # empty, spills a0 (misc::func_800066EC)
+func_800066F4  # empty, spills a0 (misc::func_800066F4)
+func_800066FC  # empty, spills a0 (misc::func_800066FC)
 func_80011940  # Comp/Wolf LZSS decompressor (asset::func_80011940)
 func_8002FAC4  # heap_set_cursor (heap::func_8002FAC4)
 func_8002FAFC  # heap_cursor (heap::func_8002FAFC)

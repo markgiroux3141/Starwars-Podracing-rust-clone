@@ -19,6 +19,7 @@ pub mod asset;
 pub mod heap;
 pub mod imports;
 pub mod loader;
+pub mod misc;
 pub mod recomp;
 pub mod util;
 
@@ -33,7 +34,21 @@ pub struct Ported {
 
 /// Every ported function (status `rust_verified` in `symbols/functions.csv`).
 pub const PORTED: &[Ported] = &[
+    Ported { vram: 0x8000_0520, name: "func_80000520", func: util::func_80000520 },
+    Ported { vram: 0x8000_052C, name: "func_8000052C", func: util::func_8000052C },
+    Ported { vram: 0x8000_0538, name: "func_80000538", func: util::func_80000538 },
+    Ported { vram: 0x8000_0544, name: "func_80000544", func: util::func_80000544 },
+    Ported { vram: 0x8000_054C, name: "func_8000054C", func: util::func_8000054C },
     Ported { vram: 0x8000_0554, name: "func_80000554", func: util::func_80000554 },
+    Ported { vram: 0x8000_5AFC, name: "func_80005AFC", func: misc::func_80005AFC },
+    Ported { vram: 0x8000_5B1C, name: "func_80005B1C", func: misc::func_80005B1C },
+    Ported { vram: 0x8000_5B44, name: "func_80005B44", func: misc::func_80005B44 },
+    Ported { vram: 0x8000_5B80, name: "func_80005B80", func: misc::func_80005B80 },
+    Ported { vram: 0x8000_66DC, name: "func_800066DC", func: misc::func_800066DC },
+    Ported { vram: 0x8000_66E4, name: "func_800066E4", func: misc::func_800066E4 },
+    Ported { vram: 0x8000_66EC, name: "func_800066EC", func: misc::func_800066EC },
+    Ported { vram: 0x8000_66F4, name: "func_800066F4", func: misc::func_800066F4 },
+    Ported { vram: 0x8000_66FC, name: "func_800066FC", func: misc::func_800066FC },
     Ported { vram: 0x8001_1940, name: "func_80011940", func: asset::func_80011940 },
     Ported { vram: 0x8002_FAC4, name: "func_8002FAC4", func: heap::func_8002FAC4 },
     Ported { vram: 0x8002_FAFC, name: "func_8002FAFC", func: heap::func_8002FAFC },
