@@ -71,6 +71,10 @@ Running log of discoveries and decisions. Newest session at the bottom.
 A bump allocator with a stack of levels.
 - `heap_init` (`func_80030FF8`, called once from `func_80031324`): start `[0x800D9DB8] = 0x8014D7E0` (a constant). End `[0x800D9DBC] = [0x80114538] − 2·(reserve & ~0x3F)`, where reserve = 0 if `osMemSize` < 8 MB and 4 × 640 = 0xA00 otherwise, so the end is `[0x80114538] − 0x1400` with the Expansion Pak. `cursors[0] = start` and slots 1..9 = 0. **Nothing found writes `0x80114538`** through lui/addiu (probably a struct base), so its value is unknown.
 - **Cursors:** 10 words at `0x800D9DD8`, one per level, zero after the last in use; they end exactly where the texture cache (`0x800D9E00`) begins. The level is at `0x800A2868`. `heap_set_level` (`func_8002FA00`) sets the level to `a0`, copies `cursors[a0−1]` into `cursors[a0]` and zeroes the slots above.
+- **heap_set_level in full** (session 5, from the disassembly; not ported): if `level < a0` is false and `[0x800A68A0] == 0` it first calls `func_8002E034` and sets `[0x800A68A0] = 1` (so only the first call does). Then `level = a0`, `cursors[a0] = cursors[a0−1]`, `texture_cache_trim(cursors[a0−1])` (`func_80030574`: zeroes every cache word above that cursor, so textures in the freed area are forgotten), `func_80007E80(1)`, zeroes the slots above `a0` (while `level < 9`), and clears `0x800A2864`.
+  - `func_80007E80` (only caller: heap_set_level) walks two slot tables, 23 words at `0x8009A32C` and 8 at `0x8009A388`. For each nonzero slot it calls `func_80007A80` and `func_80007A44` and zeroes the slot. If any slot was set it zeroes `[0x800B05B0]` and calls `func_80008F28` until **another thread** raises that word to 5. `func_80007CE4` (a handle lookup) indexes the same tables. Probably stop-all-sounds and wait a few ticks (**guess**).
+  - `func_8002E034`: `func_8002DFB0(0x3F, 0)`; while `[0x800A2690]`: `func_8002E2FC`, `func_8002E124` (osRecvMesg and more); `[0x800A2698] = 0`; `func_8002DFB0(0x40, 0)`; `[0x800A2690] = 1`. Also called by rom_read_dma and `func_80011BDC`. A handshake with another thread; effects unknown.
+  - **Why it isn't ported:** neither callee can be doubled honestly. A double for `func_80007E80` could only cover "all 31 slots empty", where it does nothing (a stand-in, not a contract). `func_8002E034` can be avoided with the precondition `[0x800A68A0] != 0`, but its first-call effects are unknown. `func_80008F28` (under both) is the blocker, as it is under the ROM reads.
 - `heap_cursor` (`func_8002FAFC`) = `cursors[level]`. `heap_set_cursor(p)` (`func_8002FAC4`) stores `p` there, then calls `heap_check` (`func_8002FC80`), a **stripped assert**. It finds the last nonzero slot by walking from slot 1 to the first zero and compares it (`sltu`) with `[0x80114538]`, but both outcomes just return. QUIRK: the walk is unbounded and runs into the texture cache if slots 1..9 are all nonzero. `heap_free` (`func_8002FC58`) = `[0x800D9DBC] − heap_cursor()`, 32-bit, can go negative.
 - **Mask buffer:** `[0x80114528]` is set once, by `func_80030B90` at init: the cursor rounded up to 64, after which the cursor moves up by 640×15×32 (8 MB) or 320×15×32 bytes, +0x40. So it is a 0x4B000-byte buffer (0x25800 with 4 MB) near the heap start. Six other functions read it; the model loader uses it for relocation masks.
 - **The top, `0x80114538`, is the third framebuffer.** `framebuffers_init` (`func_80039A30`) writes three framebuffer addresses at `0x80114530..38`: `fb[k] = (osMemSize | 0x80000000) − (k+1)·(w·240·bpp + x) + x`. With 8 MB: w = 640, 4 bytes/pixel, x = 2·4·640 = 0x1400, giving fb = 0x8076A000, 0x806D2C00, **0x8063B800**. With 4 MB: w = 320, 2 bytes/pixel, x = 0, and the third is 0x8038F800. So the heap end is **0x8063A400** with the Expansion Pak and **0x8038F800** without, and after `func_80030B90` the level-0 cursor is 0x80198820 (8 MB) or 0x80173020 (4 MB). These are derived from code. The one guess is how much other boot code allocates before the first model load (the loader tests start from those cursors).
@@ -84,9 +88,11 @@ A bump allocator with a stack of levels.
   - QUIRK: **the space checks ignore the decompressor's window.** The Comp payload goes at `(end − payload) & ~7`, and the only requirement is that it lies above the output. With less than 0x1000 bytes between them the 4 KB window below the payload overlaps the output, and the model comes out corrupt: 56 of 98 sampled tight layouts did, 3 with a bad tag (which reaches `func_800827C0`). The `& ~7` can push the window 4 bytes into the output even at exactly 0x1000 of slack.
   - It sets `[0x800A2848] = 1` and zeroes stats at entry. At the end, `0x800D9DC0` = cursor before the model, `DC4` = after it, `DC8` = model bytes, `DCC` = texture bytes (`DD0` stays 0). An unknown tag calls `func_800827C0` (not understood) and, if that returns, returns the model base instead of base+4.
 - Checked against an independent statement of the format (`crates/difftest/tests/loader.rs`, `expect`): all 307 models from a fresh 8 MB heap give exactly the predicted relocated words, texture placement, bytes, cursor and stats. So the relocation and texture facts above hold for every model.
+- `texture_block_init` (`func_8003043C`, ported session 5): reads the count into `0x800DB890`, then zeroes **all 1700 cache words whatever the count** (`0x800D9E00` up to the count word itself). The count test is `slti 0x6A5`, signed: 1701 or more hangs, negative counts don't. N64Recomp emits the `b .` as a single `pause_self(rdram)` call; in its C, a `pause_self` that returned would fall through into the clearing loop.
+- `texture_cache_trim` (`func_80030574`, ported session 5): zeroes each cache word `w` with `a0 < sext(w)`, a full 64-bit `sltu`, so a zero-extended `a0` clears every KSEG0 entry. Called only by heap_set_level.
 
 ### Sprites (session 4; `assets::Sprite`, `cargo xtask extract`)
-**From the loader** (`sprite_load(idx)`, `func_8002FF38`, called by `func_80030130`/`func_80030154`), the sprite block is `u32 count` then single offsets:
+**From the loader** (`sprite_load(idx)`, `func_8002FF38`, ported session 5; all 173 sprites checked against `assets::Sprite` in `crates/difftest/tests/sprite.rs`), the sprite block is `u32 count` then single offsets. It is reached through `func_80030154` (a thunk with a frame, ~100 call sites); `func_80030130` (`sprite_load(a1)`) is referenced by nothing in code or data. Beyond the points below: the index is in effect the sign-extended low word (like model_load, `s0` passes through rom_read_small's `sw`/`lw`). **There is no space check at all.** With a palette but a page count ≤ 0, the palette size comes from "page 0's offset" at header + 0x18, a word that was never loaded (QUIRK). A negative count still adds `8 * count` to the cursor, moving it back into the header (QUIRK). The page count is re-read from the header after every page.
 - It reads the 0x14-byte header to the **unaligned heap cursor**, then `count = (s16) +0xC` 8-byte page entries right after it (at `+0x14`; the loader ignores `+0x10`). It stores a pointer to them in `+0x10`.
 - If the palette offset `+8` ≠ 0, the palette (from `+8` up to page 0's offset) goes to the next 16-byte boundary and `+8` becomes its pointer. Then each page's texels (from its offset up to the next page's, the last up to the sprite's end) go 16-byte aligned, and the entry's `+4` becomes the pointer. The cursor ends after the last page; it returns the header.
 - **The `+4 == 2` test:** if the format is CI and `+8` is 0 it returns at once with the cursor set back to the header. So the header isn't reserved, and the next allocation overwrites it (QUIRK). No sprite in the USA ROM takes this path: every CI sprite has a palette.
@@ -98,6 +104,15 @@ A bump allocator with a stack of levels.
 - Page entry: u16 width, u16 height, u32 offset. **Pages tile the image row-major** in rows of page[0]'s height: `rows = ceil(h / page_h)`, `cols = pages / rows`. The last row and column are smaller (e.g. 640×240 CI8 = 10×8 pages of 64×32, the last row 64×16). Every page is exactly `stride(width) × height` bytes, with rows padded to 8 bytes like textures. The data follows the page table with no gap, palette first. Palettes are exactly 32 (CI4) or 512 (CI8) bytes.
 - Oddities: sprite 110 is 1×1 I4 with **no pages** (20 bytes, header only). Sprite 145 declares 193×84 but its pages are 3 columns of 64 = 192 wide (one pixel column uncovered).
 - **Still guessed:** the palette is RGBA5551 and I4/I8 map to grey plus alpha (as for textures; the TLUT/combine state isn't located). The row-major order is confirmed visually (HUD gauges and panels join seamlessly across page seams) and by the short last rows. Sprite 160 (640×240) is a collage of horizontal scenes; how it's drawn (e.g. strip by strip) is unknown. Nothing here has been checked against the drawing code, which isn't located.
+
+### Depth-0 leaves ported in session 5 (`game::util`, `game::misc`)
+Subsystems unknown unless stated; `game::misc` holds them by address until they are. What they show about the data:
+- `0x80000520`/`52C`/`538`: setter of `[0x8009A270]`, clear and getter of `[0x8009A280]`. `0x80005B1C`/`B44`: set/get `[0x8009A290]` (selector 3) and `[0x8009A28C]` (selector 5), others ignored or −1, selector compared as a 64-bit register. `0x80005AFC`: decrement `[0x8009A29C]` if positive.
+- **Object table** at `0x800AF4C0`: 300 words, count in use at `[0x8009A2A0]`, both cleared by `func_80005B80`. `func_80006D5C(id, kind)` finds an object `o` with `[o+0x100]` (flags) bit 31 clear, `flags & 0xF == kind` and `[o+0x124] == id`. `func_80006E50`/`E60` set/clear flag bits. The count isn't bounded by 300 (QUIRK).
+- **Slot tables** `0x8009A32C` (23 words) and `0x8009A388` (8): `func_80007CE4(handle)` looks up `A[byte 2]` for byte 3 ∈ {0, 1}, else `B[byte 3]`, if bit 15 is set, and returns `[0x800AFA54]` otherwise. Unbounded indices (QUIRK). func_80007E80 walks the same tables (Asset heap, above). `func_80007A44` zeroes `+0x18` of eight 0x20-byte records at `0x800D2038` if `[0x8009A2B8]`.
+- `func_80007710` = **audio_dma_new** (med): `*a0 = 0x800AFAC0`, returns the audio DMA callback `0x80007594`, the shape of libultra's `ALDMANew`.
+- Twelve are empty (`jr ra`), most spilling their arguments to the caller's slots, presumably compiled-out debug hooks. They're still ported, since callers reach them.
+- N64Recomp's `sra` shifts the full 64-bit register, then truncates: for a non-canonical input, upper-half bits reach the low word (undefined on hardware). Ports follow the C.
 
 ### Asset compression: "Comp"/"Wolf" LZSS (`func_80011940`)
 Header (12 bytes, read by the loader): `"Comp"`, `"Wolf"` (all 92), `u32` decompressed size (BE). The stream follows at +12; `func_80011940(src = stream, dst)` returns the end of the output in `v0`. It does not know the output size and stops only at the terminator.
@@ -127,6 +142,15 @@ Rules for writing a port with calls:
 - **Reproduced:** exactly `size` bytes, or nothing if `size <= 0`. `s0`–`s3`, `ra` and `sp` come back as sign-extended low words (their `sw`/`lw` pairs). All other caller-saved state (`at v0 v1 a0–a3 t0–t9 hi lo f0–f19`) gets deterministic pseudo-random values, so a port that relies on something surviving a call diverges.
 - **Not reproduced:** stack contents below `sp` (the real chain writes frames there), PI/message-queue state, and the side effects of `func_80008F28` between 0x800-byte chunks.
 - **Refused (the test aborts):** non-canonical arguments; ROM reads past the end; for `rom_read`, anything that isn't a clean PI DMA (RDRAM 8-aligned, ROM 2-aligned, even length); for `rom_read_small`, unaligned words (it does `lw` from the PI bus and `sw` to RDRAM). Every asset-block entry in the USA ROM starts 4-aligned and is a multiple of 4 long, so the loaders never hit these. PI DMA's behaviour for odd or unaligned transfers is not modelled.
+- **Patched ROMs** (session 5): `difftest::rom::Image` is baserom.z64 with byte ranges replaced, without copying the 32 MB image. Both doubles take one; `install_rom_image` installs both.
+
+### Which functions have doubles (decision, session 5)
+`crates/oracle/doubles.txt` lists every function a test may replace, as `contract` or `stand-in`. The oracle's build.rs checks it against funcs.h and functions.txt, `oracle::doubles::install` refuses unlisted names, and `cargo xtask next-function` reads the same file.
+- **contract:** reproduces the function's observable effects as far as NOTES documents them (rom_read, rom_read_small). next-function counts it as a satisfied callee, flags targets "via doubles", and `--toward` stops searching below it.
+- **stand-in:** gets a test past a call with no behavioural claim (model_error). Doesn't count for readiness.
+
+### Runtime hooks (session 5)
+Ports that must do what generated code does with the runtime call the same hook: `game::imports::runtime` declares them (`pause_self` so far), and whoever links `game` defines them. That's the oracle's stub runtime in tests, where every hook traps. Tests of code that reaches a trap run in a child process (`crates/difftest/tests/texture_block_init.rs`, like `crates/oracle/tests/traps.rs`).
 
 ## Upstream projects (checked 2026-09-28)
 
@@ -156,6 +180,7 @@ Findings from sp00nznet/racer we can use as facts (addresses, not code):
 - **clang-cl is not installed** (VS "C++ Clang tools" component). May be needed for N64ModernRuntime/RT64.
 - clippy is not installed for the toolchain (`rustup component add clippy`).
 - Python 3.12; project venv at `.venv/` with rabbitizer 1.16.2, spimdisasm 1.42.4, splat64, and Pillow (session 3; only for looking at extracted PNGs, not used by any committed tool).
+- Claude Code's Bash tool fails to parse a heredoc whose body has an odd number of `'` (a Rust lifetime or label, `'found`), even with `<<'EOF'`. Write the text to a scratch file and `cat` it instead (session 5).
 
 ## Session log
 
@@ -265,3 +290,33 @@ Findings from sp00nznet/racer we can use as facts (addresses, not code):
 **Suggested next step**
 - Teach `cargo xtask next-function` about doubled functions (e.g. a `doubled` column or a list in the oracle), so ports above rom_read become "ready with doubles". Then port `sprite_load` (`func_8002FF38`) against the sprite facts, plus `texture_block_init` (`func_8003043C`, its `b .` hang is a QUIRK that needs a child-process test) and `heap_set_level` (`func_8002FA00`; its callees `func_8002E034`, `func_80030574` and `func_80007E80` need checking first).
 - After that, the depth-0 leaves (510 ready; mostly tiny getters/setters at `0x8000052x` and `0x80005Axx`) are cheap, bulk-verifiable progress.
+
+### 2026-09-28 — Session 5
+
+**Done**
+- **next-function knows about test doubles** (Facts: "Which functions have doubles"). `crates/oracle/doubles.txt` lists them as `contract` or `stand-in`. The oracle build checks the list and `install` refuses unlisted names, so it can't drift from the tests. `next-function` counts contract doubles as satisfied, flags "via doubles", and `--toward` stops below them. The ranking is unchanged.
+- **30 ports, all `rust_verified`, 39/1374 in total:**
+  - `sprite_load` (`func_8002FF38`) plus its thunk `func_80030154` and `func_80030130` (Facts: "Sprites"). All 173 sprites checked against `assets::Sprite` (patched pointers, 16-byte alignment, cursor, nothing written above it), sequential loads, proptest cursors, alignment mod 16, out-of-range and non-canonical indices, sprite 110, no space check, and three in-memory ROM patches for the quirks.
+  - `texture_block_init` (`func_8003043C`) with its hang. `pause_self` is a runtime hook the port calls too (Facts: "Runtime hooks"). The hang is tested in child processes for C and Rust.
+  - `texture_cache_trim` (`func_80030574`), heap_set_level's leaf callee.
+  - 25 depth-0 leaves in three groups (Facts: "Depth-0 leaves"), one difftest file per group (`leaves_80000520.rs`, `leaves_80005AFC.rs`, `leaves_80006D5C.rs`).
+- `difftest::world` (the loaders' boot-derived heap, shared) and `difftest::rom::Image` (patched ROMs without a 32 MB copy). `recomp::lh`/`lbu`.
+- Every port's tests catch 3–5 reachable mutants (21 tried in total). Proptest seed files written by mutant runs were deleted.
+- Tests: 110 (was 67).
+
+**Surprises**
+- **sprite_load has no space check at all**, unlike the texture and model loaders. It also has two more quirks than NOTES had: a palette with no pages takes its size from an unloaded word, and a negative page count moves the cursor back.
+- N64Recomp turns `b .` into one `pause_self()` call, not a loop. Its C would carry on into the following code if that ever returned, so the port mirrors that.
+- texture_block_init clears 1700 cache words whatever the count. The count only decides whether it hangs.
+- `func_80030130` has no references anywhere: not in code, not as a data word.
+- All ports passed their difftests first time. The mutants are what showed the tests have teeth.
+
+**In progress / not done**
+- **heap_set_level not ported** (Facts: "Asset heap"): `func_80007E80` and `func_8002E034` can't be doubled honestly. Both bottom out in `func_80008F28` and other threads. Options for later: a `rust_draft` port tested with stand-ins under the precondition `[0x800A68A0] != 0` and empty slot tables (the user's call), or verify the thread/OS layer first.
+- spline_load (`func_80030174`) is ready via doubles and not ported. About 490 depth-0 leaves remain ready.
+- Still no "swap" build that runs ports as each other's callees.
+
+**Suggested next step**
+- Port `spline_load` (`func_80030174`, ready via rom_read_small) and decode splines in `assets` (0x10-byte header, pointer at +0xC relocated to +0x10).
+- Keep batching depth-0 leaves: `cargo xtask next-function -n 60` lists them; `0x80008530..0x8000AC60` is next, with groups by address and one test file each. `tools/register_ports.py MODULE ADDR:comment ...` adds ports to `PORTED` and `functions.txt` in address order.
+- Decide on heap_set_level: `rust_draft` with stand-ins, or wait for `func_80008F28`.
