@@ -1,0 +1,32 @@
+# N64Recomp configuration for Star Wars Episode I: Racer (N64, USA).
+# Run with `cargo xtask recomp`. Paths are relative to this file.
+# Output goes to generated/ (gitignored: generated C is ROM-derived).
+
+[input]
+entrypoint = 0x80000400
+symbols_file_path = "symbols/racer.syms.toml"
+rom_file_path = "baserom.z64"
+output_func_path = "generated"
+# One function per file, so the oracle can compile single functions.
+functions_per_output_file = 1
+
+[patches]
+# Functions N64Recomp cannot translate: they use cache ops, TLB ops, eret,
+# COP0 registers other than Status, or trunc.l.* (tools/find_functions.py
+# lists them).
+# All sit in the libultra/OS range and must come from the runtime. They are
+# left out of the output, and the oracle aborts if a test reaches one.
+ignored = [
+    "func_80087CC0", # cache
+    "func_80088AD0", # cache
+    "func_8008C550", # mfc0 Count
+    "func_8008C560", # trunc.l.d (double -> long long)
+    "func_8008C57C", # trunc.l.s (float -> long long)
+    "func_8008CB10", # exception handler (mfc0 Cause/EPC/..., jumps back into itself)
+    "func_8008D284", # mtc0 EPC, eret
+    "func_8008D450", # TLB probe/write
+    "func_80093900", # cache
+    "func_80093CD0", # cache
+    "func_80093D50", # TLB setup
+    "func_80097980", # mtc0 Compare
+]
