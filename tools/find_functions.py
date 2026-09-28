@@ -29,6 +29,9 @@ covers the second as well (N64Recomp emits a C function per symbol, so a
 function that falls off its end must contain its continuation). These overlaps
 are reported.
 
+The call graph (every call site, including indirect ones) goes to
+callgraph.csv next to the CSV; `cargo xtask next-function` reads both.
+
 Usage: .venv/Scripts/python tools/find_functions.py [--rom baserom.z64]
        [--out symbols/racer.syms.toml] [--csv symbols/functions.csv]
 """
@@ -628,41 +631,99 @@ def write_csv(path: Path, a: Analyzer):
 LIBULTRA_GUESS = 0x8008C000
 
 
-def compute_depths(a: Analyzer) -> dict[int, int | None]:
-    """Direct-call depth from leaves (calls + tail calls). Functions with
-    indirect calls or on a cycle get None."""
-    memo: dict[int, int | None] = {}
-    onstack: set[int] = set()
+def direct_callees(f: Func) -> set[int]:
+    """Calls, tail calls and fallthroughs: every function f's C calls by name."""
+    return (f.calls | f.tail_calls | f.fallthrough_into) - {f.start}
 
-    def d(s: int) -> int | None:
-        if s in memo:
-            return memo[s]
-        if s in onstack:
-            return None
-        f = a.funcs.get(s)
-        if f is None:
-            return None
-        onstack.add(s)
-        callees = (f.calls | f.tail_calls | f.fallthrough_into) - {s}
-        has_indirect = bool(f.indirect_jumps) or any(
-            a.img.ins(v).uniqueId == InstrId.cpu_jalr for v in f.visited)
-        res: int | None = 0
-        if has_indirect:
-            res = None
-        for c in callees:
-            cd = d(c)
-            if cd is None or res is None:
-                res = None
-            else:
-                res = max(res, cd + 1)
-        onstack.discard(s)
-        memo[s] = res
-        return res
 
-    sys.setrecursionlimit(10000)
-    for s in a.funcs:
-        d(s)
-    return memo
+def indirect_sites(a: Analyzer, f: Func) -> list[tuple[int, str]]:
+    """`jalr` calls and non-jump-table `jr` (indirect tail calls): targets unknown."""
+    sites = [(v, "jalr") for v in sorted(f.visited) if a.img.ins(v).uniqueId == InstrId.cpu_jalr]
+    return sites + [(v, "jr") for v in f.indirect_jumps]
+
+
+def compute_depths(a: Analyzer) -> dict[int, int]:
+    """Depth from leaves over direct edges (calls, tail calls, fallthroughs).
+
+    Mutually recursive functions (a strongly connected component) share one
+    depth: 0 if the component calls nothing outside itself, else one more than
+    the deepest component it calls. Indirect calls (`jalr`, indirect `jr`)
+    have unknown targets and don't count; callgraph.csv lists them so
+    `cargo xtask next-function` can hold such functions back."""
+    # Tarjan's SCC, iteratively (the call graph is deep enough to hit Python's
+    # recursion limit).
+    index: dict[int, int] = {}
+    low: dict[int, int] = {}
+    comp: dict[int, int] = {}
+    stack: list[int] = []
+    on: set[int] = set()
+    sccs: list[list[int]] = []
+    edges = {s: sorted(c for c in direct_callees(f) if c in a.funcs) for s, f in a.funcs.items()}
+    for root in sorted(a.funcs):
+        if root in index:
+            continue
+        work = [(root, 0)]
+        while work:
+            v, k = work.pop()
+            if k == 0:
+                index[v] = low[v] = len(index)
+                stack.append(v)
+                on.add(v)
+            if k < len(edges[v]):
+                work.append((v, k + 1))
+                w = edges[v][k]
+                if w not in index:
+                    work.append((w, 0))
+                elif w in on:
+                    low[v] = min(low[v], index[w])
+                continue
+            if low[v] == index[v]:
+                scc = []
+                while True:
+                    w = stack.pop()
+                    on.discard(w)
+                    comp[w] = len(sccs)
+                    scc.append(w)
+                    if w == v:
+                        break
+                sccs.append(scc)
+            if work:
+                parent = work[-1][0]
+                low[parent] = min(low[parent], low[v])
+    # Tarjan emits components callees-first, so one pass in order suffices.
+    cdepth: list[int] = []
+    for n, scc in enumerate(sccs):
+        out = {comp[c] for s in scc for c in edges[s]} - {n}
+        cdepth.append(1 + max(cdepth[c] for c in out) if out else 0)
+    return {s: cdepth[comp[s]] for s in a.funcs}
+
+
+def write_callgraph(path: Path, a: Analyzer):
+    """One row per call site: caller, site, callee (empty if indirect), kind.
+    Kinds: call (jal/bal), tail (j/branch to another start), fallthrough,
+    jalr and jr (indirect call / indirect tail call, target unknown)."""
+    rows = []
+    for f in sorted(a.funcs.values(), key=lambda f: f.start):
+        for v in sorted(f.visited):
+            i = a.img.ins(v)
+            if i.uniqueId == InstrId.cpu_jal:
+                rows.append((f.start, v, i.getInstrIndexAsVram(), "call"))
+            elif i.isBranch() and i.doesLink():
+                rows.append((f.start, v, i.getBranchVramGeneric(), "call"))
+            elif i.uniqueId == InstrId.cpu_j or (i.isBranch() and not i.doesLink()):
+                t = i.getInstrIndexAsVram() if i.uniqueId == InstrId.cpu_j else i.getBranchVramGeneric()
+                if t in f.tail_calls:
+                    rows.append((f.start, v, t, "tail"))
+        for t in sorted(f.fallthrough_into):
+            rows.append((f.start, t, t, "fallthrough"))
+        for v, kind in indirect_sites(a, f):
+            rows.append((f.start, v, None, kind))
+    rows.sort(key=lambda r: (r[0], r[1], r[3]))
+    with path.open("w", newline="", encoding="utf-8") as fh:
+        wr = csv.writer(fh, lineterminator="\n")
+        wr.writerow(["caller", "site", "callee", "kind"])
+        for caller, site, callee, kind in rows:
+            wr.writerow([f"0x{caller:08X}", f"0x{site:08X}", "" if callee is None else f"0x{callee:08X}", kind])
 
 
 def main():
@@ -770,6 +831,9 @@ def main():
     if args.csv:
         write_csv(args.csv, a)
         print(f"wrote {args.csv}")
+        cg = args.csv.with_name("callgraph.csv")
+        write_callgraph(cg, a)
+        print(f"wrote {cg}")
     return 1 if errs else 0
 
 

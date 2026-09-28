@@ -1,5 +1,7 @@
 //! Project automation: `cargo xtask <command>`.
 
+mod next_function;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use std::{env, fs};
@@ -15,7 +17,11 @@ commands:
                       with tools/find_functions.py (needs the .venv).
   recomp              Run N64Recomp with recomp.toml into generated/ (replacing
                       it). N64Recomp.exe defaults to third_party/N64Recomp/build;
-                      override with RACER_N64RECOMP_EXE.";
+                      override with RACER_N64RECOMP_EXE.
+  next-function [-n N] [--subsystem S] [--toward func_XXXXXXXX]
+                      Propose port targets: status recomp, no indirect calls,
+                      every callee verified. Lowest depth first, preferring S.
+                      --toward limits it to what the given function reaches.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -23,6 +29,7 @@ fn main() -> ExitCode {
         Some("verify-rom") => verify_rom(args.get(1).map(PathBuf::from)),
         Some("find-functions") => find_functions(),
         Some("recomp") => recomp(),
+        Some("next-function") => next_function::run(&repo_root(), &args[1..]),
         _ => {
             eprintln!("{USAGE}");
             return ExitCode::from(2);
