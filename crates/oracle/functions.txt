@@ -1,0 +1,5 @@
+# Recompiled functions compiled into the oracle, one name per line.
+# Each must exist as generated/<name>.c (run `cargo xtask recomp`).
+# Calls from these to functions not listed here are linked to stubs that trap.
+
+func_80000554  # zero n words (util::func_80000554)

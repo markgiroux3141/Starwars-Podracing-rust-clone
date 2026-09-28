@@ -1,0 +1,10 @@
+[package]
+name = "game"
+version = "0.1.0"
+description = "The Rust reimplementation of the game, function by function, with N64Recomp-compatible entry points"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+n64mem.workspace = true

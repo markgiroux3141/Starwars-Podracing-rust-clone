@@ -24,6 +24,7 @@ pub const RDRAM_SIZE: usize = 8 * 1024 * 1024;
 pub const KSEG0: u32 = 0x8000_0000;
 
 /// Owned RDRAM buffer, 4-byte aligned so word accesses are aligned on the host.
+#[derive(Clone, PartialEq, Eq)]
 pub struct Rdram {
     words: Box<[u32]>,
 }
@@ -31,6 +32,18 @@ pub struct Rdram {
 impl Rdram {
     pub fn new() -> Self {
         Self { words: vec![0u32; RDRAM_SIZE / 4].into_boxed_slice() }
+    }
+
+    /// The whole buffer as N64 words: element `i` is the 32-bit word at
+    /// `KSEG0 + 4 * i`, exactly as `read_u32` would return it. For bulk work
+    /// in test harnesses (filling, comparing); ported code uses [`Mem`].
+    pub fn as_words(&self) -> &[u32] {
+        &self.words
+    }
+
+    /// Mutable form of [`Self::as_words`].
+    pub fn as_words_mut(&mut self) -> &mut [u32] {
+        &mut self.words
     }
 
     /// The pointer recompiled functions take as their `rdram` argument.
