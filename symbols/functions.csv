@@ -479,8 +479,8 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80030574,texture_cache_trim,ours,0,asset,rust_verified,unit_diff,high,"zero every texture cache word w with a0 < sext(w) (sltu, 64-bit); called by heap_set_level with the new level cursor"
 0x800305E8,model_load,ours,19,asset,rust_verified,unit_diff,high,"mask, Comp to heap top, relocation, tag; QUIRK: Comp header read before space check; window can overlap output (corrupt model)"
 0x80030964,func_80030964,ours,1,,recomp,,,
-0x80030A7C,func_80030A7C,ours,0,,recomp,,,
-0x80030B68,func_80030B68,ours,0,,recomp,,,
+0x80030A7C,func_80030A7C,ours,0,,rust_verified,unit_diff,high,"merge q into model-style header p: node list, skip Data/Anim, AltN pointers (game::misc)"
+0x80030B68,model_load_stats,ours,0,,rust_verified,unit_diff,high,"*a/*c/*b = model bytes, texture bytes, 0 (game::misc)"
 0x80030B90,mask_buffer_init,ours,2,asset,recomp,,med,[0x80114528] = align64(cursor); cursor += 0x4B000/0x25800 + 0x40
 0x80030C08,func_80030C08,ours,2,,recomp,,,
 0x80030C98,func_80030C98,ours,20,,recomp,,,
@@ -489,13 +489,13 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80030FF8,heap_init,ours,22,asset,recomp,,med,"start 0x8014D7E0; end = [0x80114538] - reserve (0 if 4 MB, 0x1400 at 640 wide); clears cursors"
 0x80031134,func_80031134,ours,2,,recomp,,,
 0x80031324,func_80031324,ours,23,,recomp,,,
-0x800313D8,func_800313D8,ours,0,,recomp,,,
+0x800313D8,memset,ours,0,,rust_verified,unit_diff,high,"byte fill, returns p (game::misc)"
 0x8003140C,func_8003140C,ours,15,,recomp,,,
-0x800314C0,func_800314C0,ours,0,,recomp,,,
-0x800314DC,func_800314DC,ours,0,,recomp,,,
-0x80031560,func_80031560,ours,0,,recomp,,,
-0x800315D8,func_800315D8,ours,0,,recomp,,,
-0x80031640,func_80031640,ours,0,,recomp,,,
+0x800314C0,func_800314C0,ours,0,,rust_verified,unit_diff,high,channel [0x800DB8A0 + 28i] (game::misc)
+0x800314DC,func_800314DC,ours,0,,rust_verified,unit_diff,high,"set channel value (+4, +0x16), +8 from a2/a3, +6 reset (game::misc)"
+0x80031560,func_80031560,ours,0,,rust_verified,unit_diff,high,"channel start ([+0xC]=1, [+6]=0x8000); -1 = all four (self-call) (game::misc)"
+0x800315D8,func_800315D8,ours,0,,rust_verified,unit_diff,high,channel [+0xC]=0; -1 = all four (self-call) (game::misc)
+0x80031640,func_80031640,ours,0,,rust_verified,unit_diff,high,channel [+8]=0; -1 = all four (self-call) (game::misc)
 0x800316A8,func_800316A8,ours,11,,recomp,,,
 0x80031924,func_80031924,ours,2,,recomp,,,
 0x80031944,func_80031944,ours,3,,recomp,,,
@@ -504,10 +504,10 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80031AB0,func_80031AB0,ours,1,,recomp,,,
 0x80031B70,func_80031B70,ours,2,,recomp,,,
 0x80031BBC,func_80031BBC,ours,1,,recomp,,,
-0x80031BEC,func_80031BEC,ours,0,,recomp,,,
+0x80031BEC,func_80031BEC,ours,0,,rust_verified,unit_diff,high,[0x800DB910 + 4i] = 1 (game::misc)
 0x80031C04,func_80031C04,ours,20,,recomp,,,
-0x80031F80,func_80031F80,ours,0,,recomp,,,
-0x80031F94,func_80031F94,ours,0,,recomp,,,
+0x80031F80,func_80031F80,ours,0,,rust_verified,unit_diff,high,animation dest = [p+8] (game::misc)
+0x80031F94,func_80031F94,ours,0,,rust_verified,unit_diff,high,animation dest = 0 (game::misc)
 0x80031FA4,func_80031FA4,ours,0,,rust_verified,unit_diff,high,"cycle animation step of [0x800A2DD4] (timer, phases, dest[map[i]] = src[phase]); do_break unreachable (game::misc)"
 0x800320E0,func_800320E0,ours,0,,recomp,,,
 0x800321F0,func_800321F0,ours,0,,recomp,,,

@@ -19,6 +19,9 @@ recomp_imports! {
     func_8002FF38, // sprite_load
     func_80030328, // texture_read
     func_800304AC, // texture_get
+    func_80031560, // channel start (self-call for all four)
+    func_800315D8, // channel +0xC = 0 (self-call)
+    func_80031640, // channel +8 = 0 (self-call)
     func_800827C0, // model_load's error path (not yet understood)
 }
 

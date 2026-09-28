@@ -5,7 +5,8 @@
 #![allow(non_snake_case)]
 
 use crate::imports;
-use crate::recomp::{addu, div, enter, fpu, lb, lbu, ld, lh, li, lw, multu, reg::*, s32, sb, sh, sll, sllv, slt, sltu, sra, subu, sw, RecompContext};
+use n64mem::Mem;
+use crate::recomp::{addu, call, div, enter, fpu, lb, lbu, ld, lh, lhu, li, lw, multu, reg::*, s32, sb, sh, sll, sllv, slt, sltu, sra, subu, sw, RecompContext};
 
 /// `func_80005AFC`: decrement `[0x8009A29C]` if it is positive (signed).
 ///
@@ -3001,6 +3002,363 @@ pub unsafe extern "C" fn func_8002FE94(rdram: *mut u8, ctx: *mut RecompContext) 
         g[V1] = 0x10;
     }
     g[V0] = g[V1];
+}
+
+/// `func_80030A7C(p, q)`: merge the word list `q` into the model-style
+/// header `p` (tags as in model headers; **guess** at the purpose).
+/// 1. Node list: for each word of `p` before its -1 terminator, a nonzero
+///    word at the same index of `q` replaces it (nothing if `p` starts
+///    with -1).
+/// 2. After the terminator, `p` may have `"Data"` (tag, count `n`, `n`
+///    words) and then `"Anim"` (tag, words up to a 0); both are skipped.
+/// 3. If `p` then has `"AltN"`, and `q` has `"AltN"` right after its own
+///    node list (`q` is not skipped past any Data or Anim), each nonzero
+///    pointer in `p`'s AltN list gets `q`'s word at the same index stored
+///    through it, until `p`'s 0.
+///
+/// Domain: the lists terminated, and the pointers in RDRAM and aligned.
+/// Leaves `a2 = -1`, `a1 = "AltN"`, `v0`/`v1` at the last words read of
+/// `p`/`q`, `a0` the last `p` word, `at` the last tag compared, and the
+/// loads in `t0`, `t1`, `t6`..`t9`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80030A7C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    // 1. Node lists.
+    g[T6] = lw(m, g[A0], 0);
+    g[A2] = u64::MAX;
+    g[V0] = g[A0];
+    g[V1] = g[A1];
+    if g[A2] != g[T6] {
+        g[A0] = lw(m, g[V1], 0);
+        loop {
+            if g[A0] != 0 {
+                sw(m, g[V0], 0, g[A0]);
+            }
+            g[T7] = lw(m, g[V0], 4);
+            g[V0] = addu(g[V0], 4);
+            g[V1] = addu(g[V1], 4);
+            if g[A2] == g[T7] {
+                break;
+            }
+            g[A0] = lw(m, g[V1], 0);
+        }
+    }
+    // 2. Skip "Data" and "Anim".
+    g[T8] = lw(m, g[V0], 4);
+    g[AT] = li(0x4461_7461); // "Data"
+    g[V0] = addu(g[V0], 4);
+    g[V1] = addu(g[V1], 4);
+    if g[T8] == g[AT] {
+        g[A0] = lw(m, g[V0], 4);
+        g[V0] = addu(g[V0], 8);
+        if (g[A0] as i64) <= 0 {
+            g[A0] = addu(g[A0], u64::MAX);
+        } else {
+            loop {
+                g[A0] = addu(g[A0], u64::MAX);
+                g[V0] = addu(g[V0], 4);
+                if (g[A0] as i64) <= 0 {
+                    break;
+                }
+            }
+        }
+    }
+    g[A0] = lw(m, g[V0], 0);
+    g[AT] = li(0x416E_696D); // "Anim"
+    g[A1] = li(0x416C_0000);
+    if g[A0] == g[AT] {
+        // The C also tests the tag against 0 here, which can't succeed.
+        g[T9] = lw(m, g[V0], 4);
+        loop {
+            g[V0] = addu(g[V0], 4);
+            if g[T9] == 0 {
+                break;
+            }
+            g[T9] = lw(m, g[V0], 4);
+        }
+        g[V0] = addu(g[V0], 4);
+        g[A0] = lw(m, g[V0], 0);
+    }
+    // 3. "AltN" in both.
+    g[A1] |= 0x744E; // "AltN"
+    if g[A1] != g[A0] {
+        return;
+    }
+    g[T0] = lw(m, g[V1], 0);
+    if g[A1] != g[T0] {
+        return;
+    }
+    g[A0] = lw(m, g[V0], 4);
+    g[V0] = addu(g[V0], 4);
+    g[V1] = addu(g[V1], 4);
+    if g[A0] == 0 {
+        return;
+    }
+    g[T1] = lw(m, g[V1], 0);
+    loop {
+        g[V0] = addu(g[V0], 4);
+        g[V1] = addu(g[V1], 4);
+        sw(m, g[A0], 0, g[T1]);
+        g[A0] = lw(m, g[V0], 0);
+        if g[A0] == 0 {
+            break;
+        }
+        g[T1] = lw(m, g[V1], 0);
+    }
+}
+
+/// `func_80030B68(&a, &b, &c)`: model_load's statistics (NOTES.md, "Texture
+/// and model loaders"): `*a = [0x800D9DC8]` (model bytes), `*c =
+/// [0x800D9DCC]` (texture bytes), `*b = [0x800D9DD0]` (always 0). Leaves
+/// `t6`/`t7`/`t8` = the three words.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80030B68(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T6] = lw(m, li(0x800E_0000), -0x6238);
+    sw(m, g[A0], 0, g[T6]);
+    g[T7] = lw(m, li(0x800E_0000), -0x6234);
+    sw(m, g[A2], 0, g[T7]);
+    g[T8] = lw(m, li(0x800E_0000), -0x6230);
+    sw(m, g[A1], 0, g[T8]);
+}
+
+/// `func_800313D8(p, b, n)`: `memset`: store the byte `b` at `p..p + n`,
+/// return `p`. `n == 0` (all 64 bits) stores nothing; otherwise the count
+/// runs on its low word.
+///
+/// Domain: `n` canonical and the bytes in RDRAM (a negative `n` would run
+/// for 2^32 bytes). Leaves `v1 = 0`, `a2 = -1` (or `n - 1` if `n == 0`).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800313D8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V1] = sltu(g[A2], 1) ^ 1;
+    g[V0] = g[A0];
+    g[A2] = addu(g[A2], u64::MAX);
+    while g[V1] != 0 {
+        g[V1] = sltu(g[A2], 1) ^ 1;
+        sb(m, g[V0], 0, g[A1]);
+        g[A2] = addu(g[A2], u64::MAX);
+        g[V0] = addu(g[V0], 1);
+    }
+    g[V0] = g[A0];
+}
+
+/// The four 28-byte records at `0x800DB8A0` that [`func_800314C0`] ..
+/// [`func_80031640`] use, by index (sound channels? **guess**).
+pub const CHANNELS: u32 = 0x800D_B8A0;
+
+/// `rec = CHANNELS + 28 * i` as the code computes it: `t = ((i << 3) - i)
+/// << 2`, 32-bit.
+fn channel_offset(g: &mut [u64; 32], i: usize, t: usize) {
+    g[t] = sll(g[i], 3);
+    g[t] = subu(g[t], g[i]);
+    g[t] = sll(g[t], 2);
+}
+
+/// `func_800314C0(i)`: the word `[CHANNELS + 28 * i]`. Unbounded. Leaves
+/// `t6 = 28 * i`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800314C0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    channel_offset(g, A0, T6);
+    g[V0] = lw(&mem, addu(li(0x800E_0000), g[T6]), -0x4760);
+}
+
+/// `func_800314DC(i, value, a2, a3)`: set channel `i`'s halfwords `+4` and
+/// `+0x16` to `(u16) value`, and `+8` to -1 if `a2 == 0`, else 1 if `a3
+/// == 0`, else 2 (full 64-bit tests). `+6` becomes 0x8000 unless it was
+/// nonzero, `+4` already equalled the value and `a2 != 0`. Spills `value`
+/// to its slot `[sp + 4]`.
+///
+/// Leaves `a1 = v1 = (u16) value = t6`, `v0` = the record, `t7 = 28 * i`,
+/// `t8 = CHANNELS`, `t9` = the old `+6`, `t0` = the old `+4` if `+6` was
+/// nonzero, `t1 = 0x8000`, and `t4 = -1`, or `t3 = 1` (and `t2 = 2`) as
+/// `+8` chose.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800314DC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    channel_offset(g, A0, T7);
+    g[T8] = li(0x800D_B8A0);
+    g[V0] = addu(g[T7], g[T8]);
+    g[T9] = lhu(m, g[V0], 6);
+    sw(m, g[SP], 4, g[A1]);
+    g[T6] = g[A1] & 0xFFFF;
+    g[A1] = g[T6];
+    let mut keep = false;
+    if g[T9] != 0 {
+        g[T0] = lhu(m, g[V0], 4);
+        g[V1] = g[T6];
+        keep = g[T6] == g[T0] && g[A2] != 0;
+    }
+    g[T1] = 0x8000;
+    if !keep {
+        sh(m, g[V0], 6, g[T1]);
+    }
+    g[V1] = g[A1];
+    sh(m, g[V0], 4, g[A1]);
+    sh(m, g[V0], 0x16, g[V1]);
+    if g[A2] == 0 {
+        g[T4] = u64::MAX;
+        sh(m, g[V0], 8, g[T4]);
+    } else if g[A3] == 0 {
+        g[T3] = 1;
+        sh(m, g[V0], 8, g[T3]);
+    } else {
+        g[T3] = 1;
+        g[T2] = 2;
+        sh(m, g[V0], 8, g[T2]);
+    }
+}
+
+/// The frame shared by [`func_80031560`], [`func_800315D8`] and
+/// [`func_80031640`]: `i == -1` (full 64-bit compare) calls the function
+/// itself for channels 0..3 (through its C symbol), otherwise `one(i)`
+/// updates channel `i`. `ra`, `s0` and `s1` are saved in a 0x20-byte frame
+/// and come back as their low words, sign-extended, so the loop leaves only
+/// `a0 = 3`, `at = -1` and the last call's leftovers.
+unsafe fn each_channel(
+    rdram: *mut u8,
+    ctx: *mut RecompContext,
+    this: crate::recomp::RecompFn,
+    one: fn(&mut Mem, &mut [u64; 32]),
+) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x20i64) as u64);
+    g[AT] = u64::MAX;
+    sw(m, g[SP], 0x1C, g[RA]);
+    sw(m, g[SP], 0x18, g[S1]);
+    sw(m, g[SP], 0x14, g[S0]);
+    if g[A0] == g[AT] {
+        g[S0] = 0;
+        g[S1] = 4;
+        loop {
+            ctx.gpr[A0] = ctx.gpr[S0];
+            call(this, m, ctx);
+            let g = &mut ctx.gpr;
+            g[S0] = addu(g[S0], 1);
+            if g[S0] == g[S1] {
+                break;
+            }
+        }
+    } else {
+        one(m, g);
+    }
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x1C);
+    g[S0] = lw(m, g[SP], 0x14);
+    g[S1] = lw(m, g[SP], 0x18);
+    g[SP] = addu(g[SP], 0x20);
+}
+
+/// `func_80031560(i)`: start channel `i` (**guess**): `[rec + 0xC] = 1`
+/// and the halfword `[rec + 6] = 0x8000`; `i == -1` does channels 0..3
+/// ([`each_channel`]). Leaves `t6 = 28 * i`, `t7 = CHANNELS`, `v0` = the
+/// record, `t8 = 1`, `t9 = 0x8000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80031560(rdram: *mut u8, ctx: *mut RecompContext) {
+    each_channel(rdram, ctx, imports::func_80031560, |m, g| {
+        channel_offset(g, A0, T6);
+        g[T7] = li(0x800D_B8A0);
+        g[V0] = addu(g[T6], g[T7]);
+        g[T8] = 1;
+        g[T9] = 0x8000;
+        sw(m, g[V0], 0xC, g[T8]);
+        sh(m, g[V0], 6, g[T9]);
+    });
+}
+
+/// `func_800315D8(i)`: `[rec + 0xC] = 0` for channel `i`, or channels
+/// 0..3 if `i == -1` ([`each_channel`]). Leaves `t6 = 28 * i`, `at =
+/// 0x800E0000 + 28 * i`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800315D8(rdram: *mut u8, ctx: *mut RecompContext) {
+    each_channel(rdram, ctx, imports::func_800315D8, |m, g| {
+        channel_offset(g, A0, T6);
+        g[AT] = addu(li(0x800E_0000), g[T6]);
+        sw(m, g[AT], -0x4754, 0);
+    });
+}
+
+/// `func_80031640(i)`: the halfword `[rec + 8] = 0` for channel `i`, or
+/// channels 0..3 if `i == -1` ([`each_channel`]). Leaves `t6 = 28 * i`,
+/// `at = 0x800E0000 + 28 * i`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80031640(rdram: *mut u8, ctx: *mut RecompContext) {
+    each_channel(rdram, ctx, imports::func_80031640, |m, g| {
+        channel_offset(g, A0, T6);
+        g[AT] = addu(li(0x800E_0000), g[T6]);
+        sh(m, g[AT], -0x4758, 0);
+    });
+}
+
+/// `func_80031BEC(i)`: `[0x800DB910 + 4 * i] = 1`, a word per channel
+/// right after [`CHANNELS`] (unbounded). Leaves `t7 = 4 * i`, `at =
+/// 0x800E0000 + 4 * i`, `t6 = 1`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80031BEC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[T7] = sll(g[A0], 2);
+    g[AT] = addu(li(0x800E_0000), g[T7]);
+    g[T6] = 1;
+    sw(&mut mem, g[AT], -0x46F0, g[T6]);
+}
+
+/// `func_80031F80(p)`: the destination of [`func_80031FA4`]'s animation,
+/// `[[0x800A2DD4] + 4] = [p + 8]`. Leaves `t7` = the object, `t6` = the
+/// word.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80031F80(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T7] = lw(m, li(0x800A_0000), 0x2DD4);
+    g[T6] = lw(m, g[A0], 8);
+    sw(m, g[T7], 4, g[T6]);
+}
+
+/// `func_80031F94()`: clear the destination of [`func_80031FA4`]'s
+/// animation, `[[0x800A2DD4] + 4] = 0`, which stops its copying. Leaves
+/// `t6` = the object.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80031F94(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[T6] = lw(&mem, li(0x800A_0000), 0x2DD4);
+    sw(&mut mem, g[T6], 4, 0);
 }
 
 /// `func_80031FA4()`: step the cycling animation of the object `o =
