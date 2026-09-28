@@ -114,3 +114,37 @@ fn sprites_decode() {
     f.sort();
     assert_eq!(f, [(0x003, 18), (0x200, 40), (0x201, 48), (0x400, 66), (0x401, 1)]);
 }
+
+/// Every spline parses, and the links and ids agree with each other
+/// (NOTES.md, "Splines"): successor and predecessor lists are each other's
+/// inverse, the segment count is the point count plus one per extra
+/// successor, and each point lists that many extra segment ids, all past
+/// the points.
+#[test]
+fn splines_link_up() {
+    let Some(rom) = rom() else { return };
+    let b = Blocks::read(&rom).unwrap();
+    let (mut points, mut open, mut forks) = (0, 0, 0);
+    for i in 0..b.splines.count {
+        let s = b.spline(i).unwrap();
+        let n = s.points.len();
+        points += n;
+        let extra: usize = s.points.iter().map(|p| p.next.len().saturating_sub(1)).sum();
+        assert_eq!(s.segments as usize, n + extra, "spline {i}");
+        for (k, p) in s.points.iter().enumerate() {
+            for &j in &p.next {
+                assert!(s.points[j as usize].prev.contains(&(k as u16)), "spline {i}: {k} -> {j} not mirrored");
+            }
+            for &j in &p.prev {
+                assert!(s.points[j as usize].next.contains(&(k as u16)), "spline {i}: {j} -> {k} not mirrored");
+            }
+            let ids: Vec<i16> = p.ids[2..9].iter().copied().filter(|&x| x != -1).collect();
+            assert_eq!(ids.len(), p.next.len().saturating_sub(1), "spline {i} point {k}");
+            assert!(ids.iter().all(|&x| (n as i16..s.segments as i16).contains(&x)), "spline {i} point {k}");
+            forks += usize::from(p.next.len() > 1);
+        }
+        open += usize::from(s.points.iter().any(|p| p.prev.is_empty()));
+    }
+    assert_eq!((b.splines.count, points, open), (91, 5076, 41));
+    assert_eq!(forks, 136 + 3);
+}

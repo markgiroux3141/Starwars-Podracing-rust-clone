@@ -7,7 +7,7 @@
 #![allow(non_snake_case)]
 
 use crate::imports;
-use crate::recomp::{addu, call, enter, lbu, lh, li, lw, reg::*, s32, sll, subu, sw, RecompContext};
+use crate::recomp::{addu, call, enter, lbu, lh, li, lw, reg::*, s32, sll, slt, subu, sw, RecompContext};
 
 /// Texture block in the ROM: `u32 count`, then (pixels, palette) offset pairs.
 pub const TEXTURE_BLOCK: u32 = 0x0102_ABB0;
@@ -822,6 +822,125 @@ pub unsafe extern "C" fn func_80030154(rdram: *mut u8, ctx: *mut RecompContext) 
     let g = &mut ctx.gpr;
     g[RA] = lw(m, g[SP], 0x14);
     g[SP] = addu(g[SP], 0x18);
+}
+
+/// Spline block in the ROM: `u32 count`, then single offsets.
+pub const SPLINE_BLOCK: u32 = 0x012C_7F30;
+
+/// `func_80030174` (spline_load): `spline_load(index, &out)`.
+///
+/// Reads the block's count; if `index` is negative or not below it (signed
+/// compares), stores 0 to `*out` and returns. The index is spilled to the
+/// stack before the first read and reloaded with `lw`, so in effect it is
+/// the sign-extended low word (as in `model_load` and `sprite_load`). Otherwise it reads
+/// entries `index` and `index + 1` of the offset table, reads the spline
+/// (from the first up to the second) to the heap cursor with
+/// `rom_read_small`, stores the cursor in `*out`, **overwrites** the
+/// header's `+0xC` with `cursor + 0x10` (the first point; whatever the ROM
+/// had there is stale), and moves the cursor past the spline (NOTES.md,
+/// "Splines").
+///
+/// Like `sprite_load` there is **no space check** and no alignment: the
+/// spline goes at the cursor as it is (QUIRK: `rom_read_small` stores words,
+/// so an unaligned cursor would fault; every block entry is a multiple of 4
+/// bytes). It reloads the cursor with `heap_cursor` twice after the read. A
+/// pointless loop counts `v1` up to the point count (header `+4`, 2^31
+/// iterations if that is `0x7FFFFFFF`), as in `sprite_load`; `heap_check`,
+/// under the final `heap_set_cursor`, overwrites `v1` anyway.
+///
+/// `v0` on the out-of-range path is whatever `rom_read_small` left there.
+///
+/// Domain: canonical `out` in RDRAM; the 0x40-byte frame and the argument
+/// slots above `sp` in RDRAM; and the callees'.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80030174(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x40i64) as u64);
+    g[A3] = g[A0];
+    g[A0] = li(SPLINE_BLOCK);
+    sw(m, g[SP], 0x14, g[RA]);
+    sw(m, g[SP], 0x44, g[A1]);
+    sw(m, g[SP], 0x1C, g[A0]);
+    g[A1] = addu(g[SP], 0x30);
+    sw(m, g[SP], 0x40, g[A3]);
+    g[A2] = 4;
+    call(imports::func_80011D60, m, ctx); // rom_read_small(block, &count, 4)
+
+    let g = &mut ctx.gpr;
+    g[A3] = lw(m, g[SP], 0x40);
+    g[T6] = lw(m, g[SP], 0x30);
+    g[T7] = lw(m, g[SP], 0x44);
+    g[AT] = slt(g[A3], g[T6]);
+    'done: {
+        if (g[A3] as i64) >= 0 {
+            g[T8] = lw(m, g[SP], 0x1C); // bltz delay slot
+            if g[AT] != 0 {
+                g[T9] = sll(g[A3], 2);
+                g[A0] = addu(g[T8], g[T9]);
+                g[A0] = addu(g[A0], 4);
+                g[A1] = addu(g[SP], 0x28);
+                g[A2] = 8;
+                call(imports::func_80011D60, m, ctx); // the two offsets
+
+                let g = &mut ctx.gpr;
+                g[T0] = lw(m, g[SP], 0x28);
+                sw(m, g[SP], 0x3C, g[T0]);
+                call(imports::func_8002FAFC, m, ctx); // heap_cursor
+
+                let g = &mut ctx.gpr;
+                g[T1] = lw(m, g[SP], 0x2C);
+                g[T2] = lw(m, g[SP], 0x28);
+                g[T3] = lw(m, g[SP], 0x1C);
+                g[T4] = lw(m, g[SP], 0x3C);
+                g[A2] = subu(g[T1], g[T2]);
+                sw(m, g[SP], 0x34, g[V0]);
+                sw(m, g[SP], 0x38, g[A2]);
+                g[A1] = g[V0];
+                g[A0] = addu(g[T3], g[T4]);
+                call(imports::func_80011D60, m, ctx); // the spline
+                call(imports::func_8002FAFC, m, ctx); // heap_cursor
+
+                let g = &mut ctx.gpr;
+                g[T5] = lw(m, g[SP], 0x44);
+                sw(m, g[T5], 0, g[V0]);
+                call(imports::func_8002FAFC, m, ctx); // heap_cursor
+
+                let g = &mut ctx.gpr;
+                g[T7] = lw(m, g[SP], 0x44);
+                g[T6] = addu(g[V0], 0x10);
+                g[V1] = 0;
+                g[T8] = lw(m, g[T7], 0);
+                sw(m, g[T8], 0xC, g[T6]);
+                g[A1] = lw(m, g[T7], 0);
+                g[T0] = lw(m, g[SP], 0x38);
+                g[T9] = lw(m, g[SP], 0x34);
+                g[A0] = lw(m, g[A1], 4);
+                g[V1] = addu(g[V1], 1);
+                // The pointless loop.
+                if (g[A0] as i64) > 0 {
+                    loop {
+                        g[AT] = slt(g[V1], g[A0]);
+                        if g[AT] == 0 {
+                            break;
+                        }
+                        g[V1] = addu(g[V1], 1);
+                    }
+                }
+                g[A0] = addu(g[T9], g[T0]);
+                call(imports::func_8002FAC4, m, ctx); // heap_set_cursor
+                break 'done;
+            }
+        }
+        // Out of range.
+        sw(m, g[T7], 0, 0);
+    }
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x40);
 }
 
 /// `func_8003043C` (texture_block_init): read the texture count into

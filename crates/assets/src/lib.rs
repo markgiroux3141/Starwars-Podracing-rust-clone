@@ -460,9 +460,113 @@ pub fn decode_sprite(s: &Sprite) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// Size of one spline point.
+pub const SPLINE_POINT_SIZE: usize = 0x54;
+
+/// A spline from the spline block (NOTES.md, "Splines"): a 16-byte header
+/// and `count` points of [`SPLINE_POINT_SIZE`] bytes, big-endian.
+///
+/// Header: `+0` u32 unknown, `+4` u32 point count, `+8` u32 segment count
+/// (points plus one per extra successor at a fork), `+0xC` u32 stale: the
+/// loader (`func_80030174`) overwrites it with the address of the first
+/// point.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Spline {
+    pub unknown: u32,
+    pub segments: u32,
+    pub points: Vec<SplinePoint>,
+}
+
+/// One point. `+0` u16 successor count and `+2` predecessor count; the
+/// successors' indices from `+4` (two slots), the predecessors' from `+8`
+/// (up to three used, so the list runs into `+0xC`). Slots past the counts
+/// hold stale bytes (often ASCII text) and are not links. Then four f32
+/// triples at `+0x10`, `+0x1C`, `+0x28`, `+0x34`: the position, an
+/// often-(0, 0, 1) vector, and two points that look like Bézier handles
+/// (**guess**). Then ten i16 at `+0x40`: usually the point's own index
+/// twice, the ids of its extra segments (`next.len() - 1` of them, each in
+/// `count..segments`), and -1 for none.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SplinePoint {
+    pub next: Vec<u16>,
+    pub prev: Vec<u16>,
+    pub position: [f32; 3],
+    pub normal: [f32; 3],
+    pub handles: [[f32; 3]; 2],
+    pub ids: [i16; 10],
+}
+
+impl Spline {
+    pub fn parse(s: &[u8]) -> Result<Self> {
+        if s.len() < 0x10 {
+            return err(format!("spline of {} bytes has no header", s.len()));
+        }
+        let count = be32(s, 4)? as usize;
+        if s.len() != 0x10 + SPLINE_POINT_SIZE * count {
+            return err(format!("{} bytes for {count} points", s.len()));
+        }
+        let h16 = |at: usize| be16(s, at).unwrap();
+        let f = |at: usize| f32::from_bits(be32(s, at).unwrap());
+        let v3 = |at: usize| [f(at), f(at + 4), f(at + 8)];
+        let mut points = Vec::with_capacity(count);
+        for k in 0..count {
+            let p = 0x10 + SPLINE_POINT_SIZE * k;
+            let (n_next, n_prev) = (usize::from(h16(p)), usize::from(h16(p + 2)));
+            if n_next > 2 || n_prev > 4 {
+                return err(format!("point {k}: {n_next} successors, {n_prev} predecessors"));
+            }
+            let next: Vec<u16> = (0..n_next).map(|j| h16(p + 4 + 2 * j)).collect();
+            let prev: Vec<u16> = (0..n_prev).map(|j| h16(p + 8 + 2 * j)).collect();
+            if let Some(j) = next.iter().chain(&prev).find(|&&j| usize::from(j) >= count) {
+                return err(format!("point {k}: link to {j} of {count}"));
+            }
+            let ids = std::array::from_fn(|j| h16(p + 0x40 + 2 * j) as i16);
+            points.push(SplinePoint {
+                next,
+                prev,
+                position: v3(p + 0x10),
+                normal: v3(p + 0x1C),
+                handles: [v3(p + 0x28), v3(p + 0x34)],
+                ids,
+            });
+        }
+        Ok(Self { unknown: be32(s, 0)?, segments: be32(s, 8)?, points })
+    }
+}
+
+impl<'a> Blocks<'a> {
+    pub fn spline(&self, i: usize) -> Result<Spline> {
+        Spline::parse(self.splines.entry(i)[0].unwrap_or(&[])).map_err(|e| Error(format!("spline {i}: {e}")))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spline_links_and_sizes() {
+        // Two points in a loop, synthetic.
+        let mut s = vec![0u8; 0x10 + 2 * SPLINE_POINT_SIZE];
+        s[4..8].copy_from_slice(&2u32.to_be_bytes());
+        s[8..12].copy_from_slice(&2u32.to_be_bytes());
+        for (k, other) in [(0usize, 1u16), (1, 0)] {
+            let p = 0x10 + SPLINE_POINT_SIZE * k;
+            s[p..p + 2].copy_from_slice(&1u16.to_be_bytes());
+            s[p + 2..p + 4].copy_from_slice(&1u16.to_be_bytes());
+            s[p + 4..p + 6].copy_from_slice(&other.to_be_bytes());
+            s[p + 6..p + 8].copy_from_slice(b"  "); // stale bytes past the count
+            s[p + 8..p + 10].copy_from_slice(&other.to_be_bytes());
+            s[p + 0x10..p + 0x14].copy_from_slice(&1.5f32.to_bits().to_be_bytes());
+        }
+        let sp = Spline::parse(&s).unwrap();
+        assert_eq!(sp.points[0].next, [1]);
+        assert_eq!(sp.points[1].prev, [0]);
+        assert_eq!(sp.points[0].position[0], 1.5);
+        assert!(Spline::parse(&s[..s.len() - 1]).is_err());
+        s[0x10 + 4..0x10 + 6].copy_from_slice(&2u16.to_be_bytes()); // link out of range
+        assert!(Spline::parse(&s).is_err());
+    }
 
     #[test]
     fn sprite_pages_tile_rows_first() {

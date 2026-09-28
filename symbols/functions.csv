@@ -469,7 +469,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8002FF38,sprite_load,ours,17,asset,rust_verified,unit_diff,high,"header to the unaligned cursor, table at +0x14, palette/pages 16-aligned (NOTES Sprites); QUIRKs: no space check; CI without palette leaves the header unreserved; palette with <=0 pages reads an unloaded offset; negative count moves the cursor back"
 0x80030130,sprite_load_a1,ours,18,asset,rust_verified,unit_diff,high,sprite_load(a1); a0 only spilled. No references in code or data (dead?)
 0x80030154,sprite_load_thunk,ours,18,asset,rust_verified,unit_diff,high,sprite_load(a0) with a frame; ~100 call sites
-0x80030174,spline_load,ours,17,asset,recomp,,med,spline block 0x012C7F30
+0x80030174,spline_load,ours,17,asset,rust_verified,unit_diff,high,"spline block entry to the heap cursor, +0xC = first point; no space check; index = low word (game::loader)"
 0x80030274,func_80030274,ours,18,,recomp,,,
 0x80030298,func_80030298,ours,2,,recomp,,,
 0x80030304,func_80030304,ours,1,,recomp,,,
