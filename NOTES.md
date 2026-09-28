@@ -48,6 +48,30 @@ Running log of discoveries and decisions. Newest session at the bottom.
 - `get_cop1_cs()` returns **only the rounding-mode bits** of FCR31. Flags and cause bits read back as 0. Code that tests them after a conversion, e.g. `0x8008C598` (`andi 0x78` after `cvt.l.d`), therefore behaves differently under the recomp than on hardware. **The oracle is not hardware-exact there**; such functions will need an emulator snapshot or a different reference.
 - In 32-bit FPU mode, odd FPRs are written through `ctx->f_odd[(n-1)*2]`, i.e. the high word of `f(n-1)`. `f_odd` must point at `&ctx->f0.u32h`.
 
+### ROM asset loading path (2026-09-28, session 3; `tools/xref.py`)
+- libultra PI: `func_80087D70` = `osPiStartDma(mb, pri, dir, devAddr, dramAddr, size, mq)` (writes OSIoMesg type 0xB/0xC, fields +2/+4/+8/+0xC/+0x10, piHandle 0; `osJamMesg`/`osSendMesg` on `osPiGetCmdQueue()` = `func_8008C900`). `__osPiDevMgr` at `0x800A7B80`, created by `func_8008BDC0` (`osCreatePiManager`), which stores `func_800944E0` (`__osPiRawStartDma`) and `func_800945C0` (`__osEPiRawStartDma`, reads `__osCurrentHandle[]` at `0x800A7BA0`). Other names inferred from the same function: `func_800880E0` osCreateMesgQueue, `func_8008B810` osCreateThread, `func_8008B960` osStartThread, `func_80087E80` osRecvMesg, `func_80087CC0` osInvalDCache **(med confidence; by call shape)**.
+- Only three game functions call `osPiStartDma`: `func_80006F60` (blocking read, queue `0x800D9BF8`), `func_80007594` (audio DMA callback with 0x400-byte buffer cache; reached only indirectly) and **`func_80011B18(devAddr, dram, size)`**, the game's ROM read (one-time init `func_8002E034`, then polls `osRecvMesg` non-blocking, calling `func_80008F28` while waiting).
+- `func_80011CDC(rom, dram, size)` splits into 0x800-byte `func_80011B18` reads; `func_80011D60` is the same over `func_80011BDC` (small/unaligned reads for headers). Every asset loader goes through these.
+- **Asset blocks** (same four blocks as the PC `out_*block.bin` files; they tile ROM `0x0102ABB0`–`0x01FF30F0` exactly, apart from alignment padding). Each block starts with `u32 count`, then an offset table relative to the block start; the entry after the last gives the end.
+
+  | Block | ROM base | Count | Table | Loader |
+  |---|---|---|---|---|
+  | texture | `0x0102ABB0` | 1648 | (pixels, palette) pairs, palette 0 if none (138 entries) | `func_800304AC(idx, &p0, &p1)` via cache `0x800D9E00`; `func_80030328` reads both parts 0x40-aligned. `func_8003043C` reads the count into `0x800DB890` and **hangs (`b .`) if count > 1700**. |
+  | spline | `0x012C7F30` | 91 | single offsets | `func_80030174`; 0x10-byte header, pointer at +0xC relocated to +0x10 |
+  | sprite | `0x013307F0` | 173 | single offsets | `func_8002FF38`; reads a 0x14-byte header, tests byte +4 == 2 |
+  | model | `0x0141E200` | 307 | (mask, model) pairs | `func_800305E8(idx)` |
+- Model load (`func_800305E8`): the mask (`mask..model`) goes into the buffer at `[0x80114528]`. The model goes at the heap cursor `func_8002FAFC()`, aligned to 8. If its first word is `"Comp"`, the compressed payload is DMA'd to `(heap_end [0x800D9DBC] - (csize-12)) & ~7`, i.e. the top of the heap, and `func_80011940(src, dst)` decompresses it to the cursor. Out of space sets `0x800A2864 = 1` and returns 0. Then every model word whose mask bit is set (bit 31-(i&31) of mask word i>>5, MSB first) is relocated: top byte `0x0A` means a texture reference (`func_800304AC(word & 0xFFFFFF, &word, &word+4)` writes the pixel and palette pointers), otherwise nonzero words get `+ model base`. It then checks the tag (`Modl` `Trak` `Podd` `Part` `Scen` `MAlt` `Pupp`), returning model+4, or calls `func_800827C0` (error). 92 of the 307 models are compressed.
+- Texture descriptors live in the models, not the texture block. The relocated `0x0A00_iiii` word is at MaterialTexture+0x3C. PC-side facts (blender-swe1r, GPL; facts only): +0x0C u16 format, +0x10 u16 width, +0x12 u16 height. Format codes 3/512/513/1024/1025 = RGBA32/CI4/CI8/I4/I8, i.e. `(G_IM_FMT << 8) | G_IM_SIZ`. The palette is RGBA5551 big-endian.
+- ROM `0x100000`–`0x0102ABB0` is not these blocks; it looks like VADPCM audio (not examined yet).
+
+### Asset compression: "Comp"/"Wolf" LZSS (`func_80011940`)
+Header (12 bytes, read by the loader): `"Comp"`, `"Wolf"` (all 92), `u32` decompressed size (BE). The stream follows at +12; `func_80011940(src = stream, dst)` returns the end of the output in `v0`. It does not know the output size and stops only at the terminator.
+- Ring buffer: 4096 bytes at **`src - 0x1000`**, the memory just below the compressed input, **never initialised** (QUIRK). The write position starts at 1. Every output byte is also stored at the write position, which then advances mod 0x1000.
+- Loop: read a flag byte and consume its bits **LSB first**. Bit 1 = literal: copy one input byte. Bit 0 = reference: two bytes `b0 b1`, `offset = ((b0 & 0xF) << 8) | b1`, `length = (b0 >> 4) + 2` (2..17). **Offset 0 ends the stream at once**, even in the middle of a flag byte. Otherwise copy `length` bytes from window `(offset + k) & 0xFFF`, each read before the write of the same step, so overlapping references repeat.
+- Per byte the order is: read the window, write `dst`, write the window. So if output, window and input overlap in RDRAM, the game's result depends on that order. The heap placement can make them overlap when heap space is tight; a port must keep the order.
+- Checked on all 92 compressed models (session 3): each decompresses to exactly the declared size and begins with a valid tag, **no reference ever reads an unwritten window byte** (so the uninitialised window doesn't matter for real data), and 0–17 bytes of padding follow the terminator.
+- Register leftovers matter for the difftest: `a2 = 1`, `a3` = the flag bit that held the terminator, `t0` = the last flag byte, `$at` keeps its input value if the terminator is the first token, and `s0`–`s2` are restored sign-extended from their low words.
+
 ## Upstream projects (checked 2026-09-28)
 
 | Project | Licence | State / how we use it |
