@@ -73,3 +73,44 @@ fn blocks_tile_and_models_load() {
     }
     assert_eq!((descs.len(), exact, mips), (1603, 1568, 35));
 }
+
+#[test]
+fn sprites_decode() {
+    let Some(rom) = rom() else { return };
+    let b = Blocks::read(&rom).unwrap();
+    let mut formats: HashMap<u16, usize> = HashMap::new();
+    for i in 0..b.sprites.count {
+        let s = b.sprite(i).unwrap();
+        let f = s.format().unwrap_or_else(|| panic!("sprite {i}: format {:#x}", s.format_code));
+        *formats.entry(s.format_code).or_default() += 1;
+        // Every page is exactly its padded rows, as texture data is.
+        for (k, p) in s.pages.iter().enumerate() {
+            assert_eq!(p.texels.len(), f.level_size(p.width.into(), p.height.into()), "sprite {i} page {k}");
+        }
+        // Palettes: all CI sprites have one, of 16 or 256 colours.
+        match f {
+            Format::Ci4 => assert_eq!(s.palette.map(<[u8]>::len), Some(32), "sprite {i}"),
+            Format::Ci8 => assert_eq!(s.palette.map(<[u8]>::len), Some(512), "sprite {i}"),
+            _ => assert!(s.palette.is_none(), "sprite {i}"),
+        }
+        // Pages tile the image in rows; only sprite 145 (193 wide, pages
+        // covering 192) leaves a column uncovered, and only sprite 110 (1x1)
+        // has no pages.
+        let layout = s.layout().unwrap();
+        let covered: usize = s.pages.iter().map(|p| usize::from(p.width) * usize::from(p.height)).sum();
+        let area = usize::from(s.width) * usize::from(s.height);
+        match i {
+            110 => assert!(s.pages.is_empty()),
+            145 => assert_eq!(area - covered, usize::from(s.height)),
+            _ => assert_eq!(covered, area, "sprite {i}"),
+        }
+        for (p, (x, y)) in s.pages.iter().zip(layout) {
+            assert!(x + usize::from(p.width) <= s.width.into() && y + usize::from(p.height) <= s.height.into(), "sprite {i}");
+        }
+        assets::decode_sprite(&s).unwrap_or_else(|e| panic!("sprite {i}: {e}"));
+    }
+    assert_eq!(b.sprites.count, 173);
+    let mut f: Vec<_> = formats.into_iter().collect();
+    f.sort();
+    assert_eq!(f, [(0x003, 18), (0x200, 40), (0x201, 48), (0x400, 66), (0x401, 1)]);
+}

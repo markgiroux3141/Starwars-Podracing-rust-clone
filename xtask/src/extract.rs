@@ -7,7 +7,7 @@ use std::fs;
 use std::io::BufWriter;
 use std::path::Path;
 
-use assets::{decode, fit, Blocks, Fit, Format};
+use assets::{decode, decode_sprite, fit, Blocks, Fit, Format};
 
 use crate::Result;
 
@@ -46,9 +46,32 @@ pub fn run(root: &Path, rom_path: &Path) -> Result<()> {
     for i in 0..b.splines.count {
         fs::write(out.join(format!("spline/{i:03}.bin")), b.splines.entry(i)[0].unwrap_or(&[]))?;
     }
+    // Sprites: raw, and decoded to PNG (NOTES.md, "Sprites").
+    let mut sprite_csv = String::from("index,format,width,height,pages,palette_bytes,png
+");
+    let mut sprite_pngs = 0;
     for i in 0..b.sprites.count {
         fs::write(out.join(format!("sprite/{i:03}.bin")), b.sprites.entry(i)[0].unwrap_or(&[]))?;
+        let s = b.sprite(i)?;
+        let fname = s.format().map_or("unknown", Format::name);
+        let (w, h) = (s.width, s.height);
+        let mut png_name = String::new();
+        if !s.pages.is_empty() {
+            let rgba = decode_sprite(&s)?;
+            png_name = format!("spr_{i:03}_{fname}_{w}x{h}.png");
+            write_png(&out.join("png").join(&png_name), u32::from(w), u32::from(h), &rgba)?;
+            sprite_pngs += 1;
+        }
+        sprite_csv.push_str(&format!(
+            "{i},{:#x},{w},{h},{},{},{png_name}
+",
+            s.format_code,
+            s.pages.len(),
+            s.palette.map_or(0, <[u8]>::len)
+        ));
     }
+    fs::write(out.join("sprites.csv"), sprite_csv)?;
+    println!("sprites: {}; {sprite_pngs} PNGs in extracted/png, index in extracted/sprites.csv", b.sprites.count);
     for i in 0..b.textures.count {
         let t = b.texture(i);
         fs::write(out.join(format!("texture/{i:04}.pixels")), t.pixels)?;

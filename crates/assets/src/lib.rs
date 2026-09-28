@@ -347,9 +347,155 @@ pub fn decode(format: Format, width: usize, height: usize, tex: Texture) -> Resu
     Ok(out)
 }
 
+/// A sprite from the sprite block (NOTES.md, "Sprites"): a header, a table of
+/// pages that tile the image, an optional palette, then the pages' texels.
+///
+/// Header (0x14 bytes, big-endian): `+0` u16 width, `+2` u16 height, `+4` u8
+/// `G_IM_FMT`, `+5` u8 `G_IM_SIZ`, `+6` u16 (0), `+8` u32 palette offset (0 =
+/// none), `+0xC` s16 page count, `+0xE` u16 (always 32), `+0x10` u32 page
+/// table offset (always 0x14). Offsets are from the start of the sprite. The
+/// loader (`func_8002FF38`) reads only `+4`, `+8` and `+0xC`, and patches
+/// `+8`, `+0x10` and each page's offset into pointers.
+#[derive(Debug)]
+pub struct Sprite<'a> {
+    pub width: u16,
+    pub height: u16,
+    /// `(G_IM_FMT << 8) | G_IM_SIZ`, as in texture descriptors.
+    pub format_code: u16,
+    pub palette: Option<&'a [u8]>,
+    pub pages: Vec<SpritePage<'a>>,
+}
+
+/// One page: 8 bytes in the table, u16 width, u16 height, u32 texel offset.
+#[derive(Debug)]
+pub struct SpritePage<'a> {
+    pub width: u16,
+    pub height: u16,
+    pub texels: &'a [u8],
+}
+
+impl<'a> Sprite<'a> {
+    pub fn parse(s: &'a [u8]) -> Result<Self> {
+        if s.len() < 0x14 {
+            return err(format!("sprite of {} bytes has no header", s.len()));
+        }
+        let h16 = |at: usize| be16(s, at).unwrap();
+        let (width, height) = (h16(0), h16(2));
+        let format_code = u16::from(s[4]) << 8 | u16::from(s[5]);
+        let pal_off = be32(s, 8)? as usize;
+        let count = h16(0xC) as i16;
+        // The loader takes the table from +0x14 whatever +0x10 says.
+        let entry = |k: usize| -> Result<(u16, u16, usize)> {
+            let at = 0x14 + 8 * k;
+            let (w, h) = (be16(s, at), be16(s, at + 2));
+            Ok((w.ok_or_else(|| Error("page table truncated".into()))?, h.unwrap(), be32(s, at + 4)? as usize))
+        };
+        let n = count.max(0) as usize;
+        let table = (0..n).map(entry).collect::<Result<Vec<_>>>()?;
+        let mut pages = Vec::with_capacity(n);
+        for (k, &(w, h, off)) in table.iter().enumerate() {
+            // Like the loader: a page runs to the next page, the last to the
+            // end of the sprite.
+            let end = table.get(k + 1).map_or(s.len(), |t| t.2);
+            let texels = s.get(off..end).ok_or_else(|| Error(format!("page {k}: {off:#x}..{end:#x} out of range")))?;
+            pages.push(SpritePage { width: w, height: h, texels });
+        }
+        let palette = match pal_off {
+            0 => None,
+            p => {
+                let end = table.first().map_or(s.len(), |t| t.2);
+                Some(s.get(p..end).ok_or_else(|| Error(format!("palette {p:#x}..{end:#x} out of range")))?)
+            }
+        };
+        Ok(Self { width, height, format_code, palette, pages })
+    }
+
+    pub fn format(&self) -> Option<Format> {
+        Format::from_code(self.format_code)
+    }
+
+    /// Pages tile the image in rows of `page[0].height` pixels, left to right
+    /// and top to bottom: `rows = ceil(height / page height)` and
+    /// `columns = pages / rows`. (Sprite 145 declares width 193 but its pages
+    /// cover 192; its last column stays transparent.)
+    pub fn layout(&self) -> Result<Vec<(usize, usize)>> {
+        let Some(p0) = self.pages.first() else { return Ok(Vec::new()) };
+        let (tw, th) = (usize::from(p0.width), usize::from(p0.height));
+        if th == 0 || tw == 0 {
+            return err("zero-sized first page");
+        }
+        let rows = usize::from(self.height).div_ceil(th);
+        if rows == 0 || self.pages.len() % rows != 0 {
+            return err(format!("{} pages don't make {rows} rows", self.pages.len()));
+        }
+        let cols = self.pages.len() / rows;
+        Ok((0..self.pages.len()).map(|k| (k % cols * tw, k / cols * th)).collect())
+    }
+}
+
+impl<'a> Blocks<'a> {
+    pub fn sprite(&self, i: usize) -> Result<Sprite<'a>> {
+        Sprite::parse(self.sprites.entry(i)[0].unwrap_or(&[])).map_err(|e| Error(format!("sprite {i}: {e}")))
+    }
+}
+
+/// Decode a whole sprite to 8-bit RGBA (`width * height`), each page with
+/// [`decode`] and its assumptions. Pixels no page covers are transparent.
+pub fn decode_sprite(s: &Sprite) -> Result<Vec<u8>> {
+    let format = s.format().ok_or_else(|| Error(format!("sprite format {:#x}", s.format_code)))?;
+    let (w, h) = (usize::from(s.width), usize::from(s.height));
+    let mut out = vec![0u8; w * h * 4];
+    for (page, (x0, y0)) in s.pages.iter().zip(s.layout()?) {
+        let (pw, ph) = (usize::from(page.width), usize::from(page.height));
+        if x0 + pw > w || y0 + ph > h {
+            return err(format!("page at ({x0}, {y0}) {pw}x{ph} is outside the {w}x{h} sprite"));
+        }
+        let rgba = decode(format, pw, ph, Texture { pixels: page.texels, palette: s.palette })?;
+        for y in 0..ph {
+            let n = pw.min(w - x0);
+            let dst = ((y0 + y) * w + x0) * 4;
+            out[dst..dst + n * 4].copy_from_slice(&rgba[y * pw * 4..(y * pw + n) * 4]);
+        }
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sprite_pages_tile_rows_first() {
+        // 3x3 I8 sprite in 2x2 pages: 4 pages, rows of 2.
+        let mut s = vec![0u8; 0x14];
+        s[..4].copy_from_slice(&[0, 3, 0, 3]);
+        s[4..6].copy_from_slice(&[4, 1]); // I8
+        s[0xC..0xE].copy_from_slice(&4i16.to_be_bytes());
+        let pages = [(2u16, 2u16), (1, 2), (2, 1), (1, 1)];
+        let mut data = Vec::new();
+        let mut off = 0x14 + 8 * pages.len();
+        for (k, &(pw, ph)) in pages.iter().enumerate() {
+            s.extend_from_slice(&pw.to_be_bytes());
+            s.extend_from_slice(&ph.to_be_bytes());
+            s.extend_from_slice(&(off as u32).to_be_bytes());
+            // I8 rows padded to 8 bytes; texel value = page number * 10 + x.
+            for _ in 0..ph {
+                let mut row = [0u8; 8];
+                for (x, r) in row.iter_mut().enumerate().take(usize::from(pw)) {
+                    *r = (k * 10 + x) as u8;
+                }
+                data.extend_from_slice(&row);
+            }
+            off += 8 * usize::from(ph);
+        }
+        s.extend_from_slice(&data);
+        let sp = Sprite::parse(&s).unwrap();
+        assert_eq!(sp.layout().unwrap(), [(0, 0), (2, 0), (0, 2), (2, 2)]);
+        let rgba = decode_sprite(&sp).unwrap();
+        let px = |x: usize, y: usize| rgba[(y * 3 + x) * 4];
+        assert_eq!([px(0, 0), px(1, 0), px(2, 0)], [0, 1, 10]);
+        assert_eq!([px(0, 2), px(1, 2), px(2, 2)], [20, 21, 30]);
+    }
 
     #[test]
     fn strides_and_fits() {

@@ -466,7 +466,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8002FE80,func_8002FE80,ours,0,,recomp,,,
 0x8002FE94,func_8002FE94,ours,0,,recomp,,,
 0x8002FEE4,func_8002FEE4,ours,2,,recomp,,,
-0x8002FF38,sprite_load,ours,17,asset,recomp,,med,sprite block 0x013307F0
+0x8002FF38,sprite_load,ours,17,asset,recomp,,med,"sprite block 0x013307F0: 0x14 header + pages, palette/pages 16-aligned (NOTES Sprites); QUIRK: CI without palette leaves the header unreserved"
 0x80030130,func_80030130,ours,18,,recomp,,,
 0x80030154,func_80030154,ours,18,,recomp,,,
 0x80030174,spline_load,ours,17,asset,recomp,,med,spline block 0x012C7F30

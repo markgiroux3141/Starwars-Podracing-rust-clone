@@ -85,6 +85,20 @@ A bump allocator with a stack of levels.
   - It sets `[0x800A2848] = 1` and zeroes stats at entry. At the end, `0x800D9DC0` = cursor before the model, `DC4` = after it, `DC8` = model bytes, `DCC` = texture bytes (`DD0` stays 0). An unknown tag calls `func_800827C0` (not understood) and, if that returns, returns the model base instead of base+4.
 - Checked against an independent statement of the format (`crates/difftest/tests/loader.rs`, `expect`): all 307 models from a fresh 8 MB heap give exactly the predicted relocated words, texture placement, bytes, cursor and stats. So the relocation and texture facts above hold for every model.
 
+### Sprites (session 4; `assets::Sprite`, `cargo xtask extract`)
+**From the loader** (`sprite_load(idx)`, `func_8002FF38`, called by `func_80030130`/`func_80030154`), the sprite block is `u32 count` then single offsets:
+- It reads the 0x14-byte header to the **unaligned heap cursor**, then `count = (s16) +0xC` 8-byte page entries right after it (at `+0x14`; the loader ignores `+0x10`). It stores a pointer to them in `+0x10`.
+- If the palette offset `+8` ≠ 0, the palette (from `+8` up to page 0's offset) goes to the next 16-byte boundary and `+8` becomes its pointer. Then each page's texels (from its offset up to the next page's, the last up to the sprite's end) go 16-byte aligned, and the entry's `+4` becomes the pointer. The cursor ends after the last page; it returns the header.
+- **The `+4 == 2` test:** if the format is CI and `+8` is 0 it returns at once with the cursor set back to the header. So the header isn't reserved, and the next allocation overwrites it (QUIRK). No sprite in the USA ROM takes this path: every CI sprite has a palette.
+- There's a pointless loop that counts `s1` up to the page count and then zeroes it.
+- QUIRK: all reads use `rom_read_small` (word `sw`s), so an unaligned cursor would fault; model/texture ends keep it word-aligned in practice.
+
+**From the data** (all 173 checked in `crates/assets/tests/rom.rs`):
+- Header: `+0` u16 width, `+2` u16 height, `+4` u8 `G_IM_FMT`, `+5` u8 `G_IM_SIZ`. The format code is the same `(fmt << 8) | siz` as texture descriptors: RGBA32 ×18, CI4 ×40, CI8 ×48, I4 ×66, I8 ×1. `+6` u16 is always 0. `+0xE` u16 is always 32 (maybe the maximum page height; **guess**). `+0x10` u32 is always 0x14, the page table offset.
+- Page entry: u16 width, u16 height, u32 offset. **Pages tile the image row-major** in rows of page[0]'s height: `rows = ceil(h / page_h)`, `cols = pages / rows`. The last row and column are smaller (e.g. 640×240 CI8 = 10×8 pages of 64×32, the last row 64×16). Every page is exactly `stride(width) × height` bytes, with rows padded to 8 bytes like textures. The data follows the page table with no gap, palette first. Palettes are exactly 32 (CI4) or 512 (CI8) bytes.
+- Oddities: sprite 110 is 1×1 I4 with **no pages** (20 bytes, header only). Sprite 145 declares 193×84 but its pages are 3 columns of 64 = 192 wide (one pixel column uncovered).
+- **Still guessed:** the palette is RGBA5551 and I4/I8 map to grey plus alpha (as for textures; the TLUT/combine state isn't located). The row-major order is confirmed visually (HUD gauges and panels join seamlessly across page seams) and by the short last rows. Sprite 160 (640×240) is a collage of horizontal scenes; how it's drawn (e.g. strip by strip) is unknown. Nothing here has been checked against the drawing code, which isn't located.
+
 ### Asset compression: "Comp"/"Wolf" LZSS (`func_80011940`)
 Header (12 bytes, read by the loader): `"Comp"`, `"Wolf"` (all 92), `u32` decompressed size (BE). The stream follows at +12; `func_80011940(src = stream, dst)` returns the end of the output in `v0`. It does not know the output size and stops only at the terminator.
 - Ring buffer: 4096 bytes at **`src - 0x1000`**, the memory just below the compressed input, **never initialised** (QUIRK). The write position starts at 1. Every output byte is also stored at the write position, which then advances mod 0x1000.
