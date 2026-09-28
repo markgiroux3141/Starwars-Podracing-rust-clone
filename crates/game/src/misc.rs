@@ -3472,6 +3472,198 @@ pub unsafe extern "C" fn func_80031FA4(rdram: *mut u8, ctx: *mut RecompContext) 
     }
 }
 
+/// `func_80033B14(p)`: 1 if `p != 0`, `o = *p != 0` and bit 29 of the
+/// object's flags `[o + 0x100]` is set (NOTES.md, the object table), else
+/// 0. Leaves `v0`, and `t6`/`t7` = the flags and `flags << 2` when read.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80033B14(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    if g[A0] == 0 {
+        g[V0] = 0;
+        return;
+    }
+    g[V0] = lw(&mem, g[A0], 0);
+    if g[V0] == 0 {
+        return;
+    }
+    g[T6] = lw(&mem, g[V0], 0x100);
+    g[T7] = sll(g[T6], 2);
+    g[V0] = u64::from((g[T7] as i64) < 0);
+}
+
+/// `func_80033DC4`: empty (`jr ra`).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80033DC4(_rdram: *mut u8, _ctx: *mut RecompContext) {}
+
+/// A ring of `count` entries of `1 << shift` bytes at `base`, its last
+/// index at `index`: advance it (signed; wrapping to 0 at `count`, with
+/// the stored index going through `count` first) and return the entry. So
+/// the first entry handed out after a reset to 0 is entry 1.
+fn ring_next(m: &mut Mem, g: &mut [u64; 32], index: u32, base: u32, count: u64, shift: u32) {
+    g[V0] = li(index);
+    g[T6] = lw(m, g[V0], 0);
+    g[T9] = li(base);
+    g[V1] = addu(g[T6], 1);
+    g[AT] = slt(g[V1], count);
+    sw(m, g[V0], 0, g[V1]);
+    if g[AT] == 0 {
+        sw(m, g[V0], 0, 0);
+        g[V1] = 0;
+    }
+    g[T8] = sll(g[V1], shift);
+    g[V0] = addu(g[T8], g[T9]);
+}
+
+/// `func_80033DD0()`: the next of 256 32-byte entries at `0x800E0C50`,
+/// index at `0x800A3CC0` ([`ring_next`]). QUIRK: a negative stored index
+/// isn't reset (signed test) and gives an entry below the ring. Leaves `v1`
+/// = the index, `t6` = the old one, `t8` = the offset, `t9` = the base,
+/// `at` = the test.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80033DD0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    ring_next(&mut mem, &mut ctx.gpr, 0x800A_3CC0, 0x800E_0C50, 0x100, 5);
+}
+
+/// `func_80033E08()`: the next of 3072 64-byte entries at
+/// `0x800E2C50`, index at `0x800A3CC4` ([`ring_next`]; the same QUIRK and
+/// leftovers as [`func_80033DD0`]).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80033E08(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    ring_next(&mut mem, &mut ctx.gpr, 0x800A_3CC4, 0x800E_2C50, 0xC00, 6);
+}
+
+/// `func_800344C8()`: `[0x800A3FF4] = 1`, then decrement `[0x800A3FF0]` if
+/// it is positive (signed). Leaves `t6 = 1`, `at = 0x800A0000`, `v1 =
+/// 0x800A3FF0`, `v0` = the old count, `t7` = old - 1.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800344C8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T6] = 1;
+    g[AT] = li(0x800A_0000);
+    g[V1] = li(0x800A_3FF0);
+    sw(m, g[AT], 0x3FF4, g[T6]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T7] = addu(g[V0], u64::MAX);
+    if (g[V0] as i64) > 0 {
+        sw(m, g[V1], 0, g[T7]);
+    }
+}
+
+/// Append to the display list at `[0x80112C90]` (`dl` holds that address,
+/// in the register the caller chose): `gSPMatrix(proj, projection | load)`
+/// (`0xDA380003`) and `gSPForceMatrix(mvp)` (`G_MOVEMEM` `0xDC38000E`,
+/// then `G_MOVEWORD` `0xDB0C0000`, `0x00010000`), advancing the pointer
+/// before each command's words are written (the last command's second word
+/// first). `proj` and `mvp` are loaded between the writes, from `[proj_base
+/// + proj_off]` and `[mvp_base + mvp_off]`, into `t8` and `t1`.
+///
+/// Leaves `v1` = the last command's address, `t6`/`t9`/`t2` = the pointer
+/// after each command, `t7`/`t0`/`t3`/`t4` = the command words.
+fn projection_and_force_matrix(
+    m: &mut Mem,
+    g: &mut [u64; 32],
+    dl: usize,
+    (proj_base, proj_off): (usize, i32),
+    (mvp_base, mvp_off): (usize, i32),
+) {
+    g[V1] = lw(m, g[dl], 0);
+    g[T7] = li(0xDA38_0003);
+    g[T6] = addu(g[V1], 8);
+    sw(m, g[dl], 0, g[T6]);
+    sw(m, g[V1], 0, g[T7]);
+    g[T8] = lw(m, g[proj_base], proj_off);
+    g[T0] = li(0xDC38_000E);
+    sw(m, g[V1], 4, g[T8]);
+    g[V1] = lw(m, g[dl], 0);
+    g[T9] = addu(g[V1], 8);
+    sw(m, g[dl], 0, g[T9]);
+    sw(m, g[V1], 0, g[T0]);
+    g[T1] = lw(m, g[mvp_base], mvp_off);
+    g[T3] = li(0xDB0C_0000);
+    g[T4] = li(0x1_0000);
+    sw(m, g[V1], 4, g[T1]);
+    g[V1] = lw(m, g[dl], 0);
+    g[T2] = addu(g[V1], 8);
+    sw(m, g[dl], 0, g[T2]);
+    sw(m, g[V1], 4, g[T4]);
+    sw(m, g[V1], 0, g[T3]);
+}
+
+/// `func_80034DA8()`: `[0x800A3FF8] = 0`, then append the projection and
+/// forced matrices at `[0x801134D0]` and `[0x801134D4]` to the display list
+/// ([`projection_and_force_matrix`]). Leaves `a2 = 0x80112C90`, `at =
+/// 0x800A0000`, `t8`/`t1` = the two matrix addresses.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80034DA8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[A2] = li(0x8011_2C90);
+    g[AT] = li(0x800A_0000);
+    sw(&mut mem, g[AT], 0x3FF8, 0);
+    // The matrices are read through t8/t1 = 0x80110000 + offset.
+    g[T8] = li(0x8011_0000);
+    g[T1] = li(0x8011_0000);
+    projection_and_force_matrix(&mut mem, g, A2, (T8, 0x34D0), (T1, 0x34D4));
+}
+
+/// `func_8003527C(cam)`: append the projection and forced matrices at
+/// `[cam + 0x34]` and `[cam + 0x38]` to the display list
+/// ([`projection_and_force_matrix`]). Leaves `a3 = 0x80112C90`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003527C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[A3] = li(0x8011_2C90);
+    projection_and_force_matrix(&mut mem, g, A3, (A0, 0x34), (A0, 0x38));
+}
+
+/// `func_800352E4()`: [`func_80034DA8`] without clearing `[0x800A3FF8]`.
+/// Leaves `a2 = 0x80112C90`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800352E4(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[A2] = li(0x8011_2C90);
+    g[T8] = li(0x8011_0000);
+    g[T1] = li(0x8011_0000);
+    projection_and_force_matrix(&mut mem, g, A2, (T8, 0x34D0), (T1, 0x34D4));
+}
+
+/// `func_80035698(v)`: `[0x800A3D9C] = 1` if `v == 1` (full 64-bit
+/// compare), else 0. Leaves `v0 = 1`, `at = 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80035698(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[V0] = 1;
+    g[AT] = li(0x800A_0000);
+    let v = if g[A0] == g[V0] { g[V0] } else { 0 };
+    sw(&mut mem, g[AT], 0x3D9C, v);
+}
+
 /// `func_8003ABA0(spline, dir, w)`: step the spline walker `w` one point,
 /// forward if `(s16) dir == 1`, otherwise backward. `spline` is a loaded
 /// spline header (`+0` the flag halfword F, `+0xC` the points; NOTES.md,

@@ -522,34 +522,34 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80033878,func_80033878,ours,1,,recomp,,,
 0x80033928,func_80033928,ours,1,,recomp,,,
 0x8003398C,func_8003398C,ours,2,,recomp,,,
-0x80033B14,func_80033B14,ours,0,,recomp,,,
+0x80033B14,func_80033B14,ours,0,,rust_verified,unit_diff,high,"1 if p, *p nonzero and bit 29 of [*p + 0x100] (game::misc)"
 0x80033B5C,func_80033B5C,ours,0,,recomp,,,
 0x80033B94,func_80033B94,ours,0,,recomp,,,
 0x80033BCC,func_80033BCC,ours,1,,recomp,,,
 0x80033C70,func_80033C70,ours,0,,recomp,,,
 0x80033D30,func_80033D30,ours,0,,recomp,,,
-0x80033DC4,func_80033DC4,ours,0,,recomp,,,
-0x80033DD0,func_80033DD0,ours,0,,recomp,,,
-0x80033E08,func_80033E08,ours,0,,recomp,,,
+0x80033DC4,func_80033DC4,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
+0x80033DD0,func_80033DD0,ours,0,,rust_verified,unit_diff,high,next of 256 x 32-byte ring at 0x800E0C50 (index 0x800A3CC0) (game::misc)
+0x80033E08,func_80033E08,ours,0,,rust_verified,unit_diff,high,next of 3072 x 64-byte ring at 0x800E2C50 (index 0x800A3CC4) (game::misc)
 0x80033E40,func_80033E40,ours,0,,recomp,,,
 0x80033EEC,func_80033EEC,ours,0,,recomp,,,
 0x80033F94,func_80033F94,ours,0,,recomp,,,
 0x8003423C,func_8003423C,ours,0,,recomp,,,
 0x80034374,func_80034374,ours,0,,recomp,,,
-0x800344C8,func_800344C8,ours,0,,recomp,,,
+0x800344C8,func_800344C8,ours,0,,rust_verified,unit_diff,high,[0x800A3FF4] = 1; decrement [0x800A3FF0] if positive (game::misc)
 0x800344F4,func_800344F4,ours,0,,recomp,,,
 0x80034650,func_80034650,ours,0,,recomp,,,
 0x800347D8,func_800347D8,ours,0,,recomp,,,
 0x8003483C,func_8003483C,ours,1,,recomp,,,
 0x80034948,func_80034948,ours,1,,recomp,,,
 0x800349C4,func_800349C4,ours,2,,recomp,,,
-0x80034DA8,func_80034DA8,ours,0,,recomp,,,
+0x80034DA8,func_80034DA8,ours,0,,rust_verified,unit_diff,high,clear [0x800A3FF8]; DL gSPMatrix(proj) + gSPForceMatrix from 0x801134D0/D4 (game::misc)
 0x80034E20,func_80034E20,ours,1,,recomp,,,
-0x8003527C,func_8003527C,ours,0,,recomp,,,
-0x800352E4,func_800352E4,ours,0,,recomp,,,
+0x8003527C,func_8003527C,ours,0,,rust_verified,unit_diff,high,DL gSPMatrix(proj) + gSPForceMatrix from [cam+0x34]/[cam+0x38] (game::misc)
+0x800352E4,func_800352E4,ours,0,,rust_verified,unit_diff,high,DL gSPMatrix(proj) + gSPForceMatrix from 0x801134D0/D4 (game::misc)
 0x80035354,func_80035354,ours,3,,recomp,,,
 0x80035598,func_80035598,ours,3,,recomp,,,
-0x80035698,func_80035698,ours,0,,recomp,,,
+0x80035698,func_80035698,ours,0,,rust_verified,unit_diff,high,[0x800A3D9C] = (v == 1) (game::misc)
 0x800356BC,func_800356BC,ours,0,,recomp,,,
 0x800358A0,func_800358A0,ours,0,,recomp,,,
 0x8003594C,func_8003594C,ours,0,,recomp,,,
