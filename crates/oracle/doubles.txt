@@ -1,0 +1,19 @@
+# Test doubles: recompiled functions that tests replace with Rust code
+# (oracle::doubles::install). One per line: name, kind, then a # comment.
+# `install` refuses a name that isn't listed here, and
+# `cargo xtask next-function` reads this file.
+#
+# Kinds:
+#   contract  Reproduces the function's observable effects as far as NOTES.md
+#             documents for it, so callers can be verified against it.
+#             next-function counts it as a satisfied callee and flags the
+#             targets that rely on it.
+#   stand-in  Gets one test past a call without claiming anything about what
+#             the function does. Doesn't count for readiness.
+#
+# A function compiled into the oracle (functions.txt) can't be listed: its C
+# runs and a double would never be reached.
+
+func_80011CDC  contract  # rom_read (difftest::rom; NOTES "Test doubles for the ROM reads")
+func_80011D60  contract  # rom_read_small (difftest::rom; same)
+func_800827C0  stand-in  # model_error: just returns (tests that reach model_load's error path)

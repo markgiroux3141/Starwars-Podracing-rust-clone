@@ -76,6 +76,26 @@ fn main() {
     let stubs_path = out.join("oracle_callee_stubs.c");
     fs::write(&stubs_path, stubs).unwrap();
 
+    // Functions tests may replace with doubles, and how far each double goes
+    // (doubles.txt; also read by `cargo xtask next-function`).
+    let doubles_path = manifest.join("doubles.txt");
+    let doubles = read_doubles(&doubles_path);
+    let mut rs_doubles = String::from("/// Every function listed in doubles.txt, with its kind.
+pub const LISTED: &[(&str, Kind)] = &[
+");
+    for (name, kind) in &doubles {
+        if selected_set.contains(name.as_str()) {
+            panic!("{}: {name} is compiled into the oracle (functions.txt), so a double for it would never run", doubles_path.display());
+        }
+        if !all.contains(name) {
+            panic!("{}: {name} is not a recompiled function (not in funcs.h)", doubles_path.display());
+        }
+        writeln!(rs_doubles, "    (\"{name}\", Kind::{kind}),").unwrap();
+    }
+    rs_doubles.push_str("];
+");
+    fs::write(out.join("oracle_doubles.rs"), rs_doubles).unwrap();
+
     // Rust declarations for the selected functions.
     let mut rs = String::from("extern \"C\" {\n");
     for name in &selected {
@@ -102,6 +122,7 @@ fn main() {
 
     println!("cargo:rerun-if-changed=c");
     println!("cargo:rerun-if-changed={}", list_path.display());
+    println!("cargo:rerun-if-changed={}", doubles_path.display());
     println!("cargo:rerun-if-changed={}", generated.join("funcs.h").display());
     println!("cargo:rerun-if-changed={}", include.join("recomp.h").display());
     println!("cargo:rerun-if-env-changed=RACER_N64RECOMP_DIR");
@@ -140,4 +161,32 @@ fn read_list(path: &Path) -> Vec<String> {
         }
     }
     names
+}
+
+/// `name kind # comment` lines of doubles.txt; kind is `contract` or
+/// `stand-in`. Returns the name and the `Kind` variant.
+fn read_doubles(path: &Path) -> Vec<(String, &'static str)> {
+    let text = fs::read_to_string(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    let mut out: Vec<(String, &'static str)> = Vec::new();
+    for line in text.lines() {
+        let line = line.split('#').next().unwrap().trim();
+        if line.is_empty() {
+            continue;
+        }
+        let f: Vec<&str> = line.split_whitespace().collect();
+        let kind = match f.as_slice() {
+            [_, "contract"] => "Contract",
+            [_, "stand-in"] => "StandIn",
+            _ => panic!("{}: expected `name contract|stand-in`, got {line:?}", path.display()),
+        };
+        assert!(
+            f[0].bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'),
+            "{}: bad function name {:?}",
+            path.display(),
+            f[0]
+        );
+        assert!(!out.iter().any(|(n, _)| n == f[0]), "{}: {} listed twice", path.display(), f[0]);
+        out.push((f[0].to_string(), kind));
+    }
+    out
 }

@@ -63,6 +63,20 @@ fn doubles_for_compiled_in_functions_are_refused() {
 }
 
 #[test]
+#[should_panic(expected = "not listed in crates/oracle/doubles.txt")]
+fn doubles_must_be_listed() {
+    // osPiStartDma: not compiled in, and not listed.
+    let _g = install("func_80087D70", |_, _| {});
+}
+
+#[test]
+fn listed_kinds() {
+    assert_eq!(doubles::listed("func_80011CDC"), Some(doubles::Kind::Contract));
+    assert_eq!(doubles::listed("func_800827C0"), Some(doubles::Kind::StandIn));
+    assert_eq!(doubles::listed("func_80087D70"), None);
+}
+
+#[test]
 fn abi_helpers() {
     let mut a = RecompContext::default();
     a.gpr[S0] = 0x1234_5678_8000_0000;

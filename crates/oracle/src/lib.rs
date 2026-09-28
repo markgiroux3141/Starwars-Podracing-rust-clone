@@ -84,6 +84,10 @@ pub mod recomp {
 /// the returned [`Installed`] guard is dropped. Every call through a stub is
 /// recorded with the registers at entry; `difftest` compares the C run's
 /// calls with the Rust run's.
+///
+/// Only functions listed in `crates/oracle/doubles.txt` can have doubles
+/// ([`LISTED`]); the list says whether each double reproduces the function's
+/// contract or only stands in for it, and `cargo xtask next-function` reads it.
 pub mod doubles {
     use game::recomp::{reg::*, s32, RecompContext};
     use n64mem::Mem;
@@ -93,6 +97,23 @@ pub mod doubles {
     use std::rc::Rc;
 
     type Body = Rc<RefCell<dyn FnMut(&mut Mem, &mut RecompContext)>>;
+
+    /// How far a listed double goes (doubles.txt).
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum Kind {
+        /// Reproduces the function's observable effects as NOTES.md documents
+        /// them, so callers can be verified against it.
+        Contract,
+        /// Gets a test past a call; claims nothing about the function.
+        StandIn,
+    }
+
+    include!(concat!(env!("OUT_DIR"), "/oracle_doubles.rs"));
+
+    /// The kind `name` is listed with in doubles.txt, if any.
+    pub fn listed(name: &str) -> Option<Kind> {
+        LISTED.iter().find(|(n, _)| *n == name).map(|&(_, k)| k)
+    }
 
     thread_local! {
         static DOUBLES: RefCell<HashMap<&'static str, Body>> = RefCell::new(HashMap::new());
@@ -135,11 +156,16 @@ pub mod doubles {
 
     /// Run `body` whenever the recompiled function `name` is called on this
     /// thread. `name` must be a function not compiled into the oracle (one
-    /// that is compiled in is called directly and never reaches a double).
+    /// that is compiled in is called directly and never reaches a double),
+    /// and must be listed in doubles.txt.
     pub fn install(name: &'static str, body: impl FnMut(&mut Mem, &mut RecompContext) + 'static) -> Installed {
         assert!(
             !crate::recomp::FUNCTIONS.iter().any(|(n, _)| *n == name),
             "{name} is compiled into the oracle, so a double for it would never run"
+        );
+        assert!(
+            listed(name).is_some(),
+            "{name} is not listed in crates/oracle/doubles.txt; add it as `contract` or `stand-in`"
         );
         let body: Body = Rc::new(RefCell::new(body));
         let prev = DOUBLES.with_borrow_mut(|d| d.insert(name, body));
