@@ -32,6 +32,22 @@ Running log of discoveries and decisions. Newest session at the bottom.
 ### 64-bit instructions
 - `ld`/`sd`/`dsll32`/`dsra32`/`ddiv`/`ddivu`/`dmultu` are confined to about `0x8008a000–0x8008d000`, probably libultra `__ll_*` 64-bit helpers and `_Printf`. Game code appears to be 32-bit. `cvt.l.s`/`cvt.s.l` at `0x8008c648`/`0x8008c700` (libultra `__f_to_ll` family?).
 
+### Code segment and function boundaries (2026-09-28, `tools/find_functions.py`)
+- Boot: `0x80000400` sets `$sp = 0x800A2830` and does `jr $t2` to `0x80000450`. That routine copies ROM `0x1120–0xAF4B0` to `0x80000520` (a copy onto itself, since IPL3 already loaded it), clears from `0x800AE8B0` up to `0x80400000` (BSS), then calls `func_8002F4D0`. **The loaded image is ROM `0x1000–0xAF4B0`, VRAM `0x80000400–0x800AE8B0`.**
+- **CPU .text is ROM `0x1000–0x98BF0`, VRAM `0x80000400–0x80097FF0` (size `0x97BF0`).** RSP code follows: rspboot (`0xD0` bytes, `0x80097FF0–0x800980C0`, referenced by lui/addiu at `0x80007148`/`0x80084C40` and from data at `0x8009A2D8`), then F3DEX2 text from `0x800980C0` (the first COP2 word). Parts of it decode as CPU code and must not be treated as functions.
+- Data inside .text: the build tag string `v07Apr99.1553` at `0x80000510–0x8000051F` (referenced from code at `0x8002F2F4`).
+- **1374 functions**: 932 found through `jal`, 23 through lui/addiu pointers, and 418 only in gaps between functions (only reachable through pointer tables), plus the entry. The cross-check figure of ~878 named + ~500 statics is consistent. Every function start follows a `jr`/`j`/`b` plus delay slot or padding. 64 jump tables, all `sltiu`-bounded but one. All agree with N64Recomp's own table-size rule.
+- One fallthrough: `0x8008D400` (`jal 0x80095990` with `a0 = 0`, i.e. destroy-self, never returns) runs into `0x8008D410`, so its extent covers it (size `0x18`, not `0x10`). One overlap: `0x8008D044` (returns via `jr $s2`) sits inside the exception handler `0x8008CB10`'s extent, which branches around it. We don't reproduce the cross-check's "143 split-function fallthroughs". Our control-flow traversal needs no splitting, so that figure likely reflects their method, not the ROM.
+- The OS/libultra range starts **before** `0x8008C000`: cache ops appear at `0x80087CC0` and `0x80088AD0`.
+- 12 functions can't be translated by N64Recomp: cache/TLB/eret/non-Status COP0, and `trunc.l.d`/`trunc.l.s` in `0x8008C560`/`0x8008C57C` (`__d_to_ll`/`__f_to_ll`-like). They are `ignored` in `recomp.toml` and must come from the runtime.
+
+### N64Recomp behaviour that matters (pinned `ffb39cd`)
+- Symbol file (`Context::from_symbol_file`, `src/config.cpp`): `[[section]]` needs `rom`, `vram`, `size`, `name` (optional `got_address`, `relocs`). Each `functions` entry needs `name`, `vram`, `size`. Without `relocs` the section is non-relocatable and addresses are emitted as literals. `entrypoint` renames the function at that vram with ROM `0x1000` to `recomp_entrypoint`.
+- A function's C is its word range, and nothing more. **A function that falls off its end simply returns**, so fallthrough functions must cover their continuation. Branches out of a function are only legal to another function's start (tail call); otherwise it warns and emits a `goto` to a missing label. A `jal` to an unknown in-section address creates a `static_*` function. `cargo xtask recomp` fails on either.
+- Jump-table size = consecutive entries that fall inside the function's own range (stopping at the next table), so function extents must include every case label.
+- `get_cop1_cs()` returns **only the rounding-mode bits** of FCR31. Flags and cause bits read back as 0. Code that tests them after a conversion, e.g. `0x8008C598` (`andi 0x78` after `cvt.l.d`), therefore behaves differently under the recomp than on hardware. **The oracle is not hardware-exact there**; such functions will need an emulator snapshot or a different reference.
+- In 32-bit FPU mode, odd FPRs are written through `ctx->f_odd[(n-1)*2]`, i.e. the high word of `f(n-1)`. `f_odd` must point at `&ctx->f0.u32h`.
+
 ## Upstream projects (checked 2026-09-28)
 
 | Project | Licence | State / how we use it |
@@ -58,6 +74,7 @@ Findings from sp00nznet/racer we can use as facts (addresses, not code):
 - Windows 10, Rust 1.92 stable-msvc, CMake 4.1.
 - MSVC: VS 2022 Community (14.42) and VS 2026 Community (14.51). Ninja ships with both.
 - **clang-cl is not installed** (VS "C++ Clang tools" component). May be needed for N64ModernRuntime/RT64.
+- clippy is not installed for the toolchain (`rustup component add clippy`).
 - Python 3.12; project venv at `.venv/` with rabbitizer 1.16.2, spimdisasm 1.42.4, splat64.
 
 ## Session log
@@ -84,3 +101,30 @@ Findings from sp00nznet/racer we can use as facts (addresses, not code):
 
 **Suggested next step**
 - Write `tools/find_functions.py` to generate `symbols/racer.syms.toml` from our own analysis, run N64Recomp into `generated/`, compile one leaf function into `oracle` with a minimal stub runtime, and port it to Rust. That completes Phase 1.
+
+### 2026-09-28 — Session 2
+
+**First port target: `func_80000554`** (written before coding)
+- Zeroes `a1` consecutive 32-bit words starting at `a0` and does nothing if `a1 <= 0`; `a1` is compared as a signed 64-bit register. It is a compiler-unrolled loop: first `a1 & 3` single stores, then four stores per iteration.
+- It is a leaf with no floats, calls or stack. Callee-clobbered registers are left as the loop leaves them (`v0` = `a1 & 3`, or 0 if `a1` is a multiple of 4; `v1`, `a2`, `a3`, `t6`, `t7`, `t8`), and the port has to reproduce them exactly.
+
+**Done**
+- `tools/find_functions.py`: our own boundary analysis (rabbitizer). Recursive descent from the entrypoint through `jal`s, tail calls and jump tables (the same lui/addiu/addu/lw pattern N64Recomp recognises), then lui/addiu pointers, then gap code, then data words. Extents are iterated to a fixed point. It writes `symbols/racer.syms.toml` and `symbols/functions.csv`, keeping hand-edited rows, and reports ambiguities. It is deterministic. `cargo xtask find-functions` runs it.
+- `recomp.toml` + `cargo xtask recomp`: checks `baserom.z64` against `rom/EXPECTED.sha1`, wipes `generated/`, runs N64Recomp, and fails if it creates statics or warns. The result is 1362 C files, byte-identical across runs, with no hand edits. Every generated file spans exactly its symbol's `[vram, vram+size)`.
+- `crates/game`: `recomp::RecompContext` (`#[repr(C)]` mirror of `recomp_context`) plus `s32`/`addu`/`sll` helpers matching `S32`/`ADD32`, and the first port, `util::func_80000554`. Ports are not `#[no_mangle]`, so they don't clash with the C symbols in tests.
+- `crates/oracle`: `build.rs` compiles `generated/<name>.c` for each name in `functions.txt`. Unselected callees get generated trapping stubs. It builds with `/fp:strict` (or `-frounding-math`). It adds `c/stub_runtime.c` (every runtime hook traps via Rust `oracle_trap` → abort, with no MSVC dialog) and `c/ctx_shim.c`. Tests: context size/offsets/union halves/`f_odd` against the C compiler, and each stub aborts loudly (child-process test).
+- `crates/difftest`: `State` (8 MB RDRAM pre-filled with a fixed pseudo-random pattern, so zero stores are visible, plus a boxed context) and `compare()`, which runs C and Rust on clones and diffs every GPR, `hi`/`lo`, FPR bits, status/mode, `f_odd` and all of RDRAM. `tests/func_80000554.rs` has 2×512 proptest cases plus edge cases: counts 0, negative, `i32::MIN`, 1–9, the end of 8 MB, a whole MB, 64-bit `blez`, and non-canonical upper halves. It also checks memory against an independent statement of the behaviour.
+- **Phase 1 done**: `cargo test` runs a C-vs-Rust differential test on `func_80000554`. It passed first time, and deliberately broken ports (a dropped store; a wrong `v0`) are caught with readable diffs.
+
+**Surprises**
+- The loaded image runs to ROM `0xAF4B0`, and .text ends at `0x98BF0`, not `0x99000`. The last `0x410` bytes before `0x99000` are RSP code, part of which decodes as plausible CPU code.
+- N64Recomp can't translate `trunc.l.*`. It also drops FCR31 flag bits (see Facts), so the oracle is not a hardware reference for FCR31-flag code.
+- The ported function's "return value" in `v0` is a dead loop counter (0 when `a1` is a multiple of 4). Ports must keep such leftovers because the difftest compares whole register files.
+- A plain `abort()` from C risks an MSVC error dialog in a non-interactive run. Traps go through Rust `process::abort` instead.
+
+**In progress / not done**
+- `cargo xtask next-function` (SPEC §7) doesn't exist yet. `depth` in functions.csv is filled from direct calls and tail calls, and is empty for functions with indirect calls or on cycles.
+- No names yet (all `func_XXXXXXXX`). The 12 non-recompilable OS functions will need names, which N64Recomp matches against its built-in lists, before a runtime can supply them.
+
+**Suggested next step**
+- Phase 2: `tools/callgraph.py` (or extend find_functions' call data) with depth, flagging indirect calls. Identify libultra by signature (the range starts ≤ `0x80087CC0`). Then port more depth-0 integer leaves (332 leaves have no floats; see functions.csv) using the same difftest pattern, and add `cargo xtask next-function`.
