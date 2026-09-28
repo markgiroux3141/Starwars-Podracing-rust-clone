@@ -4,3 +4,7 @@
 
 func_80000554  # zero n words (util::func_80000554)
 func_80011940  # Comp/Wolf LZSS decompressor (asset::func_80011940)
+func_8002FAC4  # heap_set_cursor (heap::func_8002FAC4)
+func_8002FAFC  # heap_cursor (heap::func_8002FAFC)
+func_8002FC58  # heap_free (heap::func_8002FC58)
+func_8002FC80  # heap_check (heap::func_8002FC80)

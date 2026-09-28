@@ -16,6 +16,7 @@
 //! use the `assets` crate, which doesn't depend on this one.
 
 pub mod asset;
+pub mod heap;
 pub mod imports;
 pub mod recomp;
 pub mod util;
@@ -33,4 +34,8 @@ pub struct Ported {
 pub const PORTED: &[Ported] = &[
     Ported { vram: 0x8000_0554, name: "func_80000554", func: util::func_80000554 },
     Ported { vram: 0x8001_1940, name: "func_80011940", func: asset::func_80011940 },
+    Ported { vram: 0x8002_FAC4, name: "func_8002FAC4", func: heap::func_8002FAC4 },
+    Ported { vram: 0x8002_FAFC, name: "func_8002FAFC", func: heap::func_8002FAFC },
+    Ported { vram: 0x8002_FC58, name: "func_8002FC58", func: heap::func_8002FC58 },
+    Ported { vram: 0x8002_FC80, name: "func_8002FC80", func: heap::func_8002FC80 },
 ];
