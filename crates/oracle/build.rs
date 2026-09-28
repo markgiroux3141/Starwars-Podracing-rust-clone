@@ -110,7 +110,7 @@ pub const LISTED: &[(&str, Kind)] = &[
 
     // Shims and stub runtime: our code, warnings on.
     let mut shims = base_build(&include);
-    shims.files(["c/layout_shim.c", "c/ctx_shim.c", "c/stub_runtime.c"]).file(&stubs_path);
+    shims.files(["c/layout_shim.c", "c/ctx_shim.c", "c/stub_runtime.c", "c/fpu_probe.c"]).file(&stubs_path);
     shims.compile("oracle_shims");
 
     // Generated code: warnings off (unused locals in every function).

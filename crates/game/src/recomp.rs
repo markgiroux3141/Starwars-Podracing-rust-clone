@@ -159,6 +159,23 @@ pub fn lbu(mem: &Mem, base: u64, offset: i32) -> u64 {
     u64::from(mem.read_u8((base as u32).wrapping_add(offset as u32)))
 }
 
+/// N64Recomp's `LD` (`ldc1`/`ld`): the doubleword at `base + offset`, high
+/// word first in memory.
+#[inline]
+pub fn ld(mem: &Mem, base: u64, offset: i32) -> u64 {
+    let a = (base as u32).wrapping_add(offset as u32);
+    (u64::from(mem.read_u32(a)) << 32) | u64::from(mem.read_u32(a.wrapping_add(4)))
+}
+
+/// N64Recomp's `SD` (`sdc1`/`sd`): the low word to `+4` first, then the high
+/// word to `+0`.
+#[inline]
+pub fn sd(mem: &mut Mem, base: u64, offset: i32, value: u64) {
+    let a = (base as u32).wrapping_add(offset as u32);
+    mem.write_u32(a.wrapping_add(4), value as u32);
+    mem.write_u32(a, (value >> 32) as u32);
+}
+
 /// `lhu`: the zero-extended halfword at `base + offset` (`MEM_HU`).
 #[inline]
 pub fn lhu(mem: &Mem, base: u64, offset: i32) -> u64 {
@@ -326,6 +343,105 @@ macro_rules! recomp_imports {
     };
 }
 pub(crate) use recomp_imports;
+
+/// Float conversions as N64Recomp's C computes them (NOTES.md, "Floats").
+///
+/// The C switches the **host** rounding mode with `fesetround` when the game
+/// writes FCR31 (`set_cop1_cs`), and `CVT_*` honour it. Rust can't change the
+/// host mode (the compiler assumes round-to-nearest), so ports keep FCR31's
+/// rounding bits in a local and pass them to these helpers. Only the
+/// conversions take a mode: float arithmetic in ports is round-to-nearest,
+/// which is the only mode the game computes in (its one idiom that sets
+/// another mode converts and restores).
+///
+/// Out-of-range and NaN results follow what recomp.h gives on the MSVC
+/// host, checked against it in `crates/difftest/tests/fpu.rs`. They are
+/// host-specific and **not** the hardware's.
+pub mod fpu {
+    /// FCR31 rounding modes (bits 0-1).
+    pub const NEAREST: u32 = 0;
+    pub const TO_ZERO: u32 = 1;
+    pub const UP: u32 = 2;
+    pub const DOWN: u32 = 3;
+
+    fn round_f64(x: f64, mode: u32) -> f64 {
+        match mode & 3 {
+            NEAREST => x.round_ties_even(),
+            TO_ZERO => x.trunc(),
+            UP => x.ceil(),
+            _ => x.floor(),
+        }
+    }
+
+    /// `CVT_W_S` (`cvt.w.s`): `lrintf` under `mode`. On MSVC, NaN and
+    /// magnitudes above 2^31 give 0, but 2^31 itself gives `0x80000000`.
+    pub fn cvt_w_s(x: f32, mode: u32) -> u32 {
+        if x.is_nan() || x.abs() > 2_147_483_648.0 {
+            return 0;
+        }
+        // Exact in f64; 2^31 wraps to 0x80000000, as on the host.
+        round_f64(f64::from(x), mode) as i64 as u32
+    }
+
+    /// `CVT_W_D` (`cvt.w.d`): `lrint` under `mode`. On MSVC, NaN and any
+    /// value whose rounded result is outside `i32` give 0.
+    pub fn cvt_w_d(x: f64, mode: u32) -> u32 {
+        let r = round_f64(x, mode);
+        if r.is_nan() || !(-2_147_483_648.0..=2_147_483_647.0).contains(&r) {
+            return 0;
+        }
+        r as i32 as u32
+    }
+
+    /// `TRUNC_W_S` (`trunc.w.s`): the C cast `(int32_t)x`, which on x86-64 is
+    /// `cvttss2si`: NaN and out-of-range give `0x80000000`.
+    pub fn trunc_w_s(x: f32) -> u32 {
+        trunc_w_d(f64::from(x))
+    }
+
+    /// `TRUNC_W_D` (`trunc.w.d`): `(int32_t)x`, `0x80000000` when out of range.
+    pub fn trunc_w_d(x: f64) -> u32 {
+        let t = x.trunc();
+        if t.is_nan() || !(-2_147_483_648.0..=2_147_483_647.0).contains(&t) {
+            return 0x8000_0000;
+        }
+        t as i32 as u32
+    }
+
+    /// `x` (exact in f64) rounded to f32 under `mode`.
+    fn to_f32(x: f64, mode: u32) -> f32 {
+        let r = x as f32; // round to nearest, even
+        if x.is_nan() || f64::from(r) == x {
+            return r;
+        }
+        // The two floats either side of x (r is one of them; ±inf counts as
+        // a float, so overflow rounds to MAX or inf by mode).
+        let (below, above) = if f64::from(r) < x { (r, r.next_up()) } else { (r.next_down(), r) };
+        match mode & 3 {
+            NEAREST => r,
+            TO_ZERO => {
+                if x > 0.0 {
+                    below
+                } else {
+                    above
+                }
+            }
+            UP => above,
+            _ => below,
+        }
+    }
+
+    /// `CVT_S_W` (`cvt.s.w`): `(float)(int32_t)w` under `mode` (only values
+    /// beyond 2^24 round).
+    pub fn cvt_s_w(w: u32, mode: u32) -> f32 {
+        to_f32(f64::from(w as i32), mode)
+    }
+
+    /// `CVT_S_D` (`cvt.s.d`): `(float)x` under `mode`.
+    pub fn cvt_s_d(x: f64, mode: u32) -> f32 {
+        to_f32(x, mode)
+    }
+}
 
 /// Named register indices (o32 ABI names), for readability in ports.
 pub mod reg {

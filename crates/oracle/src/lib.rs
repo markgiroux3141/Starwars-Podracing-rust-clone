@@ -49,6 +49,21 @@ pub mod ctx {
 }
 
 /// The stub runtime's entry points (`c/stub_runtime.c`). Every one traps.
+/// recomp.h's float conversions under each rounding mode (`c/fpu_probe.c`),
+/// to check `game::recomp::fpu` against what generated code computes.
+pub mod fpu_probe {
+    extern "C" {
+        pub fn fpu_probe_cvt_w_s(x: f32, mode: u32) -> i32;
+        pub fn fpu_probe_cvt_w_d(x: f64, mode: u32) -> i32;
+        pub fn fpu_probe_trunc_w_s(x: f32) -> i32;
+        pub fn fpu_probe_trunc_w_d(x: f64) -> i32;
+        pub fn fpu_probe_cvt_s_w(x: i32, mode: u32) -> f32;
+        pub fn fpu_probe_cvt_s_d(x: f64, mode: u32) -> f32;
+        pub fn fpu_probe_get_cop1_cs() -> u32;
+        pub fn fpu_probe_asserts_on() -> i32;
+    }
+}
+
 pub mod runtime {
     use std::ffi::c_char;
 
