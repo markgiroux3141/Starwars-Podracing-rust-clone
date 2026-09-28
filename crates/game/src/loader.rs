@@ -876,3 +876,56 @@ pub unsafe extern "C" fn func_8003043C(rdram: *mut u8, ctx: *mut RecompContext) 
     g[RA] = lw(m, g[SP], 0x14);
     g[SP] = addu(g[SP], 0x18);
 }
+
+/// `func_80030574` (texture_cache_trim): zero every [`TEXTURE_CACHE`] word
+/// that is above `a0`, so textures loaded above a heap cursor are forgotten.
+///
+/// All 1700 words are visited, four per iteration. The test is `sltu a0,
+/// word` on the full registers, with the word sign-extended by `lw`: a word is
+/// zeroed when `a0 < word` as unsigned 64-bit values. Zero words never are.
+/// `a0` is only compared, so any value is in the domain; a zero-extended
+/// (non-canonical) address is below every sign-extended KSEG0 pointer and
+/// clears them all.
+///
+/// Leaves `v0 = v1 = 0x800DB890`, `t6`-`t9` the last group's words (as read,
+/// before any zeroing) and `at` the last compare.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80030574(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V1] = li(TEXTURE_CACHE);
+    g[V0] = li(TEXTURE_COUNT); // the end of the cache
+    g[T6] = lw(m, g[V1], 0);
+    loop {
+        // Each test: sltu at, a0, tN / beql at, zero (delay: the next load)
+        // / else sw zero and the same load.
+        g[AT] = u64::from(g[A0] < g[T6]);
+        if g[AT] != 0 {
+            sw(m, g[V1], 0, 0);
+        }
+        g[T7] = lw(m, g[V1], 4);
+        g[AT] = u64::from(g[A0] < g[T7]);
+        if g[AT] != 0 {
+            sw(m, g[V1], 4, 0);
+        }
+        g[T8] = lw(m, g[V1], 8);
+        g[AT] = u64::from(g[A0] < g[T8]);
+        if g[AT] != 0 {
+            sw(m, g[V1], 8, 0);
+        }
+        g[T9] = lw(m, g[V1], 0xC);
+        g[AT] = u64::from(g[A0] < g[T9]);
+        if g[AT] != 0 {
+            sw(m, g[V1], 0xC, 0);
+        }
+        g[V1] = addu(g[V1], 0x10);
+        // bnel v1, v0 / (delay, if taken) lw t6, 0(v1)
+        if g[V1] == g[V0] {
+            break;
+        }
+        g[T6] = lw(m, g[V1], 0);
+    }
+}

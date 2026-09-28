@@ -93,7 +93,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80007B10,func_80007B10,ours,7,,recomp,,,
 0x80007CE4,func_80007CE4,ours,0,,recomp,,,
 0x80007D44,func_80007D44,ours,17,,recomp,,,
-0x80007E80,func_80007E80,ours,15,,recomp,,,
+0x80007E80,func_80007E80,ours,15,,recomp,,,"only caller heap_set_level. For each nonzero word in 0x8009A32C..A388 and A388..A3A8: func_80007A80, func_80007A44, zero it; if any: [0x800B05B0] = 0 and func_80008F28 until another thread raises it to 5"
 0x80007F5C,func_80007F5C,ours,1,,recomp,,,
 0x80007FC8,func_80007FC8,ours,1,,recomp,,,
 0x8000803C,func_8000803C,ours,0,,recomp,,,
@@ -416,7 +416,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8002DFB0,func_8002DFB0,ours,0,,recomp,,,
 0x8002DFBC,func_8002DFBC,ours,14,,recomp,,,
 0x8002E028,func_8002E028,ours,0,,recomp,,,
-0x8002E034,func_8002E034,ours,14,,recomp,,,
+0x8002E034,func_8002E034,ours,14,,recomp,,,"one-time: func_8002DFB0(0x3F,0); while [0x800A2690]: func_8002E2FC, func_8002E124; [0x800A2698] = 0; func_8002DFB0(0x40,0); [0x800A2690] = 1. Callers: rom_read_dma, func_80011BDC, heap_set_level (guarded by 0x800A68A0), 2 more"
 0x8002E0A8,func_8002E0A8,ours,0,,recomp,,,
 0x8002E0B4,func_8002E0B4,ours,12,,recomp,,,
 0x8002E124,func_8002E124,ours,13,,recomp,,,
@@ -452,7 +452,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8002F750,func_8002F750,ours,24,,recomp,,,
 0x8002F9C0,func_8002F9C0,ours,0,,recomp,,,
 0x8002F9E0,func_8002F9E0,ours,0,,recomp,,,
-0x8002FA00,heap_set_level,ours,16,asset,recomp,,low,level = a0; cursors[a0] = cursors[a0-1]; zeroes cursors above a0; calls func_80030574 (texture cache?); clears 0x800A2864
+0x8002FA00,heap_set_level,ours,16,asset,recomp,,low,"level = a0; cursors[a0] = cursors[a0-1]; texture_cache_trim(that cursor); func_80007E80(1); zeroes cursors above; clears 0x800A2864. First call only: func_8002E034, then [0x800A68A0] = 1. Not portable yet: func_80007E80 and func_8002E034 cannot be doubled honestly (NOTES)"
 0x8002FAC4,heap_set_cursor,ours,1,asset,rust_verified,unit_diff,high,cursors[level] = a0; heap_check(1)
 0x8002FAFC,heap_cursor,ours,0,asset,rust_verified,unit_diff,high,v0 = cursors[level] (0x800D9DD8[[0x800A2868]])
 0x8002FB18,func_8002FB18,ours,1,,recomp,,,
@@ -476,7 +476,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80030328,texture_read,ours,17,asset,rust_verified,unit_diff,high,"(hdr, &pix, &pal): pixels then palette at 64-aligned heap; *pal untouched if no palette; OOM if free < size+0x80"
 0x8003043C,texture_block_init,ours,17,asset,rust_verified,unit_diff,high,count -> 0x800DB890 (rom_read_small); zeroes all 1700 cache words whatever the count; QUIRK: count >= 1701 (signed) hangs: b . = pause_self
 0x800304AC,texture_get,ours,18,asset,rust_verified,unit_diff,high,cache 0x800D9E00 holds &pix of the first loader; QUIRK: later hits copy that pair (null if it OOMed); idx >= count -> null
-0x80030574,func_80030574,ours,0,,recomp,,,
+0x80030574,texture_cache_trim,ours,0,asset,rust_verified,unit_diff,high,"zero every texture cache word w with a0 < sext(w) (sltu, 64-bit); called by heap_set_level with the new level cursor"
 0x800305E8,model_load,ours,19,asset,rust_verified,unit_diff,high,"mask, Comp to heap top, relocation, tag; QUIRK: Comp header read before space check; window can overlap output (corrupt model)"
 0x80030964,func_80030964,ours,1,,recomp,,,
 0x80030A7C,func_80030A7C,ours,0,,recomp,,,
