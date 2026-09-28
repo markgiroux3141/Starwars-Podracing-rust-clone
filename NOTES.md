@@ -125,6 +125,32 @@ Subsystems unknown unless stated; `game::misc` holds them by address until they 
 - Twelve are empty (`jr ra`), most spilling their arguments to the caller's slots, presumably compiled-out debug hooks. They're still ported, since callers reach them.
 - N64Recomp's `sra` shifts the full 64-bit register, then truncates: for a non-canonical input, upper-half bits reach the low word (undefined on hardware). Ports follow the C.
 
+### Depth-0 leaves ported in session 6 (`game::misc`, `game::math`)
+Mostly by address, drafted with the translator. Beyond `functions.csv`'s notes:
+- **Records at `0x800D2190`** (32 bytes, id = the low halfword of `a0`, signed): flags `+0x14` (bit `0x20` "on"), halfwords `+4`/`+6`, four bytes `+0x18`, a pointer `+0x1C`. Ids -201/-103/-104 name globals at `0x8009B778..83` instead. `func_8000A920` (on/off) and `func_8000AB24` (four bytes) have 172 and 149 call sites; the -103/-104 "on" is the fourth byte. **Entries behind `[0x8009B790]`** (0x7C bytes) with a selected index at `0x8009B798`.
+- `func_8000C5F0`/`8000C658`: push/pop of a current id with a saved word per id. **`SAVED_WORDS` (`0x8009B7F4`) has room for 3 ids**; id 3 is `CURRENT_ID` itself.
+- `func_8001004C`: a 16-bit handle decode through 8 (shift, base) pairs at `0x8009B888`.
+- `func_80014C98` appends `gDPPipeSync` to the display list pointer at `0x801217B0`.
+- QUIRKs worth knowing: `func_80012B5C` copies two **uninitialised stack words** to its outputs when its lookup misses. `func_8000FFF8`/`80010014` compare the index as 64 bits but address with its low word. The "three recently seen" list (`func_80009278`/`800092B0`) doesn't bound its slot.
+- The flag at `0x8009A2B8` gates `func_80007A44`, `func_8000787C` (`[0x8009A328] = trunc(x * 32000)`) and `func_80008F28`: probably "audio running" (**guess**).
+- `game::math`: vec2 add/scale/length/dist_sq (`0x8001514C..`), the first float ports.
+
+### Splines (session 6; `assets::Spline`, `spline_load` = `func_80030174`)
+- Block: `u32 count` (91), then single offsets. Entry: a 16-byte header, then `count` points of **0x54 bytes**, exactly filling the entry (all 91).
+- Header: `+0` unknown, `+4` point count, `+8` **segment count = points + one per extra successor at a fork** (all 91), `+0xC` stale. **The loader overwrites `+0xC` with the first point's address** (cursor + 0x10); it doesn't relocate the old value.
+- Point: `+0` successor count (0-2), `+2` predecessor count (0-3); successor indices from `+4`, predecessors from `+8` (one point has three, so the list runs into `+0xC`). **Unused slots hold stale bytes that read as ASCII text** (authoring-tool leftovers): always honour the counts. Links are mutual (5076 points). Then four f32 triples: position `+0x10`, an often-(0,0,1) vector `+0x1C`, two handle-like points `+0x28`/`+0x34` (**guess**: Bézier handles). Then ten i16 at `+0x40`: usually the point's own index twice, `next_count - 1` extra segment ids (all in `count..segments`), -1 padding.
+- 41 splines are open (one start, one end), 50 closed.
+- `spline_load(index, &out)`: index = sign-extended low word (stack round trip, like the other loaders). **No space check, no alignment.** A pointless loop counts to `+4` (its `v1` is overwritten by `heap_check` afterwards).
+
+### Translator (session 6; `crates/translate`, `cargo xtask translate`)
+- Parses N64Recomp's C (a small C expression parser). Each statement must match one instruction's shape (about 40 integer shapes, plus float, `c1cs` and FCR31 shapes), or the function is refused with a reason. It never guesses.
+- CFG: a conditional branch's delay slot gets its own block on the taken edge. It is hoisted above the branch when the fall-through starts with the same instructions (non-likely), with `let cN = cond;` if it overwrites a register the condition reads. Branch-likely delay slots stay on the taken edge. Jump threading, chain merging, `lui`+`addiu`/`ori` folding.
+- Structuring: Ramsey's "Beyond Relooper" (dominator tree; `break 'b` to merge nodes, `continue 'l` for back edges), then passes that remove fall-through jumps, splice unused blocks, merge `if a { if b {..} }` into `&&`, hoist loop exits and fix saved-condition polarity. Irreducible graphs would get a `match pc` state machine; none exist in the game's code.
+- Output style matches the ports: `g[REG]`, `m`, `ctx.fpr[n]`, `call(imports::func_X, m, ctx)` with `let g = &mut ctx.gpr;` re-borrowed after calls, and `hi`/`lo`/`c1cs`/`fcr31` locals as N64Recomp has them.
+- **Validation:** `cargo test -p difftest --features translated` swaps a draft of every `PORTED` function in for the port (`game`'s build.rs, `difftest::port_under_test`). All 131 translate and pass all difftests. Translator mutants (dropped saved condition, wrong tail strip, missing negation, `sra`→`srl`) are caught.
+- **Coverage** (`--survey`): 1046 of 1103 game-side functions translate, 389 of 399 at depth 0. Refused: jump tables (39), `break` (8), `LOOKUP_FUNC` (8), `lwl`/`lwr`/`swl`/`swr` (2). No irreducible graphs.
+- A draft is not a port. The per-function loop still applies, and the part that takes the time is the statement, the doc comment (domain, leftovers, QUIRKs), the independent check and the mutants.
+
 ### Asset compression: "Comp"/"Wolf" LZSS (`func_80011940`)
 Header (12 bytes, read by the loader): `"Comp"`, `"Wolf"` (all 92), `u32` decompressed size (BE). The stream follows at +12; `func_80011940(src = stream, dst)` returns the end of the output in `v0`. It does not know the output size and stops only at the terminator.
 - Ring buffer: 4096 bytes at **`src - 0x1000`**, the memory just below the compressed input, **never initialised** (QUIRK). The write position starts at 1. Every output byte is also stored at the write position, which then advances mod 0x1000.
@@ -219,6 +245,7 @@ Findings from sp00nznet/racer we can use as facts (addresses, not code):
 - clippy is not installed for the toolchain (`rustup component add clippy`).
 - Python 3.12; project venv at `.venv/` with rabbitizer 1.16.2, spimdisasm 1.42.4, splat64, and Pillow (session 3; only for looking at extracted PNGs, not used by any committed tool).
 - Claude Code's Bash tool fails to parse a heredoc whose body has an odd number of `'` (a Rust lifetime or label, `'found`), even with `<<'EOF'`. Write the text to a scratch file and `cat` it instead (session 5).
+- Working-tree files may have CRLF endings (git converts on commit). Scripted multi-line replacements must match the file's endings. A mutant runner must insist each pattern is **unique** in the file: a replacement that lands in another function looks like a missed mutant, or like a caught one if it breaks the build (session 6).
 
 ## Session log
 
@@ -358,3 +385,37 @@ Findings from sp00nznet/racer we can use as facts (addresses, not code):
 **Suggested next step**
 - Port `spline_load` (`func_80030174`, ready via rom_read_small) and decode splines in `assets` (0x10-byte header, pointer at +0xC relocated to +0x10).
 - Keep batching depth-0 leaves: `cargo xtask next-function -n 60` lists them; `0x80008530..0x8000AC60` is next, with groups by address and one test file each. `tools/register_ports.py MODULE ADDR:comment ...` adds ports to `PORTED` and `functions.txt` in address order.
+
+### 2026-09-28 — Session 6
+
+**Done**
+- **`cargo xtask translate`** (new crate `translate`, no dependency on `game`; Facts: "Translator"). It drafts register-exact ports from the generated C, integer and float. **Validated**: every existing port's draft passes every existing difftest (`--features translated`; 39 at first, all 131 at the end), and four translator mutants are caught. `--survey`: 1046 of 1103 game-side functions translate.
+- **92 ports, 131/1374 verified** (was 39), all drafted with the translator: 86 depth-0 leaves in 7 address-ordered batches, one test file per group (`leaves_8000803C.rs` .. `leaves_80018114.rs`), plus 5 float leaves and `spline_load`. 82 reachable port mutants, all caught in the end. Four missed in the first round: two fused multiply-adds and a range edge, which led to better strategies, and one that landed in another function. Plus 4 helper and 4 translator mutants.
+- **Pace:** batches of 11-23 took 2.3 to 6.5 minutes each from first draft to csv update, mutants included (about 12-30 s per function; smaller functions are faster). Session 5 recorded no timings; it verified 30 functions in the whole session.
+- **Floats: designed and started** (Facts: "FPU control register", "Floats in ports"). `game::recomp::fpu` gives conversions keyed on a local `fcr31`, checked against recomp.h's own macros on this host (`oracle/c/fpu_probe.c`, `difftest/tests/fpu.rs`). The translator does floats. 5 float leaves ported (vec2 ops in the new `game::math`, a `trunc.w.s` store). `nan_domain.rs` pins that a NaN operand stops the C.
+- **FCR31 settled:** boot sets `0x01000800` (FS|EV). All 35 game-side `cfc1` sites are IDO's float→unsigned idiom, which tests FCR31 flags the oracle can't see. `next-function` flags them.
+- **Message-queue doubles scoped** (Facts: "The OS boundary and message-queue doubles"): the families of the 65 OS functions under 363 game functions, what each would unblock, the queue doubles' contract (blocking with no message or no room is refused, unless a scripted event source feeds the queue), and the order of work. 22 libultra functions named in functions.csv.
+- **Splines decoded** (`assets::Spline`, all 91 checked; Facts: "Splines") and `spline_load` ported.
+- `tools/mark_verified.py`; `game::recomp` gained `lb lhu sh sb sra srl sllv srav srlv slt sltu mult multu div divu ld sd` and `fpu`.
+- Tests: 209 (was 110).
+
+**Surprises**
+- **The OS range isn't mainly message queues.** Indirect calls (`alAudioFrame`'s handlers, `sprintf`'s output callback) gate 206 of the 363 blocked game functions. `func_80008F28`, the "wait" under the ROM reads and heap_set_level, is `if ([0x8009A2B8]) func_8002E124()`: the audio service, which reaches every OS family.
+- **Every game FCR31 read is a flag test** (unsigned conversion), not a rounding switch, and it is invisible to the oracle.
+- MSVC's `lrintf` gives **0** for out-of-range values, but `0x80000000` for exactly 2^31. The C cast gives `0x80000000`. These results are host-specific.
+- `NAN_CHECK` is live in the oracle, so NaN operands of arithmetic are outside every float port's domain. Compares, moves and conversions to int aren't guarded.
+- Float tests with only edge values missed fused-multiply-add mutants. Ordinary-range values caught them.
+- `spline_load` overwrites the header's `+0xC` rather than relocating it, and unused spline link slots hold stale ASCII.
+- Five of my own statements were wrong, with C and Rust agreeing each time. The causes, all found in the code or layout: the three-id `SAVED_WORDS`; the 64-bit compare vs low-word address; spline_load's low-word index; `heap_check` overwriting `v1`; and an assumption placed after the run in a float test. A sixth miss was a mutant that landed in another function (the runner now requires unique patterns).
+
+**In progress / not done**
+- The partial float design sections rode along in commit d1db849; this entry completes them.
+- Not translated yet: jump tables (39 functions, e.g. `func_80008F6C`), `break` (8), `LOOKUP_FUNC` (8), unaligned accesses (2). Large depth-0 functions skipped by the batches: `func_8000F5A0`, `func_800125E4`, `func_800129E4`.
+- The message-queue, hw and indirect-call doubles are designed, not built. heap_set_level still waits for them.
+- `game::misc` is about 2600 lines, ordered by address; it wants splitting as subsystems become clear.
+- Still no swap build that runs ports as each other's callees (the translated-draft swap is test-only and swaps one function at a time).
+
+**Suggested next step**
+- Keep batching depth-0 leaves with the translator (`cargo xtask next-function -n 60`; `0x8002D968..0x8002FE94` is next). 278 depth-0 game functions remain (121 of 399 are verified), 268 of them translatable.
+- Add jump tables to the translator: `switch` into Rust `match`, validated like the rest. That unblocks 39 functions.
+- Then the OS boundary in the Facts' order: port the pure OS functions (64-bit helpers, `sinf`/`cosf`), add `LOOKUP_FUNC` support (the oracle's `get_function` resolving to C or doubles), then the hw and message-queue doubles.
