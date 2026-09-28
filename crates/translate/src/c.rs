@@ -178,7 +178,8 @@ impl<'a> Parser<'a> {
     }
 
     fn unary(&mut self) -> Result<E, String> {
-        for op in ["-", "~", "!"] {
+        // `&` only as address-of (`DMULTU(a, b, &lo, &hi)`).
+        for op in ["-", "~", "!", "&"] {
             if self.eat(op) {
                 let e = self.unary()?;
                 return Ok(match (op, e) {

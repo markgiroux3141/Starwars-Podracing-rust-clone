@@ -121,23 +121,13 @@ fn op_uses(o: &Op, u: &mut Uses) {
         Op::Load(w, ..) => {
             u.loads = true;
             u.gprs = true;
-            h.insert(match w {
-                Load::W => "lw",
-                Load::H => "lh",
-                Load::Hu => "lhu",
-                Load::B => "lb",
-                Load::Bu => "lbu",
-            });
+            h.insert(load_name(*w));
         }
         Op::Store(w, _, _, v) => {
             u.stores = true;
             u.gprs = true;
             val_uses(*v, u);
-            u.helpers.insert(match w {
-                Store::W => "sw",
-                Store::H => "sh",
-                Store::B => "sb",
-            });
+            u.helpers.insert(store_name(*w));
         }
         Op::Li(..) => {
             u.gprs = true;
@@ -175,6 +165,17 @@ fn op_uses(o: &Op, u: &mut Uses) {
                 Shift::Srl => "srl",
             });
         }
+        Op::DShift(_, _, v, _) | Op::DShiftV(_, _, v, _) => {
+            u.gprs = true;
+            val_uses(*v, u);
+        }
+        Op::DAdd(_, a, b) => {
+            u.gprs = true;
+            val_uses(*a, u);
+            val_uses(*b, u);
+        }
+        Op::DMtc1(_, v) => val_uses(*v, u),
+        Op::DMfc1(..) => u.gprs = true,
         Op::ShiftV(s, ..) => {
             u.gprs = true;
             h.insert(match s {
@@ -187,12 +188,7 @@ fn op_uses(o: &Op, u: &mut Uses) {
             u.lohi = true;
             val_uses(*a, u);
             val_uses(*b, u);
-            u.helpers.insert(match k {
-                MulDiv::Mult => "mult",
-                MulDiv::Multu => "multu",
-                MulDiv::Div => "div",
-                MulDiv::Divu => "divu",
-            });
+            u.helpers.insert(muldiv_name(*k));
         }
         Op::Call(f) => {
             u.stores = true;
@@ -255,6 +251,7 @@ fn uses_floats(code: &[S]) -> bool {
         S::Op(o) => matches!(
             o,
             Op::FLoad(..) | Op::FStore(..) | Op::FLoadD(..) | Op::FStoreD(..) | Op::Mtc1(..) | Op::Mtc1Odd(..)
+                | Op::DMtc1(..) | Op::DMfc1(..)
                 | Op::Mfc1(..) | Op::Mfc1Odd(..) | Op::FArith(..) | Op::FUn(..) | Op::Cvt(..) | Op::FCmp(..)
         ),
         S::If(_, t, e) => uses_floats(t) || uses_floats(e),
@@ -500,24 +497,21 @@ fn op(o: &Op, fcr31: bool) -> String {
         }
         Op::Cfc1(d) => format!("{} = u64::from(fcr31);", r(*d)),
         Op::Ctc1(v) => format!("fcr31 = ({} as u32) & 3;", val(*v)),
-        Op::Load(w, d, base, o) => {
-            let f = match w {
-                Load::W => "lw",
-                Load::H => "lh",
-                Load::Hu => "lhu",
-                Load::B => "lb",
-                Load::Bu => "lbu",
-            };
-            format!("{} = {f}(m, {}, {});", r(*d), r(*base), off(*o))
-        }
-        Op::Store(w, base, o, v) => {
-            let f = match w {
-                Store::W => "sw",
-                Store::H => "sh",
-                Store::B => "sb",
-            };
-            format!("{f}(m, {}, {}, {});", r(*base), off(*o), val(*v))
-        }
+        Op::Load(w, d, base, o) => format!("{} = {}(m, {}, {});", r(*d), load_name(*w), r(*base), off(*o)),
+        Op::Store(w, base, o, v) => format!("{}(m, {}, {}, {});", store_name(*w), r(*base), off(*o), val(*v)),
+        Op::DShift(s, d, x, sa) => match s {
+            Shift::Sll => format!("{} = {} << {sa};", r(*d), val(*x)),
+            Shift::Srl => format!("{} = {} >> {sa};", r(*d), val(*x)),
+            Shift::Sra => format!("{} = (({} as i64) >> {sa}) as u64;", r(*d), val(*x)),
+        },
+        Op::DShiftV(s, d, x, rs) => match s {
+            Shift::Sll => format!("{} = {} << ({} & 63);", r(*d), val(*x), r(*rs)),
+            Shift::Srl => format!("{} = {} >> ({} & 63);", r(*d), val(*x), r(*rs)),
+            Shift::Sra => format!("{} = (({} as i64) >> ({} & 63)) as u64;", r(*d), val(*x), r(*rs)),
+        },
+        Op::DAdd(d, a, b) => format!("{} = {}.wrapping_add({});", r(*d), val(*a), val(*b)),
+        Op::DMtc1(f, v) => format!("{}.u64 = {};", fr(*f), val(*v)),
+        Op::DMfc1(d, f) => format!("{} = {}.u64;", r(*d), fr(*f)),
         Op::Li(d, v) => format!("{} = li({});", r(*d), hex(u64::from(*v))),
         Op::Const(d, n) => format!("{} = {};", r(*d), val(Val::I(*n))),
         Op::Move(d, s) => format!("{} = {};", r(*d), r(*s)),
@@ -553,15 +547,7 @@ fn op(o: &Op, fcr31: bool) -> String {
             };
             format!("{} = {f}({}, {});", r(*d), val(*x), r(*rs))
         }
-        Op::MulDiv(k, a, b) => {
-            let f = match k {
-                MulDiv::Mult => "mult",
-                MulDiv::Multu => "multu",
-                MulDiv::Div => "div",
-                MulDiv::Divu => "divu",
-            };
-            format!("(lo, hi) = {f}({}, {});", val(*a), val(*b))
-        }
+        Op::MulDiv(k, a, b) => format!("(lo, hi) = {}({}, {});", muldiv_name(*k), val(*a), val(*b)),
         Op::MfLo(d) => format!("{} = lo;", r(*d)),
         Op::MfHi(d) => format!("{} = hi;", r(*d)),
         Op::Call(f) => format!("call(imports::{f}, m, ctx);"),
@@ -576,6 +562,39 @@ fn op(o: &Op, fcr31: bool) -> String {
         Op::SaveCond(n, c) => format!("let c{n} = {};", cond(c)),
         Op::Label(l) if l == "\u{0}rebind" => "let g = &mut ctx.gpr;".into(),
         Op::Label(l) => format!("// {l}"),
+    }
+}
+
+fn load_name(w: Load) -> &'static str {
+    match w {
+        Load::W => "lw",
+        Load::D => "ld",
+        Load::H => "lh",
+        Load::Hu => "lhu",
+        Load::B => "lb",
+        Load::Bu => "lbu",
+    }
+}
+
+fn store_name(w: Store) -> &'static str {
+    match w {
+        Store::W => "sw",
+        Store::D => "sd",
+        Store::H => "sh",
+        Store::B => "sb",
+    }
+}
+
+fn muldiv_name(k: MulDiv) -> &'static str {
+    match k {
+        MulDiv::Mult => "mult",
+        MulDiv::Multu => "multu",
+        MulDiv::Div => "div",
+        MulDiv::Divu => "divu",
+        MulDiv::DMult => "dmult",
+        MulDiv::DMultu => "dmultu",
+        MulDiv::DDiv => "ddiv",
+        MulDiv::DDivu => "ddivu",
     }
 }
 

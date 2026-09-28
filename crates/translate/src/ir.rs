@@ -39,6 +39,8 @@ pub enum Val {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Load {
     W,
+    /// `ld`: a doubleword, high word first.
+    D,
     H,
     Hu,
     B,
@@ -48,6 +50,8 @@ pub enum Load {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Store {
     W,
+    /// `sd`: a doubleword (N64Recomp stores the low word first).
+    D,
     H,
     B,
 }
@@ -77,6 +81,11 @@ pub enum MulDiv {
     Multu,
     Div,
     Divu,
+    /// The doubleword forms, on the full registers.
+    DMult,
+    DMultu,
+    DDiv,
+    DDivu,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -95,6 +104,12 @@ pub enum Op {
     Shift(Shift, u8, Val, u32),
     /// Variable shift by the low 5 bits of a register.
     ShiftV(Shift, u8, Val, u8),
+    /// A doubleword shift of the full register by 0..63 (`dsll`, `dsll32`, ...).
+    DShift(Shift, u8, Val, u32),
+    /// A doubleword shift by the low 6 bits of a register.
+    DShiftV(Shift, u8, Val, u8),
+    /// `daddu`/`daddiu`: the full 64-bit sum, wrapping.
+    DAdd(u8, Val, Val),
     /// Writes the function's `lo`/`hi` locals (not `ctx->lo`/`ctx->hi`).
     MulDiv(MulDiv, Val, Val),
     MfLo(u8),
@@ -138,6 +153,10 @@ pub enum Op {
     Mfc1(u8, u8),
     /// `mfc1` from an odd register `n`: `rd = sext(f(n - 1).u32h)`.
     Mfc1Odd(u8, u8),
+    /// `dmtc1`: `f.u64 = rs`.
+    DMtc1(u8, Val),
+    /// `dmfc1`: `rd = f.u64`.
+    DMfc1(u8, u8),
     FArith(FArith, Prec, u8, u8, u8),
     FUn(FUn, Prec, u8, u8),
     Cvt(Cvt, u8, u8),
@@ -195,6 +214,10 @@ impl Op {
             | Op::Alu(_, d, ..)
             | Op::Shift(_, d, ..)
             | Op::ShiftV(_, d, ..)
+            | Op::DShift(_, d, ..)
+            | Op::DShiftV(_, d, ..)
+            | Op::DAdd(d, ..)
+            | Op::DMfc1(d, _)
             | Op::MfLo(d)
             | Op::MfHi(d)
             | Op::Mfc1(d, _)
@@ -547,6 +570,9 @@ fn float_stmt(st: &crate::c::Stmt) -> Option<Result<Option<Op>, Refusal>> {
                 if call(rhs, "get_cop1_cs") == Some(&[]) {
                     return ok(Op::Cfc1(*d));
                 }
+                if let Some(f) = fpr(rhs, "u64") {
+                    return ok(Op::DMfc1(*d, f));
+                }
                 return None;
             }
             if let Some(n) = f_odd(lhs) {
@@ -584,6 +610,9 @@ fn float_stmt(st: &crate::c::Stmt) -> Option<Result<Option<Op>, Refusal>> {
                     .map(|op| Ok(Some(op)));
             }
             if let Some(d) = fpr(lhs, "u64") {
+                if let Some(v) = val(rhs) {
+                    return ok(Op::DMtc1(d, v));
+                }
                 let [a, b] = call(rhs, "LD")? else { return None };
                 let (base, off) = base_off(a, b)?;
                 return ok(Op::FLoadD(d, base, off));
@@ -646,12 +675,89 @@ fn base_off(a: &E, b: &E) -> Option<(u8, i32)> {
     }
 }
 
+/// A doubleword (64-bit) statement, if `st` is one of their shapes:
+/// `LD`/`SD` of a GPR, `x << (N + 32)`, `SIGNED(x) >> (N + 32)`, `x >> (N +
+/// 32)` and the plain `<<`/`>>` by a constant, the variable forms with `(rs
+/// & 63)`, `a + b` without `ADD32`, and `DMULT`/`DMULTU`/`DDIV`/`DDIVU` on
+/// `&lo, &hi`.
+fn dword_stmt(st: &crate::c::Stmt) -> Option<Op> {
+    use crate::c::Stmt;
+    match st {
+        Stmt::Expr(E::Call(n, args)) if n == "SD" => match args.as_slice() {
+            [v, E::Num(o), E::Reg(b)] => Some(Op::Store(Store::D, *b, i32::try_from(*o).ok()?, val(v)?)),
+            _ => None,
+        },
+        Stmt::Expr(E::Call(n, args)) => {
+            let kind = match n.as_str() {
+                "DMULT" => MulDiv::DMult,
+                "DMULTU" => MulDiv::DMultu,
+                "DDIV" => MulDiv::DDiv,
+                "DDIVU" => MulDiv::DDivu,
+                _ => return None,
+            };
+            let wrap = if matches!(kind, MulDiv::DMult | MulDiv::DDiv) { "S64" } else { "U64" };
+            let [a, b, E::Unary("&", lo), E::Unary("&", hi)] = args.as_slice() else { return None };
+            if **lo != E::Ident("lo".into()) || **hi != E::Ident("hi".into()) {
+                return None;
+            }
+            Some(Op::MulDiv(kind, val(call1(a, wrap)?)?, val(call1(b, wrap)?)?))
+        }
+        Stmt::Assign(E::Reg(d), rhs) => {
+            let d = *d;
+            if let Some([E::Reg(b), E::Num(o)]) = call(rhs, "LD") {
+                return Some(Op::Load(Load::D, d, *b, i32::try_from(*o).ok()?));
+            }
+            // The shift amount: `N`, `(N + 32)` or `(rs & 63)`.
+            enum Amount {
+                Fixed(u32),
+                Reg(u8),
+            }
+            let amount = |s: &E| -> Option<Amount> {
+                match s {
+                    E::Num(n) if (0..32).contains(n) => Some(Amount::Fixed(*n as u32)),
+                    E::Bin("+", a, b) => match (&**a, &**b) {
+                        (E::Num(n), E::Num(32)) if (0..32).contains(n) => Some(Amount::Fixed(*n as u32 + 32)),
+                        _ => None,
+                    },
+                    E::Bin("&", r, m) if **m == E::Num(63) => Some(Amount::Reg(reg(r)?)),
+                    _ => None,
+                }
+            };
+            let shift = |kind, x: &E, s: &E| -> Option<Op> {
+                let x = val(x)?;
+                Some(match amount(s)? {
+                    Amount::Fixed(sa) => Op::DShift(kind, d, x, sa),
+                    Amount::Reg(r) => Op::DShiftV(kind, d, x, r),
+                })
+            };
+            match rhs {
+                E::Bin("<<", x, s) => shift(Shift::Sll, x, s),
+                E::Bin(">>", x, s) => match call1(x, "SIGNED") {
+                    Some(x) => shift(Shift::Sra, x, s),
+                    None => shift(Shift::Srl, x, s),
+                },
+                E::Bin("+", a, b) => Some(match (val(a)?, val(b)?) {
+                    (Val::I(x), Val::I(y)) => Op::Const(d, x.checked_add(y)?),
+                    (a, b) => Op::DAdd(d, a, b),
+                }),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
 /// Statements of one C line, as ops. `mult`/`div` span several statements.
 pub fn ops_of_line(stmts: &[crate::c::Stmt]) -> Result<Vec<Op>, Refusal> {
     use crate::c::Stmt;
     let mut out = Vec::new();
     let mut k = 0;
     while k < stmts.len() {
+        if let Some(op) = dword_stmt(&stmts[k]) {
+            out.push(op);
+            k += 1;
+            continue;
+        }
         match float_stmt(&stmts[k]) {
             Some(Ok(op)) => {
                 out.extend(op);
@@ -867,6 +973,30 @@ mod tests {
         assert_eq!(ops("c1cs = ctx->f6.d <= ctx->f20.d;").unwrap(), [Op::FCmp(Cmp::Le, Prec::D, 6, 20)]);
         assert_eq!(ops("ctx->r14 = get_cop1_cs();").unwrap(), [Op::Cfc1(14)]);
         assert_eq!(ops("set_cop1_cs(ctx->r6);").unwrap(), [Op::Ctc1(Val::R(6))]);
+    }
+
+    #[test]
+    fn doubleword_shapes() {
+        assert_eq!(ops("ctx->r15 = LD(ctx->r29, 0X8);").unwrap(), [Op::Load(Load::D, 15, 29, 8)]);
+        assert_eq!(ops("SD(ctx->r4, 0X10, ctx->r29);").unwrap(), [Op::Store(Store::D, 29, 0x10, Val::R(4))]);
+        assert_eq!(ops("ctx->r3 = ctx->r2 << (0 + 32);").unwrap(), [Op::DShift(Shift::Sll, 3, Val::R(2), 32)]);
+        assert_eq!(ops("ctx->r3 = ctx->r2 << (31 + 32);").unwrap(), [Op::DShift(Shift::Sll, 3, Val::R(2), 63)]);
+        assert_eq!(ops("ctx->r2 = SIGNED(ctx->r2) >> (0 + 32);").unwrap(), [Op::DShift(Shift::Sra, 2, Val::R(2), 32)]);
+        assert_eq!(ops("ctx->r2 = ctx->r2 >> (4 + 32);").unwrap(), [Op::DShift(Shift::Srl, 2, Val::R(2), 36)]);
+        assert_eq!(ops("ctx->r2 = ctx->r14 << (ctx->r15 & 63);").unwrap(), [Op::DShiftV(Shift::Sll, 2, Val::R(14), 15)]);
+        assert_eq!(ops("ctx->r2 = SIGNED(ctx->r14) >> (ctx->r15 & 63);").unwrap(), [Op::DShiftV(Shift::Sra, 2, Val::R(14), 15)]);
+        assert_eq!(ops("ctx->r2 = ctx->r14 >> (ctx->r15 & 63);").unwrap(), [Op::DShiftV(Shift::Srl, 2, Val::R(14), 15)]);
+        assert_eq!(ops("ctx->r2 = ctx->r4 + ctx->r5;").unwrap(), [Op::DAdd(2, Val::R(4), Val::R(5))]);
+        assert_eq!(ops("ctx->r2 = 0 + -0X1;").unwrap(), [Op::Const(2, -1)]);
+        assert_eq!(
+            ops("DMULTU(U64(ctx->r14), U64(ctx->r15), &lo, &hi);").unwrap(),
+            [Op::MulDiv(MulDiv::DMultu, Val::R(14), Val::R(15))]
+        );
+        assert_eq!(ops("DDIV(S64(ctx->r14), S64(ctx->r15), &lo, &hi);").unwrap(), [Op::MulDiv(MulDiv::DDiv, Val::R(14), Val::R(15))]);
+        assert_eq!(ops("ctx->f4.u64 = ctx->r5;").unwrap(), [Op::DMtc1(4, Val::R(5))]);
+        assert_eq!(ops("ctx->r5 = ctx->f4.u64;").unwrap(), [Op::DMfc1(5, 4)]);
+        // 32-bit shifts are still their own shapes.
+        assert_eq!(ops("ctx->r15 = S32(ctx->r2 << 2);").unwrap(), [Op::Shift(Shift::Sll, 15, Val::R(2), 2)]);
     }
 
     #[test]

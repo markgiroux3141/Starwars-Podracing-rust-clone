@@ -293,6 +293,36 @@ pub fn divu(a: u64, b: u64) -> (u64, u64) {
 
 /// `lui` + `ori`/`addiu`: a 32-bit constant, sign-extended.
 #[inline]
+/// `dmult`: the 128-bit product of the full registers as signed, `(lo, hi)`
+/// = its low and high 64 bits (recomp.h's `DMULT`).
+pub fn dmult(a: u64, b: u64) -> (u64, u64) {
+    let p = i128::from(a as i64) * i128::from(b as i64);
+    (p as u64, (p >> 64) as u64)
+}
+
+/// `dmultu`: [`dmult`] unsigned (`DMULTU`).
+pub fn dmultu(a: u64, b: u64) -> (u64, u64) {
+    let p = u128::from(a) * u128::from(b);
+    (p as u64, (p >> 64) as u64)
+}
+
+/// `ddiv`: `(lo, hi)` = quotient and remainder of the full registers as
+/// signed; `INT64_MIN / -1` gives `(INT64_MIN, 0)` (recomp.h's `DDIV`).
+pub fn ddiv(a: u64, b: u64) -> (u64, u64) {
+    let (a, b) = (a as i64, b as i64);
+    assert!(b != 0, "ddiv by zero: undefined in N64Recomp's C");
+    if a == i64::MIN && b == -1 {
+        return (a as u64, 0);
+    }
+    ((a / b) as u64, (a % b) as u64)
+}
+
+/// `ddivu`: [`ddiv`] unsigned (`DDIVU`).
+pub fn ddivu(a: u64, b: u64) -> (u64, u64) {
+    assert!(b != 0, "ddivu by zero: undefined in N64Recomp's C");
+    (a / b, a % b)
+}
+
 pub fn li(v: u32) -> u64 {
     s32(v)
 }
