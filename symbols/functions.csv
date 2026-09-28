@@ -133,32 +133,32 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80009F6C,func_80009F6C,ours,1,,recomp,,,
 0x80009FA0,func_80009FA0,ours,3,,recomp,,,
 0x8000A330,func_8000A330,ours,4,,recomp,,,
-0x8000A418,func_8000A418,ours,0,,recomp,,,
+0x8000A418,func_8000A418,ours,0,,rust_verified,unit_diff,high,append to the 64-word list 0x800D3A90 (count 0x8009B774) (game::misc)
 0x8000A44C,func_8000A44C,ours,0,,recomp,,,
 0x8000A4D8,func_8000A4D8,ours,1,,recomp,,,
 0x8000A53C,func_8000A53C,ours,5,,recomp,,,
-0x8000A920,func_8000A920,ours,0,,recomp,,,
+0x8000A920,func_8000A920,ours,0,,rust_verified,unit_diff,high,"on/off: globals for ids -201/-103/-104, else RECORDS[id] bit 0x20 (game::misc)"
 0x8000AA04,func_8000AA04,ours,0,,recomp,,,
-0x8000AA78,func_8000AA78,ours,0,,recomp,,,
+0x8000AA78,func_8000AA78,ours,0,,rust_verified,unit_diff,high,RECORDS[id] +4/+6 halfwords (game::misc)
 0x8000AAC0,func_8000AAC0,ours,0,,recomp,,,
 0x8000AAF8,func_8000AAF8,ours,0,,recomp,,,
-0x8000AB24,func_8000AB24,ours,0,,recomp,,,
-0x8000ABD4,func_8000ABD4,ours,0,,recomp,,,
-0x8000AC0C,func_8000AC0C,ours,0,,recomp,,,
-0x8000AC34,func_8000AC34,ours,0,,recomp,,,
-0x8000AC60,func_8000AC60,ours,0,,recomp,,,
+0x8000AB24,func_8000AB24,ours,0,,rust_verified,unit_diff,high,four bytes to globals -103/-104 or RECORDS[id]+0x18 (game::misc)
+0x8000ABD4,func_8000ABD4,ours,0,,rust_verified,unit_diff,high,RECORDS[id]+0x1C pointer's +8; QUIRK no id check (game::misc)
+0x8000AC0C,func_8000AC0C,ours,0,,rust_verified,unit_diff,high,set RECORDS[id]+0x1C (game::misc)
+0x8000AC34,func_8000AC34,ours,0,,rust_verified,unit_diff,high,RECORDS[id] flags |= bits; QUIRK no id check (game::misc)
+0x8000AC60,func_8000AC60,ours,0,,rust_verified,unit_diff,high,RECORDS[id] flags &= ~bits; QUIRK no id check (game::misc)
 0x8000AC90,func_8000AC90,ours,1,,recomp,,,
 0x8000ACC0,func_8000ACC0,ours,1,,recomp,,,
-0x8000AEB4,func_8000AEB4,ours,0,,recomp,,,
-0x8000AED4,func_8000AED4,ours,0,,recomp,,,
-0x8000AEFC,func_8000AEFC,ours,0,,recomp,,,
+0x8000AEB4,func_8000AEB4,ours,0,,rust_verified,unit_diff,high,ENTRIES[k] flags (game::misc)
+0x8000AED4,func_8000AED4,ours,0,,rust_verified,unit_diff,high,ENTRIES[k] flags |= bits (game::misc)
+0x8000AEFC,func_8000AEFC,ours,0,,rust_verified,unit_diff,high,ENTRIES[id] +6/+4/+8 (game::misc)
 0x8000AF4C,func_8000AF4C,ours,0,,recomp,,,
 0x8000AFD4,func_8000AFD4,ours,0,,recomp,,,
-0x8000B02C,func_8000B02C,ours,0,,recomp,,,
-0x8000B06C,func_8000B06C,ours,0,,recomp,,,
-0x8000B098,func_8000B098,ours,0,,recomp,,,
+0x8000B02C,func_8000B02C,ours,0,,rust_verified,unit_diff,high,ENTRIES[id] +0xC/+0x10 (game::misc)
+0x8000B06C,func_8000B06C,ours,0,,rust_verified,unit_diff,high,ENTRIES[id] +0x78 (game::misc)
+0x8000B098,func_8000B098,ours,0,,rust_verified,unit_diff,high,ENTRIES[id] selected bit (game::misc)
 0x8000B0E0,func_8000B0E0,ours,1,,recomp,,,
-0x8000B1B0,func_8000B1B0,ours,0,,recomp,,,
+0x8000B1B0,func_8000B1B0,ours,0,,rust_verified,unit_diff,high,select ENTRIES[id] (0x8009B798) (game::misc)
 0x8000B254,func_8000B254,ours,1,,recomp,,,
 0x8000B318,func_8000B318,ours,5,,recomp,,,
 0x8000B98C,func_8000B98C,ours,1,,recomp,,,
