@@ -3664,6 +3664,210 @@ pub unsafe extern "C" fn func_80035698(rdram: *mut u8, ctx: *mut RecompContext) 
     sw(&mut mem, g[AT], 0x3D9C, v);
 }
 
+/// One render-mode change tried by [`func_800356BC`]: if the first mode
+/// word is `from`, set both words to `to`. The new words are built in the
+/// temporaries `regs` (upper half, then `| lower`); the first one's upper
+/// half is loaded even when `from` doesn't match (a delay slot).
+struct ModeChange {
+    from: u32,
+    to: (u32, u32),
+    regs: (usize, usize),
+}
+
+/// The four render modes (first word, second word) [`func_800356BC`] moves
+/// between: two independent switches, "ZBZB" (z-buffering, **guess**) and
+/// "AAEN" (anti-aliasing, **guess**).
+const MODE_NONE: (u32, u32) = (0x0C08_4000, 0x0302_4000);
+const MODE_ZB: (u32, u32) = (0x0044_2230, 0x0011_2230);
+const MODE_AA: (u32, u32) = (0x0044_2048, 0x0011_2048);
+const MODE_BOTH: (u32, u32) = (0x0044_2078, 0x0011_2078);
+
+/// By switch (ZBZB, AAEN) and on (`a2 == 1`) or off: the two changes, in
+/// the order the code tries them.
+const MODE_CHANGES: [[[ModeChange; 2]; 2]; 2] = [
+    [
+        [
+            ModeChange { from: MODE_ZB.0, to: MODE_NONE, regs: (T0, T1) },
+            ModeChange { from: MODE_BOTH.0, to: MODE_AA, regs: (T2, T3) },
+        ],
+        [
+            ModeChange { from: MODE_NONE.0, to: MODE_ZB, regs: (T6, T7) },
+            ModeChange { from: MODE_AA.0, to: MODE_BOTH, regs: (T8, T9) },
+        ],
+    ],
+    [
+        [
+            ModeChange { from: MODE_AA.0, to: MODE_NONE, regs: (T8, T9) },
+            ModeChange { from: MODE_BOTH.0, to: MODE_ZB, regs: (T0, T1) },
+        ],
+        [
+            ModeChange { from: MODE_NONE.0, to: MODE_AA, regs: (T4, T5) },
+            ModeChange { from: MODE_ZB.0, to: MODE_BOTH, regs: (T6, T7) },
+        ],
+    ],
+];
+
+/// `func_800356BC(tag, _, a2)`: switch the render mode words at
+/// `0x800A3DA0`/`0x800A3DA4`. Tag `"ZBZB"` or `"AAEN"` turns one of two
+/// switches on (`a2 == 1`, full 64-bit compare) or off, moving between the
+/// four modes of [`MODE_CHANGES`]. A mode that doesn't have the other
+/// state is left alone (e.g. ZBZB on when already on). Tag `"Full"` sets
+/// both words to `a2`. Any other tag does nothing. Spills `a1` to its slot
+/// `[sp + 4]`.
+///
+/// Leaves `at` = the last constant compared (or `0x800A0000` after a
+/// store), `v1 = 0x800A3DA0` (`0x800A0000` for an unknown tag), `v0` = the
+/// old first word, and the changes' temporaries as [`ModeChange`] says.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800356BC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[AT] = li(0x5A42_5A42); // "ZBZB"
+    sw(m, g[SP], 4, g[A1]);
+    let switch = if g[A0] == g[AT] {
+        g[AT] = 1;
+        0
+    } else {
+        g[AT] = li(0x4141_454E); // "AAEN"
+        let aaen = g[A0] == g[AT];
+        g[AT] = 1;
+        if !aaen {
+            g[AT] = li(0x4675_6C6C); // "Full"
+            g[V1] = li(0x800A_0000);
+            if g[A0] == g[AT] {
+                g[V1] = li(0x800A_3DA0);
+                sw(m, g[V1], 0, g[A2]);
+                g[AT] = li(0x800A_0000);
+                sw(m, g[AT], 0x3DA4, g[A2]);
+            }
+            return;
+        }
+        1
+    };
+    let on = usize::from(g[A2] == g[AT]);
+    g[V1] = li(0x800A_3DA0);
+    g[V0] = lw(m, g[V1], 0);
+    for c in &MODE_CHANGES[switch][on] {
+        let (a, b) = c.regs;
+        g[AT] = li(c.from);
+        g[a] = li(c.to.0 & 0xFFFF_0000);
+        if g[V0] == g[AT] {
+            g[a] |= u64::from(c.to.0 & 0xFFFF);
+            g[b] = li(c.to.1 & 0xFFFF_0000);
+            sw(m, g[V1], 0, g[a]);
+            g[b] |= u64::from(c.to.1 & 0xFFFF);
+            g[AT] = li(0x800A_0000);
+            sw(m, g[AT], 0x3DA4, g[b]);
+            return;
+        }
+    }
+}
+
+/// `func_800358A0(buttons)`: adjust an input bit mask by the settings word
+/// `[0x800D697C]` and two flags (**guess**: controller options). With
+/// setting bit 6, clear bit 16; with bit 5, clear bit 17. Then if
+/// `[0x800A4744] == 0`, clear bits 9 and 10; otherwise, if `[0x800A3D60] !=
+/// 0` and exactly one of bits 9 and 10 is set, swap them. Returns the
+/// mask (bits above 31 kept).
+///
+/// Leaves `a0` = the mask after the first two steps (or after the swap
+/// from 10 to 9), `t0`/`t3` = the flags, `t1 = a0 & !0x400`, `t6`/`t8` =
+/// the setting bits, and `at`, `t4`/`t5`/`t7`/`t8` as the path left them.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800358A0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let m = &mem;
+    let g = &mut ctx.gpr;
+    g[V0] = lw(m, li(0x800D_0000), 0x697C);
+    g[AT] = li(0xFFFE_0000);
+    g[T0] = li(0x800A_0000);
+    g[T6] = g[V0] & 0x40;
+    g[T8] = g[V0] & 0x20;
+    if g[T6] != 0 {
+        g[AT] |= 0xFFFF;
+        g[T7] = g[A0] & g[AT];
+        g[A0] = g[T7];
+    }
+    g[AT] = li(0xFFFD_0000);
+    if g[T8] != 0 {
+        g[AT] |= 0xFFFF;
+        g[T9] = g[A0] & g[AT];
+        g[A0] = g[T9];
+    }
+    g[T0] = lw(m, g[T0], 0x4744);
+    g[AT] = (-0x401i64) as u64;
+    g[T1] = g[A0] & g[AT];
+    g[T3] = li(0x800A_0000);
+    if g[T0] == 0 {
+        g[AT] = (-0x201i64) as u64;
+        g[V0] = g[T1] & g[AT];
+        return;
+    }
+    g[T3] = lw(m, g[T3], 0x3D60);
+    g[V0] = g[A0] & 0x200;
+    if g[T3] != 0 {
+        g[T7] = g[A0] & 0x400;
+        if g[V0] == 0 {
+            if g[T7] != 0 {
+                // Bit 10 only: move it to bit 9.
+                g[AT] = (-0x401i64) as u64;
+                g[T8] = g[A0] & g[AT];
+                g[A0] = g[T8] | 0x200;
+            }
+        } else {
+            g[T4] = g[A0] & 0x400;
+            g[T5] = g[A0] | 0x400;
+            if g[T4] == 0 {
+                // Bit 9 only: move it to bit 10.
+                g[AT] = (-0x201i64) as u64;
+                g[V0] = g[T5] & g[AT];
+                return;
+            }
+        }
+    }
+    g[V0] = g[A0];
+}
+
+/// `func_80036094(a0)`: an empty function that spills `a0` to its slot
+/// `[sp]`. Domain: canonical `sp` with `[sp]` in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80036094(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    sw(&mut mem, ctx.gpr[SP], 0, ctx.gpr[A0]);
+}
+
+/// `func_80036F7C()`: `[0x800A3D30] = 0x800DB930` and `[0x800A3D38] = 0`.
+/// Leaves `t6 = 0x800DB930`, `at = 0x800A0000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80036F7C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T6] = li(0x800D_B930);
+    g[AT] = li(0x800A_0000);
+    sw(m, g[AT], 0x3D30, g[T6]);
+    sw(m, g[AT], 0x3D38, 0);
+}
+
+/// `func_80037BF0(a0)`: an empty function that spills `a0` to its slot
+/// `[sp]`. Domain: canonical `sp` with `[sp]` in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80037BF0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    sw(&mut mem, ctx.gpr[SP], 0, ctx.gpr[A0]);
+}
+
 /// `func_8003ABA0(spline, dir, w)`: step the spline walker `w` one point,
 /// forward if `(s16) dir == 1`, otherwise backward. `spline` is a loaded
 /// spline header (`+0` the flag halfword F, `+0xC` the points; NOTES.md,

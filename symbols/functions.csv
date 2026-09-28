@@ -550,19 +550,19 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80035354,func_80035354,ours,3,,recomp,,,
 0x80035598,func_80035598,ours,3,,recomp,,,
 0x80035698,func_80035698,ours,0,,rust_verified,unit_diff,high,[0x800A3D9C] = (v == 1) (game::misc)
-0x800356BC,func_800356BC,ours,0,,recomp,,,
-0x800358A0,func_800358A0,ours,0,,recomp,,,
+0x800356BC,func_800356BC,ours,0,,rust_verified,unit_diff,high,"render mode words 0x800A3DA0/A4: ZBZB and AAEN switches, Full sets both (game::misc)"
+0x800358A0,func_800358A0,ours,0,,rust_verified,unit_diff,high,"input mask: clear bits 16/17 by settings, clear or swap bits 9/10 (game::misc)"
 0x8003594C,func_8003594C,ours,0,,recomp,,,
 0x80035BF0,func_80035BF0,ours,1,,recomp,,,
-0x80036094,func_80036094,ours,0,,recomp,,,
+0x80036094,func_80036094,ours,0,,rust_verified,unit_diff,high,"empty, spills a0 (game::misc)"
 0x8003609C,func_8003609C,ours,0,,recomp,,,
 0x80036314,func_80036314,ours,1,,recomp,,,
 0x800366DC,func_800366DC,ours,2,,recomp,,,
 0x80036A1C,func_80036A1C,ours,0,,recomp,,,
-0x80036F7C,func_80036F7C,ours,0,,recomp,,,
+0x80036F7C,func_80036F7C,ours,0,,rust_verified,unit_diff,high,"[0x800A3D30] = 0x800DB930, [0x800A3D38] = 0 (game::misc)"
 0x80036F98,func_80036F98,ours,3,,recomp,,,
 0x800374C4,func_800374C4,ours,4,,recomp,,,
-0x80037BF0,func_80037BF0,ours,0,,recomp,,,
+0x80037BF0,func_80037BF0,ours,0,,rust_verified,unit_diff,high,"empty, spills a0 (game::misc)"
 0x80037BF8,func_80037BF8,ours,0,,recomp,,,
 0x80037C8C,func_80037C8C,ours,6,,recomp,,,
 0x80037E9C,func_80037E9C,ours,6,,recomp,,,
