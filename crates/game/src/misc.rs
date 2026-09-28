@@ -4,7 +4,7 @@
 // Ports keep N64Recomp's names (func_80005AFC), capitals included.
 #![allow(non_snake_case)]
 
-use crate::recomp::{addu, enter, li, lw, reg::*, s32, sll, sw, RecompContext};
+use crate::recomp::{addu, div, enter, lh, li, lw, reg::*, s32, sb, sh, sll, slt, sltu, subu, sw, RecompContext};
 
 /// `func_80005AFC`: decrement `[0x8009A29C]` if it is positive (signed).
 ///
@@ -382,4 +382,275 @@ pub unsafe extern "C" fn func_80007CE4(rdram: *mut u8, ctx: *mut RecompContext) 
     g[T0] = sll(g[T9], 2);
     g[V0] = addu(li(0x800A_0000), g[T0]);
     g[V0] = lw(&mem, g[V0], -0x5CD4);
+}
+
+/// `func_8000803C(o, k)`: 1 if entry `k` of `o`'s table has room, else 0.
+///
+/// The table is at `[o + 0x40]`, 0x30-byte entries. `p = [entry + 8]`; if
+/// `p` is 0 it returns 0. Otherwise `q = [p + 0x38]` and it returns
+/// `[q] + [q + 4] < [p + 0x54]`, a 32-bit sum compared **unsigned** (the
+/// words are sign-extended, which keeps their unsigned order).
+///
+/// Leaves `t6 = 0x30 * k`, `t7` = the entry, `v1 = p`, and when `p != 0`:
+/// `t8`, `t9`, `t0` (the sum), `t1` (the limit) and `at` (the result).
+///
+/// Domain: canonical `o`, `[o + 0x40] + 0x30 * k + 8`, `p` and `q` in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000803C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let m = &mem;
+    let g = &mut ctx.gpr;
+    g[V0] = lw(m, g[A0], 0x40);
+    // t6 = k * 0x30: ((k << 2) - k) << 4
+    g[T6] = sll(g[A1], 2);
+    g[T6] = subu(g[T6], g[A1]);
+    g[T6] = sll(g[T6], 4);
+    g[T7] = addu(g[V0], g[T6]);
+    g[V1] = lw(m, g[T7], 8);
+    if g[V1] == 0 {
+        g[V0] = 0;
+        return;
+    }
+    g[V0] = lw(m, g[V1], 0x38);
+    g[T1] = lw(m, g[V1], 0x54);
+    g[T8] = lw(m, g[V0], 0);
+    g[T9] = lw(m, g[V0], 4);
+    g[T0] = addu(g[T8], g[T9]);
+    g[AT] = sltu(g[T0], g[T1]);
+    // bnez at: v0 = 1, else v0 = 0; the same as v0 = at.
+    g[V0] = g[AT];
+}
+
+/// `func_80008530`: returns at once.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80008530(_rdram: *mut u8, _ctx: *mut RecompContext) {}
+
+/// `func_80008540`: spills `a0` to `[sp]` and returns (see [`spill_a0`]).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80008540(rdram: *mut u8, ctx: *mut RecompContext) {
+    spill_a0(rdram, ctx)
+}
+
+/// An on/off switch kept as an "off" flag word: `switch(on)` with `on == 0`
+/// sets the flag to 1, `on == 1` clears it, `on == -1` toggles it (flag =
+/// flag == 0), anything else leaves it. Returns 1 if the flag is now 0.
+/// `on` is compared as a full 64-bit register. Two instances,
+/// [`func_80008630`] and [`func_80008694`], reached only through pointers.
+///
+/// Leaves `t6 = 1`, `a0 = flag`, `v1` = the flag's new value; `at` = 1 for
+/// `on == 1`, -1 for other nonzero `on`, unchanged for 0; `t7` = the new
+/// value only when toggling.
+fn off_switch(rdram: *mut u8, ctx: *mut RecompContext, flag: u32) {
+    // SAFETY: forwarded from the entry points below.
+    let (mut mem, ctx) = unsafe { enter(rdram, ctx) };
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T6] = 1;
+    if g[A0] == 0 {
+        sw(m, li(flag), 0, g[T6]);
+    } else {
+        g[AT] = 1;
+        if g[A0] == g[AT] {
+            sw(m, li(flag), 0, 0);
+        } else {
+            g[AT] = u64::MAX;
+            if g[A0] == g[AT] {
+                g[V1] = lw(m, li(flag), 0);
+                g[T7] = sltu(g[V1], 1);
+                sw(m, li(flag), 0, g[T7]);
+            }
+        }
+    }
+    g[A0] = li(flag);
+    g[V1] = lw(m, g[A0], 0);
+    g[V0] = sltu(g[V1], 1);
+}
+
+/// `func_80008630(on)`: [`off_switch`] on the flag at `0x8009A2C4`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80008630(rdram: *mut u8, ctx: *mut RecompContext) {
+    off_switch(rdram, ctx, 0x8009_A2C4)
+}
+
+/// `func_80008694(on)`: [`off_switch`] on the flag at `0x8009A2C0`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80008694(rdram: *mut u8, ctx: *mut RecompContext) {
+    off_switch(rdram, ctx, 0x8009_A2C0)
+}
+
+/// `func_80008718(c)`: 1 if `0x8E <= c < 0x9E` or `c == 0x22`, else 0
+/// (signed 64-bit compares). Called twice by `func_80008760`; the numbers
+/// look like character codes (0x22 is `"`), which is a **guess**.
+///
+/// Leaves `at` = 1 when it returns 1 from the range test, else 0x22.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80008718(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (_mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[AT] = slt(g[A0], 0x8E);
+    let below = g[AT] != 0;
+    g[AT] = slt(g[A0], 0x9E);
+    if !below && g[AT] != 0 {
+        g[V0] = 1;
+        return;
+    }
+    g[AT] = 0x22;
+    g[V0] = u64::from(g[A0] == g[AT]);
+}
+
+/// `func_80008750(b)`: spills `a0` to `[sp]` and stores its low byte at
+/// `0x8009A324`. Leaves `at = 0x800A0000`.
+///
+/// Domain: canonical `sp` with `[sp]` in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80008750(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[AT] = li(0x800A_0000);
+    sw(m, g[SP], 0, g[A0]);
+    sb(m, g[AT], -0x5CDC, g[A0]);
+}
+
+/// The last three values pushed by [`func_80009278`] (halfwords), searched
+/// by [`func_800092B0`]; `func_800092EC` uses both, a "recently seen" list.
+pub const RECENT: u32 = 0x8009_ADF4;
+/// The next slot of [`RECENT`] to write (a halfword).
+pub const RECENT_NEXT: u32 = 0x8009_ADFC;
+
+/// `func_80009278(v)`: `RECENT[next] = v` (halfword), then `next = (next +
+/// 1) % 3`. QUIRK: `next` is read back unchecked and the remainder is
+/// signed, so a slot index outside 0..3 writes outside the list (and a
+/// negative one stays negative).
+///
+/// Leaves `v1 = RECENT_NEXT`, `v0` = the old `next` (sign-extended), `t6 =
+/// 2 * next`, `at = 3`, `t7 = next + 1`, `t8` = the new `next`.
+///
+/// Domain: `RECENT + 2 * next` in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80009278(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V1] = li(RECENT_NEXT);
+    g[V0] = lh(m, g[V1], 0);
+    g[AT] = li(0x800A_0000);
+    g[T6] = sll(g[V0], 1);
+    g[AT] = addu(g[AT], g[T6]);
+    sh(m, g[AT], -0x520C, g[A0]);
+    g[AT] = 3;
+    g[T7] = addu(g[V0], 1);
+    let (_lo, hi) = div(g[T7], g[AT]); // `lo` is never read
+    g[T8] = hi;
+    sh(m, g[V1], 0, g[T8]);
+}
+
+/// `func_800092B0(v)`: 1 if `v` equals one of the three [`RECENT`]
+/// halfwords, else 0. Each is sign-extended and compared with the whole
+/// 64-bit `v`.
+///
+/// Leaves `v1` = the address after the match (or the list's end) and `t6` =
+/// the last halfword compared.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800092B0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let m = &mem;
+    let g = &mut ctx.gpr;
+    g[V1] = li(RECENT);
+    g[V0] = li(RECENT + 6);
+    g[T6] = lh(m, g[V1], 0);
+    loop {
+        g[V1] = addu(g[V1], 2);
+        if g[A0] == g[T6] {
+            g[V0] = 1;
+            return;
+        }
+        if g[V1] == g[V0] {
+            g[V0] = 0;
+            return;
+        }
+        g[T6] = lh(m, g[V1], 0);
+    }
+}
+
+/// Flag words indexed by [`func_80009524`], [`func_8000953C`] and
+/// [`func_8000955C`] (test, set, clear). How many there are isn't known.
+pub const FLAG_WORDS: u32 = 0x800D_2140;
+
+/// `func_80009524(k, bits)`: `FLAG_WORDS[k] & bits`. QUIRK: `k` is unbounded.
+///
+/// Leaves `t6 = 4k` and `t7` = the word.
+///
+/// Domain: `FLAG_WORDS + 4k` in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80009524(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[T6] = sll(g[A0], 2);
+    g[T7] = addu(li(0x800D_0000), g[T6]);
+    g[T7] = lw(&mem, g[T7], 0x2140);
+    g[V0] = g[T7] & g[A1];
+}
+
+/// `func_8000953C(k, bits)`: `FLAG_WORDS[k] |= bits`. QUIRK: `k` is unbounded.
+///
+/// Leaves `t7 = FLAG_WORDS`, `t6 = 4k`, `v0` = the word's address, `t8` =
+/// the old word and `t9` the new one.
+///
+/// Domain: `FLAG_WORDS + 4k` in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000953C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T7] = li(FLAG_WORDS);
+    g[T6] = sll(g[A0], 2);
+    g[V0] = addu(g[T6], g[T7]);
+    g[T8] = lw(m, g[V0], 0);
+    g[T9] = g[T8] | g[A1];
+    sw(m, g[V0], 0, g[T9]);
+}
+
+/// `func_8000955C(k, bits)`: `FLAG_WORDS[k] &= !bits`. QUIRK: `k` is unbounded.
+///
+/// Leaves `t7 = FLAG_WORDS`, `t6 = 4k`, `v0` = the word's address, `t8` =
+/// the old word, `t9 = !bits` (all 64 bits) and `t0` the new word.
+///
+/// Domain: `FLAG_WORDS + 4k` in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8000955C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T7] = li(FLAG_WORDS);
+    g[T6] = sll(g[A0], 2);
+    g[V0] = addu(g[T6], g[T7]);
+    g[T8] = lw(m, g[V0], 0);
+    g[T9] = !g[A1];
+    g[T0] = g[T8] & g[T9];
+    sw(m, g[V0], 0, g[T0]);
 }

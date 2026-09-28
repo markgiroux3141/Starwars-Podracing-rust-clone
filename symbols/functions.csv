@@ -96,17 +96,17 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80007E80,func_80007E80,ours,15,,recomp,,,"only caller heap_set_level. For each nonzero word in 0x8009A32C..A388 and A388..A3A8: func_80007A80, func_80007A44, zero it; if any: [0x800B05B0] = 0 and func_80008F28 until another thread raises it to 5"
 0x80007F5C,func_80007F5C,ours,1,,recomp,,,
 0x80007FC8,func_80007FC8,ours,1,,recomp,,,
-0x8000803C,func_8000803C,ours,0,,recomp,,,
+0x8000803C,func_8000803C,ours,0,,rust_verified,unit_diff,high,1 if table entry k has room ([q]+[q+4] <u [p+0x54]) (game::misc)
 0x80008090,func_80008090,ours,3,,recomp,,,
-0x80008530,func_80008530,ours,0,,recomp,,,
-0x80008540,func_80008540,ours,0,,recomp,,,
+0x80008530,func_80008530,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
+0x80008540,func_80008540,ours,0,,rust_verified,unit_diff,high,empty; spills a0 (game::misc)
 0x80008548,func_80008548,ours,3,,recomp,,,
 0x80008610,func_80008610,ours,9,,recomp,,,
-0x80008630,func_80008630,ours,0,,recomp,,,
-0x80008694,func_80008694,ours,0,,recomp,,,
+0x80008630,func_80008630,ours,0,,rust_verified,unit_diff,high,on/off switch over the off flag 0x8009A2C4 (game::misc)
+0x80008694,func_80008694,ours,0,,rust_verified,unit_diff,high,on/off switch over the off flag 0x8009A2C0 (game::misc)
 0x800086F8,func_800086F8,ours,1,,recomp,,,
-0x80008718,func_80008718,ours,0,,recomp,,,
-0x80008750,func_80008750,ours,0,,recomp,,,
+0x80008718,func_80008718,ours,0,,rust_verified,unit_diff,high,1 if 0x8E <= a0 < 0x9E or a0 == 0x22 (game::misc)
+0x80008750,func_80008750,ours,0,,rust_verified,unit_diff,high,spills a0; byte [0x8009A324] = a0 (game::misc)
 0x80008760,func_80008760,ours,1,,recomp,,,
 0x80008B14,func_80008B14,ours,2,,recomp,,,
 0x80008B68,func_80008B68,ours,2,,recomp,,,
@@ -117,13 +117,13 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80008F6C,func_80008F6C,ours,0,,recomp,,,
 0x80009134,func_80009134,ours,0,,recomp,,,
 0x800091B0,func_800091B0,ours,2,,recomp,,,
-0x80009278,func_80009278,ours,0,,recomp,,,
-0x800092B0,func_800092B0,ours,0,,recomp,,,
+0x80009278,func_80009278,ours,0,,rust_verified,unit_diff,high,push to the 3-entry recent list 0x8009ADF4; QUIRK unbounded slot (game::misc)
+0x800092B0,func_800092B0,ours,0,,rust_verified,unit_diff,high,1 if a0 is in the recent list (game::misc)
 0x800092EC,func_800092EC,ours,18,,recomp,,,
 0x800093B0,func_800093B0,ours,19,,recomp,,,
-0x80009524,func_80009524,ours,0,,recomp,,,
-0x8000953C,func_8000953C,ours,0,,recomp,,,
-0x8000955C,func_8000955C,ours,0,,recomp,,,
+0x80009524,func_80009524,ours,0,,rust_verified,unit_diff,high,FLAG_WORDS[k] & bits; QUIRK unbounded k (game::misc)
+0x8000953C,func_8000953C,ours,0,,rust_verified,unit_diff,high,FLAG_WORDS[k] |= bits (game::misc)
+0x8000955C,func_8000955C,ours,0,,rust_verified,unit_diff,high,FLAG_WORDS[k] &= ~bits (game::misc)
 0x80009580,func_80009580,ours,19,,recomp,,,
 0x80009704,func_80009704,ours,19,,recomp,,,
 0x80009744,func_80009744,ours,1,,recomp,,,
