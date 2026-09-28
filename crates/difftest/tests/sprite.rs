@@ -10,7 +10,7 @@
 //! Heap state: [`difftest::world`].
 
 use assets::Sprite;
-use difftest::rom::{baserom, install_rom_doubles, rom_read_small, ROM_READ_SMALL};
+use difftest::rom::{baserom, install_rom_doubles, rom_read_small, Image, ROM_READ_SMALL};
 use difftest::world::{align, blocks, bytes, sext, words, world, Heap, HEAP_8MB, STACK};
 use difftest::{compare, State};
 use game::heap::{CURSORS, HEAP_END};
@@ -231,14 +231,13 @@ fn no_space_check() {
     assert_eq!(m.read_u32(OUT_OF_HEAP), 0);
 }
 
-/// A copy of the ROM with sprite `i`'s bytes changed by `patch`, as a
-/// rom_read_small double (on top of [`install_rom_doubles`]).
+/// A rom_read_small double (on top of [`install_rom_doubles`]) over the ROM
+/// with sprite `i`'s bytes changed by `patch`.
 fn patched(i: usize, patch: impl FnOnce(&mut [u8])) -> doubles::Installed {
     let at = raw(i).as_ptr() as usize - baserom().as_ptr() as usize;
-    let mut rom = baserom().to_vec();
-    patch(&mut rom[at..at + raw(i).len()]);
-    let rom: &'static [u8] = Box::leak(rom.into_boxed_slice());
-    doubles::install(ROM_READ_SMALL, rom_read_small(rom))
+    let mut bytes = raw(i).to_vec();
+    patch(&mut bytes);
+    doubles::install(ROM_READ_SMALL, rom_read_small(Image::from(baserom()).patch(at, &bytes)))
 }
 
 /// QUIRK: a CI sprite (`+4 == 2`) whose palette offset is 0 returns at once,

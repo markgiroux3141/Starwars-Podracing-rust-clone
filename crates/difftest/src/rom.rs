@@ -42,6 +42,50 @@ pub fn baserom() -> &'static [u8] {
     })
 }
 
+/// A ROM image for the doubles: a base (usually [`baserom`]) with some byte
+/// ranges replaced, so tests can feed patched data without copying the whole
+/// 32 MB image. Later patches win where they overlap.
+#[derive(Clone)]
+pub struct Image {
+    base: &'static [u8],
+    patches: Vec<(usize, Vec<u8>)>,
+}
+
+impl From<&'static [u8]> for Image {
+    fn from(base: &'static [u8]) -> Self {
+        Self { base, patches: Vec::new() }
+    }
+}
+
+impl Image {
+    /// This image with `bytes` at ROM offset `at`.
+    pub fn patch(mut self, at: usize, bytes: &[u8]) -> Self {
+        assert!(at + bytes.len() <= self.base.len(), "patch at {at:#x} is past the end of the ROM");
+        self.patches.push((at, bytes.to_vec()));
+        self
+    }
+
+    pub fn len(&self) -> usize {
+        self.base.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.base.is_empty()
+    }
+
+    /// `size` bytes from `src`, patches applied.
+    pub fn read(&self, src: usize, size: usize) -> Vec<u8> {
+        let mut out = self.base[src..src + size].to_vec();
+        for (at, bytes) in &self.patches {
+            let (lo, hi) = ((*at).max(src), (at + bytes.len()).min(src + size));
+            if lo < hi {
+                out[lo - src..hi - src].copy_from_slice(&bytes[lo - at..hi - at]);
+            }
+        }
+        out
+    }
+}
+
 pub const ROM_READ: &str = "func_80011CDC";
 pub const ROM_READ_SMALL: &str = "func_80011D60";
 
@@ -70,14 +114,15 @@ fn finish(ctx: &mut RecompContext) {
 }
 
 /// `rom_read(rom, dram, size)`: PI DMA in 0x800-byte chunks.
-pub fn rom_read(rom: &'static [u8]) -> impl FnMut(&mut Mem, &mut RecompContext) {
+pub fn rom_read(rom: impl Into<Image>) -> impl FnMut(&mut Mem, &mut RecompContext) {
+    let rom = rom.into();
     move |mem, ctx| {
         if let Some((src, dram, size)) = args(ctx, ROM_READ, rom.len()) {
             assert!(
                 dram % 8 == 0 && src % 2 == 0 && size % 2 == 0,
                 "{ROM_READ}: ROM {src:#x} -> {dram:#010x}, {size:#x} bytes is not a clean PI DMA"
             );
-            mem.write_bytes(dram, &rom[src..src + size]);
+            mem.write_bytes(dram, &rom.read(src, size));
         }
         finish(ctx);
     }
@@ -85,14 +130,15 @@ pub fn rom_read(rom: &'static [u8]) -> impl FnMut(&mut Mem, &mut RecompContext) 
 
 /// `rom_read_small(rom, dram, size)`: word reads through `osPiReadIo`, stored
 /// with `sw`, then the last `size % 4` bytes one at a time.
-pub fn rom_read_small(rom: &'static [u8]) -> impl FnMut(&mut Mem, &mut RecompContext) {
+pub fn rom_read_small(rom: impl Into<Image>) -> impl FnMut(&mut Mem, &mut RecompContext) {
+    let rom = rom.into();
     move |mem, ctx| {
         if let Some((src, dram, size)) = args(ctx, ROM_READ_SMALL, rom.len()) {
             assert!(
                 dram % 4 == 0 && src % 4 == 0,
                 "{ROM_READ_SMALL}: ROM {src:#x} -> {dram:#010x} is not word-aligned"
             );
-            mem.write_bytes(dram, &rom[src..src + size]);
+            mem.write_bytes(dram, &rom.read(src, size));
         }
         finish(ctx);
     }
@@ -100,6 +146,25 @@ pub fn rom_read_small(rom: &'static [u8]) -> impl FnMut(&mut Mem, &mut RecompCon
 
 /// Install both ROM-read doubles on this thread, reading baserom.z64.
 pub fn install_rom_doubles() -> [Installed; 2] {
-    let rom = baserom();
-    [doubles::install(ROM_READ, rom_read(rom)), doubles::install(ROM_READ_SMALL, rom_read_small(rom))]
+    install_rom_image(baserom().into())
+}
+
+/// Install both ROM-read doubles on this thread, reading `rom`.
+pub fn install_rom_image(rom: Image) -> [Installed; 2] {
+    [doubles::install(ROM_READ, rom_read(rom.clone())), doubles::install(ROM_READ_SMALL, rom_read_small(rom))]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn patches_overlay_the_base() {
+        let base: &'static [u8] = &[0, 1, 2, 3, 4, 5, 6, 7];
+        let img = Image::from(base).patch(2, &[0xA, 0xB, 0xC]).patch(4, &[0xD]);
+        assert_eq!(img.read(0, 8), [0, 1, 0xA, 0xB, 0xD, 5, 6, 7]);
+        assert_eq!(img.read(3, 2), [0xB, 0xD]);
+        assert_eq!(img.read(5, 3), [5, 6, 7]);
+        assert_eq!(Image::from(base).read(1, 2), [1, 2]);
+    }
 }
