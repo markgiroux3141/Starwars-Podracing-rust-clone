@@ -823,3 +823,56 @@ pub unsafe extern "C" fn func_80030154(rdram: *mut u8, ctx: *mut RecompContext) 
     g[RA] = lw(m, g[SP], 0x14);
     g[SP] = addu(g[SP], 0x18);
 }
+
+/// `func_8003043C` (texture_block_init): read the texture count into
+/// [`TEXTURE_COUNT`] with `rom_read_small`, then zero [`TEXTURE_CACHE`].
+///
+/// The cache is always 1700 words (`0x800D9E00` up to the count itself at
+/// `0x800DB890`), four per iteration, whatever the count. A count of 1701 or
+/// more (signed) hangs instead: QUIRK, `b .` before the loop, an assert with
+/// nothing else left. N64Recomp turns that into one call to the runtime's
+/// `pause_self`, which never returns; the port makes the same call, and would
+/// carry on into the loop just as the C does if it did return.
+///
+/// Leaves `v0 = v1 = 0x800DB890`, `at = 1` and `t6` = the count.
+///
+/// Domain: canonical `sp`, the 0x18-byte frame in RDRAM, and
+/// `rom_read_small`'s.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003043C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    g[A0] = li(TEXTURE_BLOCK);
+    g[A1] = li(TEXTURE_COUNT);
+    g[A2] = 4;
+    call(imports::func_80011D60, m, ctx); // rom_read_small(count -> TEXTURE_COUNT)
+
+    let g = &mut ctx.gpr;
+    g[T6] = lw(m, li(0x800E_0000), -0x4770);
+    g[V0] = li(TEXTURE_CACHE);
+    g[AT] = u64::from((g[T6] as i64) < 0x6A5);
+    g[V1] = li(0x800E_0000); // bne delay slot
+    if g[AT] == 0 {
+        // L_80030478: b . (the delay slot is a nop)
+        imports::runtime::pause_self(m.as_mut_ptr());
+    }
+    // L_80030480
+    g[V1] = addu(g[V1], (-0x4770i64) as u64);
+    loop {
+        g[V0] = addu(g[V0], 0x10);
+        sw(m, g[V0], -0xC, 0);
+        sw(m, g[V0], -0x8, 0);
+        sw(m, g[V0], -0x4, 0);
+        sw(m, g[V0], -0x10, 0); // bne delay slot
+        if g[V0] == g[V1] {
+            break;
+        }
+    }
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x18);
+}

@@ -21,3 +21,23 @@ recomp_imports! {
     func_800304AC, // texture_get
     func_800827C0, // model_load's error path (not yet understood)
 }
+
+/// Hooks into the runtime that N64Recomp's generated code calls (recomp.h),
+/// for ports that must do the same. Like the functions above, whoever links
+/// `game` defines them: the oracle's stub runtime in the tests (every hook
+/// traps), the runtime in the game build.
+pub mod runtime {
+    #[cfg(not(test))]
+    extern "C" {
+        /// What N64Recomp emits for a branch to itself (`b .`), the idle loop
+        /// of a thread with nothing left to do. It doesn't return.
+        pub fn pause_self(rdram: *mut u8);
+    }
+
+    #[cfg(test)]
+    #[no_mangle]
+    pub unsafe extern "C" fn pause_self(_rdram: *mut u8) {
+        eprintln!("pause_self is only linked in the oracle or the game build, not game's unit tests");
+        std::process::abort();
+    }
+}

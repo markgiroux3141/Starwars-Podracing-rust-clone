@@ -43,6 +43,7 @@ pub const PORTED: &[Ported] = &[
     Ported { vram: 0x8003_0130, name: "func_80030130", func: loader::func_80030130 },
     Ported { vram: 0x8003_0154, name: "func_80030154", func: loader::func_80030154 },
     Ported { vram: 0x8003_0328, name: "func_80030328", func: loader::func_80030328 },
+    Ported { vram: 0x8003_043C, name: "func_8003043C", func: loader::func_8003043C },
     Ported { vram: 0x8003_04AC, name: "func_800304AC", func: loader::func_800304AC },
     Ported { vram: 0x8003_05E8, name: "func_800305E8", func: loader::func_800305E8 },
 ];

@@ -474,7 +474,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80030298,func_80030298,ours,2,,recomp,,,
 0x80030304,func_80030304,ours,1,,recomp,,,
 0x80030328,texture_read,ours,17,asset,rust_verified,unit_diff,high,"(hdr, &pix, &pal): pixels then palette at 64-aligned heap; *pal untouched if no palette; OOM if free < size+0x80"
-0x8003043C,texture_block_init,ours,17,asset,recomp,,med,count -> 0x800DB890; QUIRK: hangs if > 1700
+0x8003043C,texture_block_init,ours,17,asset,rust_verified,unit_diff,high,count -> 0x800DB890 (rom_read_small); zeroes all 1700 cache words whatever the count; QUIRK: count >= 1701 (signed) hangs: b . = pause_self
 0x800304AC,texture_get,ours,18,asset,rust_verified,unit_diff,high,cache 0x800D9E00 holds &pix of the first loader; QUIRK: later hits copy that pair (null if it OOMed); idx >= count -> null
 0x80030574,func_80030574,ours,0,,recomp,,,
 0x800305E8,model_load,ours,19,asset,rust_verified,unit_diff,high,"mask, Comp to heap top, relocation, tag; QUIRK: Comp header read before space check; window can overlap output (corrupt model)"
