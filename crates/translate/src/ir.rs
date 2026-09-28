@@ -107,6 +107,70 @@ pub enum Op {
     SaveCond(usize, Cond),
     /// A label of the C, kept as a comment where blocks were merged.
     Label(String),
+    // Floats. FPRs by number; in the game's 32-bit FPU mode singles and
+    // words live in the low half (`fl`/`u32l`) of an even register, doubles
+    // in the whole register, and odd registers in `f_odd`, the high half of
+    // the even register below.
+    /// `lwc1`: `f.u32l = mem[base + off]`.
+    FLoad(u8, u8, i32),
+    /// `swc1`: `mem[base + off] = f.u32l`.
+    FStore(u8, u8, i32),
+    /// `ldc1`: `f.u64 = mem64[base + off]`.
+    FLoadD(u8, u8, i32),
+    /// `sdc1`: `mem64[base + off] = f.u64`.
+    FStoreD(u8, u8, i32),
+    /// `mtc1` to an even register: `f.u32l = low word`.
+    Mtc1(u8, Val),
+    /// `mtc1` to an odd register `n`: the high half of `f(n - 1)`.
+    Mtc1Odd(u8, Val),
+    /// `mfc1` from an even register: `rd = sext(f.u32l)`.
+    Mfc1(u8, u8),
+    /// `mfc1` from an odd register `n`: `rd = sext(f(n - 1).u32h)`.
+    Mfc1Odd(u8, u8),
+    FArith(FArith, Prec, u8, u8, u8),
+    FUn(FUn, Prec, u8, u8),
+    Cvt(Cvt, u8, u8),
+    /// `c.cond.fmt`: sets the function's `c1cs` local.
+    FCmp(Cmp, Prec, u8, u8),
+    /// `cfc1 rd, $31`: FCR31 as N64Recomp reads it, the rounding bits only.
+    Cfc1(u8),
+    /// `ctc1 rs, $31`: sets the rounding mode.
+    Ctc1(Val),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Prec {
+    S,
+    D,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FArith {
+    Add,
+    Sub,
+    Mul,
+    Div,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FUn {
+    Neg,
+    Mov,
+    Sqrt,
+}
+
+/// Conversions: `Xy` converts format `y` to `X` (`W` word, `S` single, `D`
+/// double), as MIPS names them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Cvt {
+    SW,
+    DW,
+    DS,
+    SD,
+    WS,
+    WD,
+    TruncWS,
+    TruncWD,
 }
 
 impl Op {
@@ -121,9 +185,17 @@ impl Op {
             | Op::Shift(_, d, ..)
             | Op::ShiftV(_, d, ..)
             | Op::MfLo(d)
-            | Op::MfHi(d) => Some(d),
+            | Op::MfHi(d)
+            | Op::Mfc1(d, _)
+            | Op::Mfc1Odd(d, _)
+            | Op::Cfc1(d) => Some(d),
             _ => None,
         }
+    }
+
+    /// Whether this op writes `c1cs` (a float compare).
+    pub fn writes_c1(&self) -> bool {
+        matches!(self, Op::FCmp(..))
     }
 
     pub fn is_call(&self) -> bool {
@@ -166,6 +238,8 @@ pub enum Cond {
     /// effects, so `&&`'s short circuit changes nothing).
     And(Box<Cond>, Box<Cond>),
     Not(Box<Cond>),
+    /// `c1cs` (true) or `!c1cs` (false): the last float compare, `bc1t`/`bc1f`.
+    C1(bool),
 }
 
 impl Cond {
@@ -174,6 +248,7 @@ impl Cond {
             Cond::Cmp { cmp, signed, a, b } => Cond::Cmp { cmp: cmp.negate(), signed: *signed, a: *a, b: *b },
             Cond::Saved(n, neg) => Cond::Saved(*n, !neg),
             Cond::Not(c) => (**c).clone(),
+            Cond::C1(t) => Cond::C1(!t),
             c => Cond::Not(Box::new(c.clone())),
         }
     }
@@ -181,9 +256,18 @@ impl Cond {
     pub fn reads(&self, r: u8) -> bool {
         match self {
             Cond::Cmp { a, b, .. } => *a == Val::R(r) || *b == Val::R(r),
-            Cond::Saved(..) => false,
+            Cond::Saved(..) | Cond::C1(_) => false,
             Cond::And(a, b) => a.reads(r) || b.reads(r),
             Cond::Not(c) => c.reads(r),
+        }
+    }
+
+    pub fn reads_c1(&self) -> bool {
+        match self {
+            Cond::C1(_) => true,
+            Cond::And(a, b) => a.reads_c1() || b.reads_c1(),
+            Cond::Not(c) => c.reads_c1(),
+            _ => false,
         }
     }
 }
@@ -381,12 +465,191 @@ fn shift(kind: Shift, d: u8, x: Val, s: &E) -> Option<Op> {
     }
 }
 
+/// `ctx->fN.field`.
+fn fpr<'a>(e: &'a E, field: &str) -> Option<u8> {
+    let E::Member(inner, f) = e else { return None };
+    if f != field {
+        return None;
+    }
+    let E::Member(ctx, name) = &**inner else { return None };
+    if **ctx != E::Ident("ctx".into()) {
+        return None;
+    }
+    name.strip_prefix('f').and_then(|n| n.parse::<u8>().ok()).filter(|&n| n < 32)
+}
+
+/// `ctx->f_odd[(N - 1) * 2]`: odd register N.
+fn f_odd(e: &E) -> Option<u8> {
+    let E::Index(base, idx) = e else { return None };
+    let E::Member(ctx, name) = &**base else { return None };
+    if **ctx != E::Ident("ctx".into()) || name != "f_odd" {
+        return None;
+    }
+    let (m, two) = bin(idx, "*")?;
+    let (n, one) = bin(m, "-")?;
+    match (n, one, two) {
+        (E::Num(n), E::Num(1), E::Num(2)) if n % 2 == 1 && (1..32).contains(n) => Some(*n as u8),
+        _ => None,
+    }
+}
+
+/// A float statement: `Some(Ok(None))` for checks that translate to
+/// nothing, `Some(Ok(Some(op)))`, `Some(Err)` for a float shape that isn't
+/// supported, `None` if it isn't a float statement.
+fn float_stmt(st: &crate::c::Stmt) -> Option<Result<Option<Op>, Refusal>> {
+    use crate::c::Stmt;
+    let ok = |op| Some(Ok(Some(op)));
+    match st {
+        Stmt::Expr(e @ E::Call(n, args)) => match (n.as_str(), args.as_slice()) {
+            ("NAN_CHECK", [_]) => Some(Ok(None)),
+            ("CHECK_FR", [E::Ident(c), E::Num(k)]) if c == "ctx" => {
+                if k % 2 == 0 {
+                    Some(Ok(None))
+                } else {
+                    Some(Err(Refusal::new("float", format!("odd FPR check `{e}`"))))
+                }
+            }
+            ("SD", [v, a, b]) => {
+                let f = fpr(v, "u64")?;
+                let (base, off) = base_off(a, b)?;
+                ok(Op::FStoreD(f, base, off))
+            }
+            ("set_cop1_cs", [v]) => ok(Op::Ctc1(val(v)?)),
+            _ => None,
+        },
+        Stmt::Assign(lhs, rhs) => {
+            // Stores of FPR words.
+            if let Some(("MEM_W", base, off)) = mem(lhs) {
+                return fpr(rhs, "u32l").map(|f| Ok(Some(Op::FStore(f, base, off))));
+            }
+            if let E::Reg(d) = lhs {
+                if let E::Cast(t, inner) = rhs {
+                    if t == "int32_t" {
+                        if let Some(f) = fpr(inner, "u32l") {
+                            return ok(Op::Mfc1(*d, f));
+                        }
+                        if let Some(n) = f_odd(inner) {
+                            return ok(Op::Mfc1Odd(*d, n));
+                        }
+                    }
+                }
+                if call(rhs, "get_cop1_cs") == Some(&[]) {
+                    return ok(Op::Cfc1(*d));
+                }
+                return None;
+            }
+            if let Some(n) = f_odd(lhs) {
+                return ok(Op::Mtc1Odd(n, val(rhs)?));
+            }
+            if let E::Ident(c) = lhs {
+                if c == "c1cs" {
+                    let E::Bin(op, a, b) = rhs else { return None };
+                    let cmp = match *op {
+                        "<" => Cmp::Lt,
+                        "<=" => Cmp::Le,
+                        "==" => Cmp::Eq,
+                        _ => return None,
+                    };
+                    if let (Some(a), Some(b)) = (fpr(a, "fl"), fpr(b, "fl")) {
+                        return ok(Op::FCmp(cmp, Prec::S, a, b));
+                    }
+                    if let (Some(a), Some(b)) = (fpr(a, "d"), fpr(b, "d")) {
+                        return ok(Op::FCmp(cmp, Prec::D, a, b));
+                    }
+                    return None;
+                }
+            }
+            if let Some(d) = fpr(lhs, "u32l") {
+                if let Some(("MEM_W", base, off)) = mem(rhs) {
+                    return ok(Op::FLoad(d, base, off));
+                }
+                if let Some(v) = val(rhs) {
+                    return ok(Op::Mtc1(d, v));
+                }
+                let cvt = |name, from: &str| call1(rhs, name).and_then(|a| fpr(a, from));
+                return [("CVT_W_S", "fl", Cvt::WS), ("CVT_W_D", "d", Cvt::WD), ("TRUNC_W_S", "fl", Cvt::TruncWS), ("TRUNC_W_D", "d", Cvt::TruncWD)]
+                    .into_iter()
+                    .find_map(|(n, from, k)| cvt(n, from).map(|a| Op::Cvt(k, d, a)))
+                    .map(|op| Ok(Some(op)));
+            }
+            if let Some(d) = fpr(lhs, "u64") {
+                let [a, b] = call(rhs, "LD")? else { return None };
+                let (base, off) = base_off(a, b)?;
+                return ok(Op::FLoadD(d, base, off));
+            }
+            for (field, prec) in [("fl", Prec::S), ("d", Prec::D)] {
+                let Some(d) = fpr(lhs, field) else { continue };
+                let arg = |e: &E| fpr(e, field);
+                let (mul, div) = if prec == Prec::S { ("MUL_S", "DIV_S") } else { ("MUL_D", "DIV_D") };
+                let two = |e: &E, k| -> Option<Op> {
+                    match e {
+                        E::Bin(o, a, b) if (*o == "+" && k == FArith::Add) || (*o == "-" && k == FArith::Sub) => {
+                            Some(Op::FArith(k, prec, d, arg(a)?, arg(b)?))
+                        }
+                        E::Call(n, v) if (n == mul && k == FArith::Mul) || (n == div && k == FArith::Div) => match v.as_slice() {
+                            [a, b] => Some(Op::FArith(k, prec, d, arg(a)?, arg(b)?)),
+                            _ => None,
+                        },
+                        _ => None,
+                    }
+                };
+                if let Some(op) = [FArith::Add, FArith::Sub, FArith::Mul, FArith::Div].into_iter().find_map(|k| two(rhs, k)) {
+                    return ok(op);
+                }
+                if let E::Unary("-", a) = rhs {
+                    return arg(a).map(|a| Ok(Some(Op::FUn(FUn::Neg, prec, d, a))));
+                }
+                if let Some(a) = arg(rhs) {
+                    return ok(Op::FUn(FUn::Mov, prec, d, a));
+                }
+                if prec == Prec::S {
+                    if let Some(a) = call1(rhs, "sqrtf").and_then(arg) {
+                        return ok(Op::FUn(FUn::Sqrt, prec, d, a));
+                    }
+                    if let Some(a) = call1(rhs, "CVT_S_W").and_then(|a| fpr(a, "u32l")) {
+                        return ok(Op::Cvt(Cvt::SW, d, a));
+                    }
+                    if let Some(a) = call1(rhs, "CVT_S_D").and_then(|a| fpr(a, "d")) {
+                        return ok(Op::Cvt(Cvt::SD, d, a));
+                    }
+                } else {
+                    if let Some(a) = call1(rhs, "CVT_D_W").and_then(|a| fpr(a, "u32l")) {
+                        return ok(Op::Cvt(Cvt::DW, d, a));
+                    }
+                    if let Some(a) = call1(rhs, "CVT_D_S").and_then(|a| fpr(a, "fl")) {
+                        return ok(Op::Cvt(Cvt::DS, d, a));
+                    }
+                }
+                return None;
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+fn base_off(a: &E, b: &E) -> Option<(u8, i32)> {
+    match (a, b) {
+        (E::Reg(r), E::Num(o)) | (E::Num(o), E::Reg(r)) => Some((*r, i32::try_from(*o).ok()?)),
+        _ => None,
+    }
+}
+
 /// Statements of one C line, as ops. `mult`/`div` span several statements.
 pub fn ops_of_line(stmts: &[crate::c::Stmt]) -> Result<Vec<Op>, Refusal> {
     use crate::c::Stmt;
     let mut out = Vec::new();
     let mut k = 0;
     while k < stmts.len() {
+        match float_stmt(&stmts[k]) {
+            Some(Ok(op)) => {
+                out.extend(op);
+                k += 1;
+                continue;
+            }
+            Some(Err(r)) => return Err(r),
+            None => {}
+        }
         match &stmts[k] {
             Stmt::Assign(lhs, rhs) => {
                 if let Some(r) = find_unsupported(lhs).or_else(|| find_unsupported(rhs)) {
@@ -483,6 +746,11 @@ fn muldiv(stmts: &[crate::c::Stmt]) -> Option<(Op, usize)> {
 
 /// The condition of `if (cond) {`.
 pub fn cond(e: &E) -> Result<Cond, Refusal> {
+    match e {
+        E::Ident(c) if c == "c1cs" => return Ok(Cond::C1(true)),
+        E::Unary("!", c) if **c == E::Ident("c1cs".into()) => return Ok(Cond::C1(false)),
+        _ => {}
+    }
     if let Some(r) = find_unsupported(e) {
         return Err(r);
     }
@@ -557,10 +825,38 @@ mod tests {
     }
 
     #[test]
+    fn float_shapes() {
+        assert_eq!(ops("CHECK_FR(ctx, 8);").unwrap(), []);
+        assert_eq!(ops("NAN_CHECK(ctx->f4.fl); NAN_CHECK(ctx->f6.fl);").unwrap(), []);
+        assert_eq!(ops("ctx->f6.u32l = MEM_W(ctx->r4, 0X0);").unwrap(), [Op::FLoad(6, 4, 0)]);
+        assert_eq!(ops("MEM_W(0X6C, ctx->r29) = ctx->f8.u32l;").unwrap(), [Op::FStore(8, 29, 0x6C)]);
+        assert_eq!(ops("ctx->f20.u64 = LD(ctx->r29, 0X18);").unwrap(), [Op::FLoadD(20, 29, 0x18)]);
+        assert_eq!(ops("SD(ctx->f20.u64, 0X18, ctx->r29);").unwrap(), [Op::FStoreD(20, 29, 0x18)]);
+        assert_eq!(ops("ctx->f0.u32l = ctx->r1;").unwrap(), [Op::Mtc1(0, Val::R(1))]);
+        assert_eq!(ops("ctx->f_odd[(19 - 1) * 2] = ctx->r1;").unwrap(), [Op::Mtc1Odd(19, Val::R(1))]);
+        assert_eq!(ops("ctx->r5 = (int32_t)ctx->f8.u32l;").unwrap(), [Op::Mfc1(5, 8)]);
+        assert_eq!(ops("ctx->r6 = (int32_t)ctx->f_odd[(17 - 1) * 2];").unwrap(), [Op::Mfc1Odd(6, 17)]);
+        assert_eq!(ops("ctx->f8.fl = MUL_S(ctx->f4.fl, ctx->f6.fl);").unwrap(), [Op::FArith(FArith::Mul, Prec::S, 8, 4, 6)]);
+        assert_eq!(ops("ctx->f10.fl = ctx->f12.fl + ctx->f2.fl;").unwrap(), [Op::FArith(FArith::Add, Prec::S, 10, 12, 2)]);
+        assert_eq!(ops("ctx->f10.d = ctx->f6.d - ctx->f8.d;").unwrap(), [Op::FArith(FArith::Sub, Prec::D, 10, 6, 8)]);
+        assert_eq!(ops("ctx->f4.d = DIV_D(ctx->f10.d, ctx->f18.d);").unwrap(), [Op::FArith(FArith::Div, Prec::D, 4, 10, 18)]);
+        assert_eq!(ops("ctx->f12.fl = -ctx->f0.fl;").unwrap(), [Op::FUn(FUn::Neg, Prec::S, 12, 0)]);
+        assert_eq!(ops("ctx->f12.fl = ctx->f0.fl;").unwrap(), [Op::FUn(FUn::Mov, Prec::S, 12, 0)]);
+        assert_eq!(ops("ctx->f0.fl = sqrtf(ctx->f0.fl);").unwrap(), [Op::FUn(FUn::Sqrt, Prec::S, 0, 0)]);
+        assert_eq!(ops("ctx->f6.fl = CVT_S_W(ctx->f4.u32l);").unwrap(), [Op::Cvt(Cvt::SW, 6, 4)]);
+        assert_eq!(ops("ctx->f6.d = CVT_D_S(ctx->f4.fl);").unwrap(), [Op::Cvt(Cvt::DS, 6, 4)]);
+        assert_eq!(ops("ctx->f10.u32l = TRUNC_W_S(ctx->f8.fl);").unwrap(), [Op::Cvt(Cvt::TruncWS, 10, 8)]);
+        assert_eq!(ops("ctx->f10.u32l = CVT_W_S(ctx->f20.fl);").unwrap(), [Op::Cvt(Cvt::WS, 10, 20)]);
+        assert_eq!(ops("c1cs = ctx->f0.fl < ctx->f16.fl;").unwrap(), [Op::FCmp(Cmp::Lt, Prec::S, 0, 16)]);
+        assert_eq!(ops("c1cs = ctx->f6.d <= ctx->f20.d;").unwrap(), [Op::FCmp(Cmp::Le, Prec::D, 6, 20)]);
+        assert_eq!(ops("ctx->r14 = get_cop1_cs();").unwrap(), [Op::Cfc1(14)]);
+        assert_eq!(ops("set_cop1_cs(ctx->r6);").unwrap(), [Op::Ctc1(Val::R(6))]);
+    }
+
+    #[test]
     fn refusals() {
-        assert_eq!(ops("CHECK_FR(ctx, 8);").unwrap_err().kind, "float");
-        assert_eq!(ops("ctx->f6.u32l = MEM_W(ctx->r4, 0X0);").unwrap_err().kind, "float");
-        assert_eq!(ops("ctx->r14 = get_cop1_cs();").unwrap_err().kind, "FCR31");
+        assert_eq!(ops("CHECK_FR(ctx, 9);").unwrap_err().kind, "float");
+        assert_eq!(ops("ctx->f0.u64 = CVT_L_S(ctx->f2.fl);").unwrap_err().kind, "float");
         assert_eq!(ops("LOOKUP_FUNC(ctx->r25)(rdram, ctx);").unwrap_err().kind, "indirect call");
         assert_eq!(ops("do_break(2147521760);").unwrap_err().kind, "break");
         assert_eq!(ops("ctx->r1 = do_lwr(rdram, ctx->r1, ctx->r14, 0X12);").unwrap_err().kind, "unaligned access");
@@ -580,6 +876,6 @@ mod tests {
             c("if (SIGNED(ctx->r3) <= 0) {").unwrap(),
             Cond::Cmp { cmp: Cmp::Le, signed: true, a: Val::R(3), b: Val::I(0) }
         );
-        assert_eq!(c("if (!c1cs) {").unwrap_err().kind, "float");
+        assert_eq!(c("if (!c1cs) {").unwrap(), Cond::C1(false));
     }
 }

@@ -5,9 +5,11 @@
 //! callees through `imports`. It is a draft, not a port: every draft still
 //! goes through the per-function loop in CLAUDE.md.
 //!
-//! Integer code only, for now. Anything else is refused with a reason
-//! ([`Refusal`]): floats, FCR31, jump tables, indirect calls, `break`,
-//! unaligned and 64-bit accesses.
+//! Integer and float code. Anything else is refused with a reason
+//! ([`Refusal`]): jump tables, indirect calls, `break`, unaligned and
+//! 64-bit accesses, 64-bit float conversions. Float arithmetic comes out
+//! round-to-nearest; conversions take FCR31's rounding bits, kept in a
+//! local (NOTES.md, "Floats").
 //!
 //! This crate reads the generated C, which is derived from the ROM; neither
 //! that C nor translated output is committed. It must not depend on `game`
@@ -196,8 +198,44 @@ L_8000100C:
     }
 
     #[test]
-    fn floats_are_refused() {
-        let r = translate(&wrap("    // 0x80001000: lwc1 $f6, 0x0($a0)\n    CHECK_FR(ctx, 6);\n    return;")).err().unwrap();
+    fn long_conversions_are_refused() {
+        let r = translate(&wrap("    // 0x80001000: cvt.l.s $f0, $f2\n    ctx->f0.u64 = CVT_L_S(ctx->f2.fl);\n    return;")).err().unwrap();
         assert_eq!(r.kind, "float");
+    }
+
+    #[test]
+    fn float_ops_use_fpr_accessors_and_c1cs() {
+        let b = body(
+            "    // 0x80001000: lwc1 $f4, 0x0($a0)
+    CHECK_FR(ctx, 4);
+    ctx->f4.u32l = MEM_W(ctx->r4, 0X0);
+    // 0x80001004: c.lt.s $f4, $f12
+    CHECK_FR(ctx, 4);
+    CHECK_FR(ctx, 12);
+    c1cs = ctx->f4.fl < ctx->f12.fl;
+    // 0x80001008: bc1f L_80001014
+    if (!c1cs) {
+        // 0x8000100C: mul.s $f0, $f4, $f4
+        CHECK_FR(ctx, 0);
+        NAN_CHECK(ctx->f4.fl); NAN_CHECK(ctx->f4.fl);
+        ctx->f0.fl = MUL_S(ctx->f4.fl, ctx->f4.fl);
+            goto L_80001014;
+    }
+    // 0x8000100C: mul.s $f0, $f4, $f4
+    CHECK_FR(ctx, 0);
+    NAN_CHECK(ctx->f4.fl); NAN_CHECK(ctx->f4.fl);
+    ctx->f0.fl = MUL_S(ctx->f4.fl, ctx->f4.fl);
+    // 0x80001010: trunc.w.s $f2, $f0
+    ctx->f2.u32l = TRUNC_W_S(ctx->f0.fl);
+L_80001014:
+    // 0x80001014: jr $ra
+    // 0x80001018: nop
+
+    return;",
+        );
+        let want = "let mut c1cs = false;\nctx.fpr[4].set_u32l(lw(m, g[A0], 0) as u32);\n\
+                    c1cs = ctx.fpr[4].fl() < ctx.fpr[12].fl();\nctx.fpr[0].set_fl(ctx.fpr[4].fl() * ctx.fpr[4].fl());\n\
+                    if c1cs {\nctx.fpr[2].set_u32l(fpu::trunc_w_s(ctx.fpr[0].fl()));\n}";
+        assert!(b.contains(want), "{b}");
     }
 }

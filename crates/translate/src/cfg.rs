@@ -228,7 +228,9 @@ impl Cfg {
             }
             let Term::Goto(target) = tb.term else { unreachable!() };
             let mut cond = cond.clone();
-            let clobbers = delay.iter().any(|(o, _)| o.writes().is_some_and(|r| cond.reads(r)));
+            let clobbers = delay
+                .iter()
+                .any(|(o, _)| o.writes().is_some_and(|r| cond.reads(r)) || (o.writes_c1() && cond.reads_c1()));
             if clobbers {
                 let n = self.saved;
                 self.saved += 1;

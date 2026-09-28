@@ -1,7 +1,7 @@
 //! Rust source from structured code, in the style of the hand-written ports:
 //! `g[REG]` for `ctx.gpr`, `m` for RDRAM, `game::recomp` helpers.
 
-use crate::ir::{Alu, Cmp, Cond, Load, MulDiv, Op, Shift, Store, Val};
+use crate::ir::{Alu, Cmp, Cond, Cvt, FArith, FUn, Load, MulDiv, Op, Prec, Shift, Store, Val};
 use crate::structure::S;
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
@@ -61,6 +61,10 @@ pub struct Uses {
     pub gprs: bool,
     pub lohi: bool,
     pub runtime: bool,
+    /// Uses `c1cs` (float compares).
+    pub c1cs: bool,
+    /// Reads or writes FCR31 (`fcr31` local).
+    pub fcr31: bool,
 }
 
 fn uses(code: &[S], u: &mut Uses) {
@@ -100,6 +104,7 @@ fn cond_uses(c: &Cond, u: &mut Uses) {
             cond_uses(b, u);
         }
         Cond::Not(c) => cond_uses(c, u),
+        Cond::C1(_) => u.c1cs = true,
         Cond::Saved(..) => {}
     }
 }
@@ -194,7 +199,61 @@ fn op_uses(o: &Op, u: &mut Uses) {
         }
         Op::SaveCond(_, c) => cond_uses(c, u),
         Op::Label(_) => {}
+        Op::FLoad(..) => {
+            u.loads = true;
+            u.gprs = true;
+            h.insert("lw");
+        }
+        Op::FStore(..) => {
+            u.stores = true;
+            u.gprs = true;
+            h.insert("sw");
+        }
+        Op::FLoadD(..) => {
+            u.loads = true;
+            u.gprs = true;
+            h.insert("ld");
+        }
+        Op::FStoreD(..) => {
+            u.stores = true;
+            u.gprs = true;
+            h.insert("sd");
+        }
+        Op::Mfc1(..) | Op::Mfc1Odd(..) => {
+            h.insert("s32");
+            u.gprs = true;
+        }
+        Op::Mtc1(_, v) | Op::Mtc1Odd(_, v) => val_uses(*v, u),
+        Op::Cvt(..) => {
+            h.insert("fpu");
+        }
+        Op::FArith(..) | Op::FUn(..) => {}
+        Op::FCmp(..) => u.c1cs = true,
+        Op::Cfc1(_) => {
+            h.insert("fpu");
+            u.gprs = true;
+            u.fcr31 = true;
+        }
+        Op::Ctc1(v) => {
+            h.insert("fpu");
+            u.fcr31 = true;
+            val_uses(*v, u);
+        }
     }
+}
+
+fn uses_floats(code: &[S]) -> bool {
+    code.iter().any(|s| match s {
+        S::Op(o) => matches!(
+            o,
+            Op::FLoad(..) | Op::FStore(..) | Op::FLoadD(..) | Op::FStoreD(..) | Op::Mtc1(..) | Op::Mtc1Odd(..)
+                | Op::Mfc1(..) | Op::Mfc1Odd(..) | Op::FArith(..) | Op::FUn(..) | Op::Cvt(..) | Op::FCmp(..)
+        ),
+        S::If(_, t, e) => uses_floats(t) || uses_floats(e),
+        S::Block(_, b) | S::Loop(_, b) => uses_floats(b),
+        S::Machine(_, arms) => arms.iter().any(|(_, _, b)| uses_floats(b)),
+        _ => false,
+    })
 }
 
 fn contains_call(code: &[S]) -> bool {
@@ -212,6 +271,8 @@ fn uses_g(s: &S) -> bool {
     match s {
         S::Op(Op::Call(_) | Op::PauseSelf | Op::Label(_)) => false,
         S::Op(Op::MulDiv(_, a, b)) => matches!(a, Val::R(_)) || matches!(b, Val::R(_)),
+        S::Op(Op::Mtc1(_, v) | Op::Mtc1Odd(_, v) | Op::Ctc1(v)) => matches!(v, Val::R(_)),
+        S::Op(Op::FArith(..) | Op::FUn(..) | Op::Cvt(..) | Op::FCmp(..)) => false,
         S::Op(_) => true,
         S::Break(_) | S::Continue(_) | S::Return | S::SetPc(_) => false,
         _ => true,
@@ -318,6 +379,8 @@ fn simple_jump(stack: &[(bool, String)], l: &str) -> bool {
 
 fn cond(c: &Cond) -> String {
     match c {
+        Cond::C1(true) => "c1cs".into(),
+        Cond::C1(false) => "!c1cs".into(),
         Cond::Saved(n, false) => format!("c{n}"),
         Cond::Saved(n, true) => format!("!c{n}"),
         Cond::And(a, b) => format!("{} && {}", cond(a), cond(b)),
@@ -341,8 +404,79 @@ fn cond(c: &Cond) -> String {
     }
 }
 
-fn op(o: &Op) -> String {
+fn fr(n: u8) -> String {
+    format!("ctx.fpr[{n}]")
+}
+
+/// `fN` as a value of the op's precision.
+fn fv(n: u8, p: Prec) -> String {
+    match p {
+        Prec::S => format!("ctx.fpr[{n}].fl()"),
+        Prec::D => format!("ctx.fpr[{n}].d()"),
+    }
+}
+
+fn fset(n: u8, p: Prec, v: &str) -> String {
+    match p {
+        Prec::S => format!("{}.set_fl({v});", fr(n)),
+        Prec::D => format!("{}.set_d({v});", fr(n)),
+    }
+}
+
+/// Where float arithmetic runs in a function that writes FCR31, check the
+/// mode is still round-to-nearest (the only one Rust computes in).
+fn rne(fcr31: bool) -> &'static str {
+    if fcr31 {
+        "debug_assert_eq!(fcr31, fpu::NEAREST); "
+    } else {
+        ""
+    }
+}
+
+fn op(o: &Op, fcr31: bool) -> String {
+    let mode = if fcr31 { "fcr31" } else { "fpu::NEAREST" };
     match o {
+        Op::FLoad(f, b, o) => format!("{}.set_u32l(lw(m, {}, {}) as u32);", fr(*f), r(*b), off(*o)),
+        Op::FStore(f, b, o) => format!("sw(m, {}, {}, u64::from({}.u32l()));", r(*b), off(*o), fr(*f)),
+        Op::FLoadD(f, b, o) => format!("{}.u64 = ld(m, {}, {});", fr(*f), r(*b), off(*o)),
+        Op::FStoreD(f, b, o) => format!("sd(m, {}, {}, {}.u64);", r(*b), off(*o), fr(*f)),
+        Op::Mtc1(f, v) => format!("{}.set_u32l({} as u32);", fr(*f), val(*v)),
+        Op::Mtc1Odd(n, v) => format!("{}.set_u32h({} as u32); // f{n}", fr(n - 1), val(*v)),
+        Op::Mfc1(d, f) => format!("{} = s32({}.u32l());", r(*d), fr(*f)),
+        Op::Mfc1Odd(d, n) => format!("{} = s32({}.u32h()); // f{n}", r(*d), fr(n - 1)),
+        Op::FArith(k, p, d, a, b) => {
+            let sym = match k {
+                FArith::Add => "+",
+                FArith::Sub => "-",
+                FArith::Mul => "*",
+                FArith::Div => "/",
+            };
+            format!("{}{}", rne(fcr31), fset(*d, *p, &format!("{} {sym} {}", fv(*a, *p), fv(*b, *p))))
+        }
+        Op::FUn(FUn::Neg, p, d, a) => fset(*d, *p, &format!("-{}", fv(*a, *p))),
+        Op::FUn(FUn::Mov, Prec::S, d, a) => format!("{}.set_u32l({}.u32l());", fr(*d), fr(*a)),
+        Op::FUn(FUn::Mov, Prec::D, d, a) => format!("{}.u64 = {}.u64;", fr(*d), fr(*a)),
+        Op::FUn(FUn::Sqrt, p, d, a) => format!("{}{}", rne(fcr31), fset(*d, *p, &format!("{}.sqrt()", fv(*a, *p)))),
+        Op::Cvt(k, d, a) => match k {
+            Cvt::SW => format!("{}.set_fl(fpu::cvt_s_w({}.u32l(), {mode}));", fr(*d), fr(*a)),
+            Cvt::DW => format!("{}.set_d(f64::from({}.u32l() as i32));", fr(*d), fr(*a)),
+            Cvt::DS => format!("{}.set_d(f64::from({}.fl()));", fr(*d), fr(*a)),
+            Cvt::SD => format!("{}.set_fl(fpu::cvt_s_d({}.d(), {mode}));", fr(*d), fr(*a)),
+            Cvt::WS => format!("{}.set_u32l(fpu::cvt_w_s({}.fl(), {mode}));", fr(*d), fr(*a)),
+            Cvt::WD => format!("{}.set_u32l(fpu::cvt_w_d({}.d(), {mode}));", fr(*d), fr(*a)),
+            Cvt::TruncWS => format!("{}.set_u32l(fpu::trunc_w_s({}.fl()));", fr(*d), fr(*a)),
+            Cvt::TruncWD => format!("{}.set_u32l(fpu::trunc_w_d({}.d()));", fr(*d), fr(*a)),
+        },
+        Op::FCmp(c, p, a, b) => {
+            let sym = match c {
+                Cmp::Lt => "<",
+                Cmp::Le => "<=",
+                _ => "==",
+            };
+            format!("c1cs = {} {sym} {};", fv(*a, *p), fv(*b, *p))
+        }
+        Op::Cfc1(d) => format!("{} = u64::from(fcr31);", r(*d)),
+        Op::Ctc1(v) => format!("fcr31 = ({} as u32) & 3;", val(*v)),
         Op::Load(w, d, base, o) => {
             let f = match w {
                 Load::W => "lw",
@@ -419,6 +553,7 @@ struct Writer<'a> {
     out: String,
     labels: &'a BTreeSet<String>,
     stack: Vec<(bool, String)>,
+    fcr31: bool,
 }
 
 impl Writer<'_> {
@@ -439,7 +574,7 @@ impl Writer<'_> {
     fn stmt(&mut self, s: &S, d: usize) {
         match s {
             S::Op(o) => {
-                let t = op(o);
+                let t = op(o, self.fcr31);
                 self.line(d, &t);
             }
             S::If(c, t, e) => {
@@ -449,7 +584,7 @@ impl Writer<'_> {
                     self.line(d, "}");
                 } else if let [S::If(..)] = e.as_slice() {
                     // else if
-                    let mut inner = Writer { out: String::new(), labels: self.labels, stack: self.stack.clone() };
+                    let mut inner = Writer { out: String::new(), labels: self.labels, stack: self.stack.clone(), fcr31: self.fcr31 };
                     inner.stmt(&e[0], d);
                     let text = inner.out.trim_start().to_string();
                     for _ in 0..d {
@@ -520,19 +655,22 @@ pub fn function(name: &str, body: &[S], doc: &str) -> (String, Uses) {
         gprs: false,
         lohi: false,
         runtime: false,
+        c1cs: false,
+        fcr31: false,
     };
     uses(&body, &mut u);
     insert_rebinds(&mut body);
     let mut labels = BTreeSet::new();
     needed_labels(&body, &mut Vec::new(), &mut labels);
 
-    let mut w = Writer { out: String::new(), labels: &labels, stack: Vec::new() };
+    let mut w = Writer { out: String::new(), labels: &labels, stack: Vec::new(), fcr31: u.fcr31 };
     for l in doc.lines() {
         w.line(0, &format!("///{}{l}", if l.is_empty() { "" } else { " " }));
     }
     let empty = body.is_empty() || body == [S::Return];
     let needs_mem = u.loads || u.stores;
-    if empty || (!needs_mem && !u.gprs && !u.lohi) {
+    let floats = uses_floats(&body);
+    if empty || (!needs_mem && !u.gprs && !u.lohi && !floats && !u.c1cs && !u.fcr31) {
         w.line(0, &format!("pub unsafe extern \"C\" fn {name}(_rdram: *mut u8, _ctx: *mut RecompContext) {{}}"));
         return (w.out, u);
     }
@@ -554,6 +692,15 @@ pub fn function(name: &str, body: &[S], doc: &str) -> (String, Uses) {
     if u.lohi {
         // N64Recomp's hi/lo are locals of the generated function, starting at 0.
         w.line(1, "let (mut lo, mut hi) = (0u64, 0u64);");
+    }
+    if u.c1cs {
+        // The FPU condition bit, a local of the generated function starting at 0.
+        w.line(1, "let mut c1cs = false;");
+    }
+    if u.fcr31 {
+        // FCR31's rounding bits as N64Recomp reads them (flags always read 0);
+        // round-to-nearest at entry (NOTES.md, "Floats").
+        w.line(1, "let mut fcr31 = fpu::NEAREST;");
     }
     // A trailing `return` is implied.
     if body.last() == Some(&S::Return) {
