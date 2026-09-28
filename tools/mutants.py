@@ -10,7 +10,8 @@ those mutants (by index).
 MUTANTS.json is a list of objects:
 
     {"file": "crates/game/src/misc.rs", "old": "...", "new": "...",
-     "test": "jump_tables", "features": "", "filter": "", "why": "..."}
+     "test": "jump_tables", "features": "", "filter": "", "timeout": 300,
+     "why": "..."}
 
 `file`, `test`, `features` and `filter` may instead be given once in a
 top-level object: {"defaults": {...}, "mutants": [...]}. `old` must occur
@@ -18,7 +19,9 @@ exactly once in the file (a pattern that lands in another function would
 look like a missed or a caught mutant), and `\\n` in patterns matches the
 file's own line endings (CRLF or LF). Each mutant runs `cargo test -p
 difftest --test TEST [--features F] [-- FILTER]` and counts as caught if the
-tests fail. A build failure is reported on its own, not counted as caught.
+tests fail, or if the run takes longer than `timeout` seconds (a mutant
+that makes a loop endless). A build failure is reported on its own, not
+counted as caught.
 
 Afterwards the file is restored byte for byte, proptest-regressions files
 the run created are deleted, and existing ones are restored. Exit status is
@@ -69,7 +72,14 @@ def run_one(m, show):
     t = time.time()
     try:
         open(path, 'wb').write(text.replace(old, new).encode('utf-8'))
-        r = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace',
+                               timeout=m.get('timeout', 300))
+        except subprocess.TimeoutExpired:
+            # subprocess.run kills cargo; the test binary it started may
+            # outlive it, so kill that too.
+            subprocess.run(['taskkill', '/F', '/T', '/IM', m['test'] + '-*'], capture_output=True)
+            return 'caught/timeout', time.time() - t
     finally:
         open(path, 'wb').write(original)
         restore(before)
