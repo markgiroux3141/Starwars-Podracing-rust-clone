@@ -127,11 +127,64 @@ pub fn addu(a: u64, b: u64) -> u64 {
     s32((a as u32).wrapping_add(b as u32))
 }
 
+/// `subu`: 32-bit wrapping subtract of the low words, sign-extended (`SUB32`).
+#[inline]
+pub fn subu(a: u64, b: u64) -> u64 {
+    s32((a as u32).wrapping_sub(b as u32))
+}
+
 /// `sll rd, rt, sa`: shift the low word, sign-extend (`S32(rt << sa)`).
 #[inline]
 pub fn sll(rt: u64, sa: u32) -> u64 {
     s32((rt as u32) << sa)
 }
+
+/// Call another N64Recomp-shaped function, as a `jal` in the original does.
+///
+/// Ports call their callees through the C symbols N64Recomp gives them,
+/// declared in [`crate::imports`], never a Rust port directly. The linker
+/// decides what each symbol is: the recompiled C, a Rust port exported under
+/// that name, or (in the tests) an oracle stub or test double. So the
+/// recompiled caller and its Rust port always reach the same callee (NOTES.md,
+/// "How ports call other functions").
+///
+/// Like N64Recomp's `jal`, this does not write `$ra`. The whole register file
+/// in `ctx` must be exactly what the original has at the call, since the
+/// callee sees all of it; values a port keeps in locals must be written back
+/// first and reloaded after.
+#[inline]
+pub fn call(f: RecompFn, mem: &mut Mem, ctx: &mut RecompContext) {
+    assert_eq!(mem.len(), RDRAM_SIZE, "callees need the whole of RDRAM");
+    ctx.fix_f_odd();
+    // SAFETY: `mem` covers a full RDRAM buffer and is borrowed mutably, so no
+    // access through it overlaps the call; `ctx` is exclusive and `f_odd`
+    // points into it.
+    unsafe { f(mem.as_mut_ptr(), ctx) }
+}
+
+/// Declare the recompiled functions that ports call (see [`call`]). Outside
+/// `game`'s own unit tests they are `extern "C"` symbols that whoever links
+/// `game` must define. In those unit tests nothing does, so each gets a
+/// definition that aborts.
+macro_rules! recomp_imports {
+    ($($name:ident),* $(,)?) => {
+        #[cfg(not(test))]
+        extern "C" {
+            $(pub fn $name(rdram: *mut u8, ctx: *mut $crate::recomp::RecompContext);)*
+        }
+        $(
+            #[cfg(test)]
+            #[no_mangle]
+            pub unsafe extern "C" fn $name(_rdram: *mut u8, _ctx: *mut $crate::recomp::RecompContext) {
+                eprintln!(concat!(stringify!($name), " is only linked in the oracle or the game build, not game's unit tests"));
+                std::process::abort();
+            }
+        )*
+        /// Every imported symbol.
+        pub const NAMES: &[&str] = &[$(stringify!($name)),*];
+    };
+}
+pub(crate) use recomp_imports;
 
 /// Named register indices (o32 ABI names), for readability in ports.
 pub mod reg {
@@ -180,6 +233,8 @@ mod tests {
         assert_eq!(addu(0xDEAD_0000_0000_0001, 0x1234_0000_0000_0002), 3);
         assert_eq!(sll(0x4000_0000, 1), 0xFFFF_FFFF_8000_0000);
         assert_eq!(sll(0xFFFF_FFFF_0000_0001, 2), 4);
+        assert_eq!(subu(0, 1), u64::MAX);
+        assert_eq!(subu(0x8000_0000, 1), 0x7FFF_FFFF);
     }
 
     #[test]

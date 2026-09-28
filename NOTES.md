@@ -75,6 +75,27 @@ Header (12 bytes, read by the loader): `"Comp"`, `"Wolf"` (all 92), `u32` decomp
 - Checked on all 92 compressed models (session 3): each decompresses to exactly the declared size and begins with a valid tag, **no reference ever reads an unwritten window byte** (so the uninitialised window doesn't matter for real data), and 0–17 bytes of padding follow the terminator.
 - Register leftovers matter for the difftest: `a2 = 1`, `a3` = the flag bit that held the terminator, `t0` = the last flag byte, `$at` keeps its input value if the terminator is the first token, and `s0`–`s2` are restored sign-extended from their low words.
 
+### How ports call other functions (decision, session 4)
+**Ports call callees through N64Recomp's C symbols** (`func_XXXXXXXX`, recomp signature), declared once in `game::imports` and called with `game::recomp::call(imports::func_X, &mut mem, ctx)`. Ports never call another Rust port directly. The linker decides what each symbol is:
+- **In the tests**, the oracle defines *every* recompiled function: the generated C if it is listed in `crates/oracle/functions.txt`, otherwise a generated stub (`oracle_callee`) that runs the test double installed on the current thread (`oracle::doubles::install`) or traps. The recompiled caller and its Rust port call the same symbol, so they always reach the same callee: C for verified callees, a double for unverifiable ones.
+- **In the game build (later)**, each symbol is either the recompiled C or a Rust port exported under that name (opt-in `#[no_mangle]`, with that function's C left out). Recompiled callers and Rust callers then agree automatically, the same way N64Recomp's own patch overrides work.
+
+Why this and not a runtime function table: one resolution mechanism for C and Rust callers, so they can't disagree. It needs no global mutable state, and the stubs build.rs already generated serve both sides. The costs:
+- Anything that links `game` must define the imported symbols. `game`'s own unit tests get aborting definitions (`cfg(test)` in `recomp_imports!`). **Tools must not depend on `game`**: `lzss` moved to `assets::lzss` for that reason, and `assets`/`xtask` no longer link `game`.
+- In the difftest binary a callee is always the C (or a double), never the callee's Rust port, so each port is verified against C callees only. Running all ports together needs a separate "swap" binary (C of ported functions left out, Rust exported under the C names). That is the game build's job, or a later test.
+- A double can only replace a function that isn't compiled in (`install` refuses otherwise).
+
+Rules for writing a port with calls:
+- `jal` doesn't write `$ra` in N64Recomp. `sw $ra` saves the caller's incoming value, and `lw $ra` gives it back sign-extended.
+- At every call, the whole register file in `ctx` must match the C's, since the callee sees all of it. Values kept in Rust locals are written back before the call and reloaded after.
+- Each call through a stub is recorded with its GPRs at entry, and `difftest::compare` requires the C and Rust runs to make the same calls with the same registers.
+
+### Test doubles for the ROM reads (session 4)
+`difftest::rom` has doubles for `rom_read` (`func_80011CDC`) and `rom_read_small` (`func_80011D60`) that copy from baserom.z64, read at test time. They replace the unverifiable PI/`osRecvMesg`/`func_80008F28` chain below them.
+- **Reproduced:** exactly `size` bytes, or nothing if `size <= 0`. `s0`–`s3`, `ra` and `sp` come back as sign-extended low words (their `sw`/`lw` pairs). All other caller-saved state (`at v0 v1 a0–a3 t0–t9 hi lo f0–f19`) gets deterministic pseudo-random values, so a port that relies on something surviving a call diverges.
+- **Not reproduced:** stack contents below `sp` (the real chain writes frames there), PI/message-queue state, and the side effects of `func_80008F28` between 0x800-byte chunks.
+- **Refused (the test aborts):** non-canonical arguments; ROM reads past the end; for `rom_read`, anything that isn't a clean PI DMA (RDRAM 8-aligned, ROM 2-aligned, even length); for `rom_read_small`, unaligned words (it does `lw` from the PI bus and `sw` to RDRAM). Every asset-block entry in the USA ROM starts 4-aligned and is a multiple of 4 long, so the loaders never hit these. PI DMA's behaviour for odd or unaligned transfers is not modelled.
+
 ## Upstream projects (checked 2026-09-28)
 
 | Project | Licence | State / how we use it |

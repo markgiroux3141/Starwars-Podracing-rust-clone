@@ -6,10 +6,11 @@
 //! Texture and model entries are pairs; spline and sprite entries are single.
 //!
 //! This is tooling (extraction, inspection), not the game: it works on byte
-//! slices, not RDRAM. Decompression uses [`game::asset::lzss`], which is
-//! differentially tested against the original.
+//! slices, not RDRAM. Decompression is [`lzss`], which is differentially
+//! tested against the original.
 
-use game::asset::lzss;
+pub mod lzss;
+
 use std::borrow::Cow;
 use std::fmt;
 

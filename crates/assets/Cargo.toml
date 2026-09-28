@@ -6,5 +6,6 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
-[dependencies]
-game.workspace = true
+# Deliberately no dependency on `game`: ports there call other functions
+# through N64Recomp's C symbols, which only the oracle or the game build
+# provide (NOTES.md, "How ports call other functions").

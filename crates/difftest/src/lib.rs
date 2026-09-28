@@ -8,8 +8,17 @@
 //!
 //! RDRAM starts out filled with a fixed pseudo-random pattern rather than
 //! zeros, so a store of zero (or of any value) is always visible.
+//!
+//! Calls from the function under test go to the same callee on both sides
+//! (NOTES.md, "How ports call other functions"): recompiled C compiled into
+//! the oracle, or a stub running a test double ([`oracle::doubles`], and
+//! [`rom`] for reading the ROM). Every call through a stub is recorded, and
+//! the two runs must make the same calls with the same registers.
+
+pub mod rom;
 
 use game::recomp::{RecompContext, RecompFn};
+use oracle::doubles::{self, Call};
 use n64mem::{Rdram, KSEG0};
 use std::fmt;
 use std::sync::OnceLock;
@@ -58,11 +67,13 @@ fn background() -> &'static Rdram {
 pub struct State {
     pub rdram: Rdram,
     pub ctx: Box<RecompContext>,
+    /// Calls through oracle stubs (test doubles) during the last [`State::run`].
+    pub calls: Vec<Call>,
 }
 
 impl Clone for State {
     fn clone(&self) -> Self {
-        let mut s = Self { rdram: self.rdram.clone(), ctx: self.ctx.clone() };
+        let mut s = Self { rdram: self.rdram.clone(), ctx: self.ctx.clone(), calls: self.calls.clone() };
         s.ctx.fix_f_odd();
         s
     }
@@ -77,7 +88,7 @@ impl Default for State {
 impl State {
     /// Background-pattern RDRAM and an all-zero context.
     pub fn new() -> Self {
-        let mut s = Self { rdram: background().clone(), ctx: Box::default() };
+        let mut s = Self { rdram: background().clone(), ctx: Box::default(), calls: Vec::new() };
         s.ctx.fix_f_odd();
         s
     }
@@ -108,11 +119,14 @@ impl State {
         }
     }
 
-    /// Run a recompiled-function-shaped entry point on this state.
+    /// Run a recompiled-function-shaped entry point on this state, recording
+    /// its calls to test doubles in [`State::calls`].
     pub fn run(&mut self, f: RecompFn) {
         self.ctx.fix_f_odd();
+        doubles::start_trace();
         // SAFETY: rdram is a full-size N64Recomp buffer and ctx is exclusive.
         unsafe { f(self.rdram.as_mut_ptr(), &mut *self.ctx) }
+        self.calls = doubles::take_trace();
     }
 }
 
@@ -126,6 +140,8 @@ pub enum Diff {
     StatusReg { c: u32, rust: u32 },
     Mips3FloatMode { c: u8, rust: u8 },
     FOdd,
+    /// The first call to a test double that differs (or is missing on one side).
+    Call { index: usize, c: Option<Call>, rust: Option<Call> },
     Word { vaddr: u32, c: u32, rust: u32 },
 }
 
@@ -139,6 +155,16 @@ impl fmt::Display for Diff {
             Diff::StatusReg { c, rust } => write!(f, "status_reg C {c:#010x}  Rust {rust:#010x}"),
             Diff::Mips3FloatMode { c, rust } => write!(f, "mips3_float_mode C {c}  Rust {rust}"),
             Diff::FOdd => write!(f, "f_odd no longer points at the context's own f0 high word"),
+            Diff::Call { index, ref c, ref rust } => {
+                write!(f, "call #{index} to a test double: C {c:?}  Rust {rust:?}")?;
+                if let (Some(c), Some(r)) = (c, rust) {
+                    for reg in (0..32).filter(|&k| c.gpr[k] != r.gpr[k]) {
+                        write!(f, "
+      ${:<4} C {:#018x}  Rust {:#018x}", GPR_NAMES[reg], c.gpr[reg], r.gpr[reg])?;
+                    }
+                }
+                Ok(())
+            }
             Diff::Word { vaddr, c, rust } => write!(f, "[{vaddr:#010x}] C {c:#010x}  Rust {rust:#010x}"),
         }
     }
@@ -200,6 +226,10 @@ pub fn diff_states(c: &State, rust: &State) -> Vec<Diff> {
     }
     if !f_odd_ok(c) || !f_odd_ok(rust) {
         out.push(Diff::FOdd);
+    }
+    if c.calls != rust.calls {
+        let index = (0..).find(|&i| c.calls.get(i) != rust.calls.get(i)).unwrap();
+        out.push(Diff::Call { index, c: c.calls.get(index).cloned(), rust: rust.calls.get(index).cloned() });
     }
     let (cw, rw) = (c.rdram.as_words(), rust.rdram.as_words());
     if cw != rw {

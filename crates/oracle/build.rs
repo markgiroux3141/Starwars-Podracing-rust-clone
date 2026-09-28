@@ -1,5 +1,6 @@
 //! Builds the oracle: N64Recomp's generated C for the functions listed in
-//! `functions.txt`, a minimal stub runtime, and the layout shims.
+//! `functions.txt`, a stub for every other recompiled function, a minimal
+//! stub runtime, and the layout shims.
 
 use std::collections::BTreeSet;
 use std::env;
@@ -37,32 +38,40 @@ fn main() {
     let list_path = manifest.join("functions.txt");
     let selected = read_list(&list_path);
 
+    // Every function N64Recomp generated, from funcs.h.
+    let funcs_h = fs::read_to_string(generated.join("funcs.h")).unwrap();
+    let all: BTreeSet<String> = funcs_h
+        .lines()
+        .filter_map(|l| l.strip_prefix("void ")?.strip_suffix("(uint8_t* rdram, recomp_context* ctx);"))
+        .map(str::to_string)
+        .collect();
+    assert!(all.len() > 1000, "funcs.h: expected the full function list, found {}", all.len());
+
     let mut sources = Vec::new();
-    let mut callees = BTreeSet::new();
     for name in &selected {
         let path = generated.join(format!("{name}.c"));
-        let text = fs::read_to_string(&path).unwrap_or_else(|e| {
+        if !path.exists() || !all.contains(name) {
             panic!(
-                "{} ({e}). Is {name} in symbols/racer.syms.toml and not ignored in recomp.toml? \
-                 Re-run `cargo xtask recomp` if the symbol file changed.",
+                "{} is missing or not in funcs.h. Is {name} in symbols/racer.syms.toml and not ignored in \
+                 recomp.toml? Re-run `cargo xtask recomp` if the symbol file changed.",
                 path.display()
             )
-        });
-        callees.extend(direct_callees(&text));
+        }
         println!("cargo:rerun-if-changed={}", path.display());
         sources.push(path);
     }
 
-    // Callees that are not compiled in get a stub that traps, so a test that
-    // wanders into one fails loudly instead of failing to link.
+    // Every other recompiled function gets a stub, so any symbol that a
+    // selected function or a Rust port (game::imports) calls is defined. The
+    // stub runs the test double the current thread installed for it
+    // (oracle::doubles), or traps loudly if there is none.
     let selected_set: BTreeSet<&str> = selected.iter().map(String::as_str).collect();
-    let mut stubs = String::from("#include \"recomp.h\"\nvoid oracle_unexpected_call(const char* name);\n");
-    for c in callees.iter().filter(|c| !selected_set.contains(c.as_str())) {
-        writeln!(
-            stubs,
-            "RECOMP_FUNC void {c}(uint8_t* rdram, recomp_context* ctx) {{ (void)rdram; (void)ctx; oracle_unexpected_call(\"{c}\"); }}"
-        )
-        .unwrap();
+    let mut stubs = String::from(
+        "#include \"recomp.h\"\nvoid oracle_callee(const char* name, uint8_t* rdram, recomp_context* ctx);\n",
+    );
+    for c in all.iter().filter(|c| !selected_set.contains(c.as_str())) {
+        writeln!(stubs, "RECOMP_FUNC void {c}(uint8_t* rdram, recomp_context* ctx) {{ oracle_callee(\"{c}\", rdram, ctx); }}")
+            .unwrap();
     }
     let stubs_path = out.join("oracle_callee_stubs.c");
     fs::write(&stubs_path, stubs).unwrap();
@@ -131,22 +140,4 @@ fn read_list(path: &Path) -> Vec<String> {
         }
     }
     names
-}
-
-/// Names called as `name(rdram, ctx);`, which is how N64Recomp emits direct
-/// calls and tail calls (indirect ones go through LOOKUP_FUNC).
-fn direct_callees(text: &str) -> BTreeSet<String> {
-    const CALL: &str = "(rdram, ctx);";
-    let mut out = BTreeSet::new();
-    let mut rest = text;
-    while let Some(i) = rest.find(CALL) {
-        let before = &rest[..i];
-        let start = before.rfind(|c: char| !(c.is_ascii_alphanumeric() || c == '_')).map_or(0, |p| p + 1);
-        let ident = &before[start..];
-        if !ident.is_empty() && !ident.starts_with(|c: char| c.is_ascii_digit()) {
-            out.insert(ident.to_string());
-        }
-        rest = &rest[i + CALL.len()..];
-    }
-    out
 }

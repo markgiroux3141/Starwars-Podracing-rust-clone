@@ -1,16 +1,16 @@
 //! func_80011940 ("Comp"/"Wolf" LZSS decompressor): recompiled C vs
-//! game::asset port, plus game::asset::lzss (the slice version) on the same
+//! game::asset port, plus assets::lzss (the slice version) on the same
 //! inputs.
 //!
 //! The real-data tests read the compressed models from baserom.z64 at test
 //! time. Nothing ROM-derived is stored in the repository.
 
+use difftest::rom::baserom;
 use difftest::{compare, Rng, State};
-use game::asset::{func_80011940, lzss};
+use assets::lzss;
+use game::asset::func_80011940;
 use game::recomp::reg::{A0, A1, AT, SP, V0};
 use proptest::prelude::*;
-use std::path::PathBuf;
-use std::sync::OnceLock;
 
 const NAME: &str = "func_80011940";
 /// Input stream; the ring buffer is the 4 KB below it.
@@ -205,23 +205,10 @@ fn overlapping_layouts() {
     run(&s);
 }
 
-/// baserom.z64 from the repo root. The oracle can't be built without it
-/// (generated/ is ROM-derived), so its absence is an error, not a skip.
-fn rom() -> &'static [u8] {
-    static ROM: OnceLock<Vec<u8>> = OnceLock::new();
-    ROM.get_or_init(|| {
-        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../baserom.z64");
-        let r = std::fs::read(&p).unwrap_or_else(|e| panic!("{}: {e}; run `cargo xtask verify-rom`", p.display()));
-        assert_eq!(&r[..4], [0x80, 0x37, 0x12, 0x40], "baserom.z64 is not z64");
-        assert_eq!(&r[0x20..0x33], b"STAR WARS EP1 RACER");
-        r
-    })
-}
-
 /// Every compressed model in the model block (ROM 0x0141E200, NOTES.md).
 fn compressed_models() -> Vec<(usize, &'static [u8])> {
     const BLOCK: usize = 0x0141_E200;
-    let rom = rom();
+    let rom = baserom();
     let u32_at = |o: usize| u32::from_be_bytes(rom[o..o + 4].try_into().unwrap()) as usize;
     let count = u32_at(BLOCK);
     (0..count)

@@ -84,6 +84,22 @@ impl<'a> Mem<'a> {
         Self { base, len, _borrow: PhantomData }
     }
 
+    /// The raw buffer, to pass as the `rdram` argument of another
+    /// N64Recomp-shaped function. Taking `&mut self` means no access through
+    /// this view can overlap the callee's.
+    pub fn as_mut_ptr(&mut self) -> *mut u8 {
+        self.base
+    }
+
+    /// Size of the view in bytes.
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
     /// Offset into the buffer for `vaddr`, exactly as `MEM_W` computes it.
     #[inline]
     fn offset(&self, vaddr: u32, size: usize) -> usize {

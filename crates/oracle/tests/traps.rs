@@ -1,8 +1,14 @@
 //! The stub runtime's entry points must abort the process loudly, not return
 //! or hang. Each case re-runs this test binary as a child that hits one stub.
 
+use game::recomp::RecompContext;
 use oracle::runtime::{do_break, get_function, oracle_unexpected_call, switch_error};
 use std::process::Command;
+
+extern "C" {
+    // rom_read: always a generated stub (see doubles.rs).
+    fn func_80011CDC(rdram: *mut u8, ctx: *mut RecompContext);
+}
 
 const CHILD_ENV: &str = "ORACLE_TRAP_CHILD";
 
@@ -17,6 +23,11 @@ fn child() {
             }
             "switch" => switch_error(c"func_80001000".as_ptr(), 0x8000_1010, 0x800A_0000),
             "call" => oracle_unexpected_call(c"func_80002000".as_ptr()),
+            "stub" => {
+                let mut rdram = n64mem::Rdram::new();
+                let mut ctx = RecompContext::default();
+                func_80011CDC(rdram.as_mut_ptr(), &mut ctx);
+            }
             _ => unreachable!(),
         }
     }
@@ -45,6 +56,7 @@ fn stubs_abort_loudly() {
         ("lookup", "LOOKUP_FUNC(0x80010000)"),
         ("switch", "func_80001000: jump table at 0x800A0000"),
         ("call", "call to func_80002000, which is not compiled into the oracle"),
+        ("stub", "call to func_80011CDC, which is not compiled into the oracle"),
     ] {
         let (ok, stderr) = run_child(which);
         assert!(!ok, "{which}: child exited successfully; the stub did not trap");

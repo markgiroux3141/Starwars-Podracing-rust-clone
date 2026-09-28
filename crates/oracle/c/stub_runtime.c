@@ -60,8 +60,10 @@ void pause_self(uint8_t* rdram) {
  * sections. Ours has none. NULL so that any use faults immediately. */
 int32_t* section_addresses = NULL;
 
-/* Called by the generated stubs for recompiled functions that a selected
- * function calls but that are not themselves compiled into the oracle. */
+/* Called (via oracle_callee on the Rust side) when a generated stub for a
+ * recompiled function that is not compiled into the oracle is reached and the
+ * test installed no double for it. */
 void oracle_unexpected_call(const char* name) {
-    trap("call to %s, which is not compiled into the oracle (add it to crates/oracle/functions.txt)", name);
+    trap("call to %s, which is not compiled into the oracle (add it to crates/oracle/functions.txt, "
+         "or install a test double with oracle::doubles::install)", name);
 }

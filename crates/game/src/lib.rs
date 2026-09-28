@@ -9,8 +9,14 @@
 //! with the C ones when both are linked into the differential tests. Exporting
 //! them under the C names, to override the recompiled code in the game build,
 //! will be opt-in when that build exists.
+//!
+//! Ports call other functions through their C symbols ([`imports`],
+//! [`recomp::call`]), so anything that links this crate must define those
+//! symbols: the oracle does in the tests. Tools that only need data formats
+//! use the `assets` crate, which doesn't depend on this one.
 
 pub mod asset;
+pub mod imports;
 pub mod recomp;
 pub mod util;
 
