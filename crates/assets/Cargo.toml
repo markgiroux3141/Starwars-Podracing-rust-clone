@@ -1,0 +1,10 @@
+[package]
+name = "assets"
+version = "0.1.0"
+description = "The game's asset blocks (textures, splines, sprites, models) read from the ROM: tables, decompression, texture decoding"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+game.workspace = true

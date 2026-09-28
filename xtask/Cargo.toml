@@ -6,4 +6,6 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+png = "0.18"
 racer-rom.workspace = true
+assets.workspace = true

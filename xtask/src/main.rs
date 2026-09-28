@@ -1,5 +1,6 @@
 //! Project automation: `cargo xtask <command>`.
 
+mod extract;
 mod next_function;
 
 use std::path::{Path, PathBuf};
@@ -18,6 +19,9 @@ commands:
   recomp              Run N64Recomp with recomp.toml into generated/ (replacing
                       it). N64Recomp.exe defaults to third_party/N64Recomp/build;
                       override with RACER_N64RECOMP_EXE.
+  extract             Dump the asset blocks from baserom.z64 into extracted/
+                      (gitignored), decompress models, decode referenced
+                      textures to PNG (extracted/png, textures.csv).
   next-function [-n N] [--subsystem S] [--toward func_XXXXXXXX]
                       Propose port targets: status recomp, no indirect calls,
                       every callee verified. Lowest depth first, preferring S.
@@ -29,6 +33,7 @@ fn main() -> ExitCode {
         Some("verify-rom") => verify_rom(args.get(1).map(PathBuf::from)),
         Some("find-functions") => find_functions(),
         Some("recomp") => recomp(),
+        Some("extract") => check_baserom(&repo_root()).and_then(|rom| extract::run(&repo_root(), &rom)),
         Some("next-function") => next_function::run(&repo_root(), &args[1..]),
         _ => {
             eprintln!("{USAGE}");
