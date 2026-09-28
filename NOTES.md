@@ -312,11 +312,11 @@ Findings from sp00nznet/racer we can use as facts (addresses, not code):
 - All ports passed their difftests first time. The mutants are what showed the tests have teeth.
 
 **In progress / not done**
-- **heap_set_level not ported** (Facts: "Asset heap"): `func_80007E80` and `func_8002E034` can't be doubled honestly. Both bottom out in `func_80008F28` and other threads. Options for later: a `rust_draft` port tested with stand-ins under the precondition `[0x800A68A0] != 0` and empty slot tables (the user's call), or verify the thread/OS layer first.
+- **heap_set_level not ported** (Facts: "Asset heap"): `func_80007E80` and `func_8002E034` can't be doubled honestly. Both bottom out in `func_80008F28` and other threads.
+  - **Decision (after the session, user deferred to Claude):** no `rust_draft` with stand-ins. It is one function, and a port tested only where its callees do nothing would look more verified than it is. It waits for honest contract doubles of the libultra thread/message layer (see the next step), which also unblock the ROM-read chain and about 360 other game functions.
 - spline_load (`func_80030174`) is ready via doubles and not ported. About 490 depth-0 leaves remain ready.
 - Still no "swap" build that runs ports as each other's callees.
 
 **Suggested next step**
 - Port `spline_load` (`func_80030174`, ready via rom_read_small) and decode splines in `assets` (0x10-byte header, pointer at +0xC relocated to +0x10).
 - Keep batching depth-0 leaves: `cargo xtask next-function -n 60` lists them; `0x80008530..0x8000AC60` is next, with groups by address and one test file each. `tools/register_ports.py MODULE ADDR:comment ...` adds ports to `PORTED` and `functions.txt` in address order.
-- Decide on heap_set_level: `rust_draft` with stand-ins, or wait for `func_80008F28`.
