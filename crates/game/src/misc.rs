@@ -4,7 +4,8 @@
 // Ports keep N64Recomp's names (func_80005AFC), capitals included.
 #![allow(non_snake_case)]
 
-use crate::recomp::{addu, div, enter, fpu, lb, lbu, lh, li, lw, multu, reg::*, s32, sb, sh, sll, sllv, slt, sltu, sra, subu, sw, RecompContext};
+use crate::imports;
+use crate::recomp::{addu, div, enter, fpu, lb, lbu, ld, lh, li, lw, multu, reg::*, s32, sb, sh, sll, sllv, slt, sltu, sra, subu, sw, RecompContext};
 
 /// `func_80005AFC`: decrement `[0x8009A29C]` if it is positive (signed).
 ///
@@ -3000,6 +3001,330 @@ pub unsafe extern "C" fn func_8002FE94(rdram: *mut u8, ctx: *mut RecompContext) 
         g[V1] = 0x10;
     }
     g[V0] = g[V1];
+}
+
+/// `func_80031FA4()`: step the cycling animation of the object `o =
+/// [0x800A2DD4]`, probably palette colour cycling (**guess**). The timer
+/// `[o + 0x14]` (f32) loses the double at `0x80120BF0` (computed in double,
+/// rounded to single). While it is negative the period `[o + 0x10]` is
+/// added back, counting the additions. Then, if the destination `[o + 4]`
+/// is nonzero, the count positive and `n = (s16) [o + 0x18]` positive, for
+/// each `i < n`: `phase[i] = (phase[i] + count) % (s16) [o + 0xC]` (signed
+/// remainder, stored as a byte) and `dest[map[i]] = src[phase[i]]`. The
+/// phases are bytes at `[o + 0x20]`, the map bytes at `[o + 0x1C]`, `src`
+/// and `dest` halfwords at `[o + 8]` and `[o + 4]`.
+///
+/// `o` is read again from `0x800A2DD4` after every store, and `n` after
+/// every entry. QUIRK: a period that doesn't bring the timer back (zero,
+/// negative, or too small to change it) never ends the loop.
+///
+/// Domain: the timer, the step and the period not NaN (`NAN_CHECK`), the
+/// loop ending, a nonzero modulus, and the arrays in RDRAM. A zero modulus
+/// faults the host's divide in the C before its `break 7`, and the port's
+/// `div` asserts. `break 6` (modulus -1 with `phase + count = 0x80000000`)
+/// would need about 2^31 additions of the period, and after about 2^25
+/// adding the period no longer changes the timer, so the loop never ends.
+/// So neither `do_break` is reached, but the port keeps both, like the C.
+///
+/// Leaves `a2 = 0x800A2DD4`, `v1 = o`, `v0` = the count, `f2 = 0.0`, the
+/// timer arithmetic in `f4`..`f18`, and from the copy loop `a0 = n` and
+/// the temporaries in `a1`, `at`, `t0`..`t9`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80031FA4(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[A2] = li(0x800A_2DD4);
+    g[V1] = lw(m, g[A2], 0);
+    g[AT] = li(0x8012_0000);
+    ctx.fpr[8].u64 = ld(m, g[AT], 0xBF0);
+    ctx.fpr[4].set_u32l(lw(m, g[V1], 0x14) as u32);
+    ctx.fpr[2].set_u32l(0);
+    g[V0] = 0;
+    ctx.fpr[6].set_d(f64::from(ctx.fpr[4].fl()));
+    ctx.fpr[10].set_d(ctx.fpr[6].d() - ctx.fpr[8].d());
+    ctx.fpr[16].set_fl(fpu::cvt_s_d(ctx.fpr[10].d(), fpu::NEAREST));
+    sw(m, g[V1], 0x14, u64::from(ctx.fpr[16].u32l()));
+    // Add periods back until the timer isn't negative, counting them.
+    g[V1] = lw(m, g[A2], 0);
+    ctx.fpr[0].set_u32l(lw(m, g[V1], 0x14) as u32);
+    while ctx.fpr[0].fl() < ctx.fpr[2].fl() {
+        ctx.fpr[18].set_u32l(lw(m, g[V1], 0x10) as u32);
+        g[V0] = addu(g[V0], 1);
+        ctx.fpr[4].set_fl(ctx.fpr[0].fl() + ctx.fpr[18].fl());
+        sw(m, g[V1], 0x14, u64::from(ctx.fpr[4].u32l()));
+        g[V1] = lw(m, g[A2], 0);
+        ctx.fpr[0].set_u32l(lw(m, g[V1], 0x14) as u32);
+    }
+    g[T6] = lw(m, g[V1], 4);
+    if g[T6] == 0 || (g[V0] as i64) <= 0 {
+        return;
+    }
+    g[T7] = lh(m, g[V1], 0x18);
+    g[A0] = 0;
+    if (g[T7] as i64) <= 0 {
+        return;
+    }
+    g[T8] = lw(m, g[V1], 0x20);
+    loop {
+        // phase[i] = (phase[i] + count) % modulus
+        g[T1] = lh(m, g[V1], 0xC);
+        g[A1] = addu(g[T8], g[A0]);
+        g[T9] = lbu(m, g[A1], 0);
+        g[T0] = addu(g[T9], g[V0]);
+        let (_, hi) = div(g[T0], g[T1]);
+        g[T2] = hi;
+        sb(m, g[A1], 0, g[T2]);
+        g[V1] = lw(m, g[A2], 0);
+        // IDO's divide checks (see the domain above).
+        if g[T1] == 0 {
+            imports::runtime::do_break(0x8003_2064);
+        }
+        g[AT] = u64::MAX;
+        let minus_one = g[T1] == g[AT];
+        g[AT] = li(0x8000_0000);
+        if minus_one && g[T0] == g[AT] {
+            imports::runtime::do_break(0x8003_207C);
+        }
+        // dest[map[i]] = src[phase[i]]
+        g[T4] = lw(m, g[V1], 0x20);
+        g[T1] = lw(m, g[V1], 0x1C);
+        g[T3] = lw(m, g[V1], 8);
+        g[T5] = addu(g[T4], g[A0]);
+        g[T6] = lbu(m, g[T5], 0);
+        g[T2] = addu(g[T1], g[A0]);
+        g[T4] = lbu(m, g[T2], 0);
+        g[T7] = sll(g[T6], 1);
+        g[T0] = lw(m, g[V1], 4);
+        g[T8] = addu(g[T3], g[T7]);
+        g[T9] = lh(m, g[T8], 0);
+        g[T5] = sll(g[T4], 1);
+        g[T6] = addu(g[T0], g[T5]);
+        sh(m, g[T6], 0, g[T9]);
+        g[V1] = lw(m, g[A2], 0);
+        g[A0] = addu(g[A0], 1);
+        g[T3] = lh(m, g[V1], 0x18);
+        g[AT] = slt(g[A0], g[T3]);
+        if g[AT] == 0 {
+            break;
+        }
+        g[T8] = lw(m, g[V1], 0x20);
+    }
+}
+
+/// `func_8003ABA0(spline, dir, w)`: step the spline walker `w` one point,
+/// forward if `(s16) dir == 1`, otherwise backward. `spline` is a loaded
+/// spline header (`+0` the flag halfword F, `+0xC` the points; NOTES.md,
+/// "Splines"). The walker holds point indices `+0x10` (current), `+0x14`,
+/// `+0x18`, `+0x1C`, end flags `+0x20` (forward) and `+0x24` (backward),
+/// a choice `+0x28` for forks, path bits `+0x2C`, and a float `+8`.
+///
+/// Forward: clear `+0x24`. Unless `+0x20` is already set, take point `p =
+/// +0x14` (F != 0) or `+0x1C` (F == 0). With no successors: `+0x20 = 1`,
+/// `+8 = 1.0`, the result -1. Otherwise successor `k = choice` if `choice
+/// < count`, else `choice % count` (signed, truncated to s16 either way),
+/// and the path bits become `(bits >> 1) | k` (F != 0) or `(bits >> 1) | (k
+/// << 2)` (arithmetic shift). Then, if `+0x20` is (still) clear:
+/// `+0x10 = +0x14`, and with F != 0 `+0x14` = the successor; with F == 0
+/// `+0x14, +0x18, +0x1C = +0x18, +0x1C, successor`.
+///
+/// Backward: clear `+0x20`. Unless `+0x24` is already set, take point `p =
+/// +0x10`. With no predecessors: `+0x24 = 1`, `+8 = 0.0`. Otherwise the
+/// predecessor `choice < count ? pred[choice] : pred[choice % count]` (not
+/// truncated), the path bits become `(bits << 1) & 1` (F != 0; QUIRK: that
+/// is always 0) or `(bits << 1) & 7`, and gain bit 0 unless the
+/// predecessor's first successor is the current point. Then, if `+0x24` is
+/// clear: with F == 0, `+0x1C, +0x18 = +0x18, +0x14`; and `+0x14 = +0x10`,
+/// `+0x10` = the predecessor.
+///
+/// `dir` is spilled to its slot `[sp + 4]`, and the chosen point (or -1)
+/// is kept in the frame at `[sp - 8]`. QUIRK: when the end flag was already
+/// set, `a1` is loaded from that frame word without it being written, an
+/// uninitialised stack read (it only reaches `a1`). Point indices go
+/// through `multu` by 0x54, so only their low 32 bits count.
+///
+/// Domain: a nonzero count before each `%` (so neither IDO divide check,
+/// `do_break`, is reached: `choice % count` runs only when `choice >=
+/// count`, which excludes `count == -1` with `choice = INT_MIN`), and the
+/// points in RDRAM. Leaves `a3` = 1 or the choice, `v0`, `v1` = the point,
+/// `t0 = 0x54` or `k`, `at`, the loads in `t1`..`t9`, and `f4 = 1.0` or `f6
+/// = 0.0` at an end.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003ABA0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-8i64) as u64);
+    g[T6] = sll(g[A1], 16);
+    g[T7] = sra(g[T6], 16);
+    sw(m, g[SP], 0xC, g[A1]);
+    g[A3] = 1;
+    g[A1] = g[T7];
+    if g[T7] == g[A3] {
+        // Forward.
+        g[V0] = lw(m, g[A2], 0x20);
+        sw(m, g[A2], 0x24, 0);
+        if g[V0] == 0 {
+            g[V0] = lh(m, g[A0], 0);
+            g[AT] = li(0x3F80_0000); // 1.0
+            let (p, pt, points) = if g[V0] != 0 { (T2, T3, T4) } else { (T8, T9, T1) };
+            g[p] = lw(m, g[A2], if g[V0] != 0 { 0x14 } else { 0x1C });
+            g[T0] = 0x54;
+            g[points] = lw(m, g[A0], 0xC);
+            g[pt] = multu(g[p], g[T0]).0;
+            g[V1] = addu(g[pt], g[points]);
+            g[A1] = lh(m, g[V1], 0);
+            if g[A1] == 0 {
+                ctx.fpr[4].set_u32l(g[AT] as u32);
+                g[A1] = u64::MAX;
+                sw(m, g[A2], 0x20, g[A3]);
+                sw(m, g[A2], 8, u64::from(ctx.fpr[4].u32l()));
+                sw(m, g[SP], 0, g[A1]);
+                g[V0] = g[A3];
+            } else {
+                g[A3] = lw(m, g[A2], 0x28);
+                g[AT] = slt(g[A3], g[A1]);
+                if g[AT] == 0 {
+                    g[T0] = div(g[A3], g[A1]).1;
+                    g[T6] = sll(g[T0], 16);
+                    g[T7] = sra(g[T6], 16);
+                    g[T0] = g[T7];
+                    if g[A1] == 0 {
+                        imports::runtime::do_break(0x8003_AC7C);
+                    }
+                    g[AT] = u64::MAX;
+                    let minus_one = g[A1] == g[AT];
+                    g[AT] = li(0x8000_0000);
+                    if minus_one && g[A3] == g[AT] {
+                        imports::runtime::do_break(0x8003_AC94);
+                    }
+                } else {
+                    g[T0] = sll(g[A3], 16);
+                    g[T5] = sra(g[T0], 16);
+                    g[T0] = g[T5];
+                }
+                g[T8] = sll(g[T0], 1);
+                g[T9] = addu(g[V1], g[T8]);
+                g[A1] = lh(m, g[T9], 4);
+                if g[V0] != 0 {
+                    g[T5] = lw(m, g[A2], 0x2C);
+                    g[V0] = lw(m, g[A2], 0x20);
+                    g[T6] = sra(g[T5], 1);
+                    g[T7] = g[T6] | g[T0];
+                    sw(m, g[A2], 0x2C, g[T7]);
+                } else {
+                    g[T1] = lw(m, g[A2], 0x2C);
+                    g[T3] = sll(g[T0], 2);
+                    g[V0] = lw(m, g[A2], 0x20);
+                    g[T2] = sra(g[T1], 1);
+                    g[T4] = g[T2] | g[T3];
+                    sw(m, g[A2], 0x2C, g[T4]);
+                }
+                sw(m, g[SP], 0, g[A1]);
+            }
+        }
+        g[A1] = lw(m, g[SP], 0); // QUIRK: never written if the end flag was set
+        if g[V0] == 0 {
+            g[T8] = lw(m, g[A2], 0x14);
+            sw(m, g[A2], 0x10, g[T8]);
+            g[T9] = lh(m, g[A0], 0);
+            if g[T9] != 0 {
+                sw(m, g[A2], 0x14, g[A1]);
+            } else {
+                g[T1] = lw(m, g[A2], 0x18);
+                g[T2] = lw(m, g[A2], 0x1C);
+                sw(m, g[A2], 0x1C, g[A1]);
+                sw(m, g[A2], 0x14, g[T1]);
+                sw(m, g[A2], 0x18, g[T2]);
+            }
+        }
+    } else {
+        // Backward.
+        g[T3] = lw(m, g[A2], 0x24);
+        sw(m, g[A2], 0x20, 0);
+        if g[T3] == 0 {
+            g[T4] = lw(m, g[A2], 0x10);
+            g[T0] = 0x54;
+            g[T6] = lw(m, g[A0], 0xC);
+            g[T5] = multu(g[T4], g[T0]).0;
+            g[V1] = addu(g[T5], g[T6]);
+            g[V0] = lh(m, g[V1], 2);
+            if g[V0] == 0 {
+                ctx.fpr[6].set_u32l(0);
+                g[A1] = u64::MAX;
+                sw(m, g[A2], 0x24, g[A3]);
+                sw(m, g[A2], 8, u64::from(ctx.fpr[6].u32l()));
+                sw(m, g[SP], 0, g[A1]);
+            } else {
+                g[A3] = lw(m, g[A2], 0x28);
+                g[AT] = slt(g[A3], g[V0]);
+                if g[AT] == 0 {
+                    g[T9] = div(g[A3], g[V0]).1;
+                    g[T1] = sll(g[T9], 1);
+                    g[T2] = addu(g[V1], g[T1]);
+                    g[A1] = lh(m, g[T2], 8);
+                    if g[V0] == 0 {
+                        imports::runtime::do_break(0x8003_ADA4);
+                    }
+                    g[AT] = u64::MAX;
+                    let minus_one = g[V0] == g[AT];
+                    g[AT] = li(0x8000_0000);
+                    if minus_one && g[A3] == g[AT] {
+                        imports::runtime::do_break(0x8003_ADBC);
+                    }
+                } else {
+                    g[T7] = sll(g[A3], 1);
+                    g[T8] = addu(g[V1], g[T7]);
+                    g[A1] = lh(m, g[T8], 8);
+                }
+                g[T3] = lh(m, g[A0], 0);
+                if g[T3] != 0 {
+                    g[T7] = lw(m, g[A2], 0x2C);
+                    g[T8] = sll(g[T7], 1);
+                    g[T9] = g[T8] & 1; // QUIRK: always 0
+                    sw(m, g[A2], 0x2C, g[T9]);
+                } else {
+                    g[T4] = lw(m, g[A2], 0x2C);
+                    g[T5] = sll(g[T4], 1);
+                    g[T6] = g[T5] & 7;
+                    sw(m, g[A2], 0x2C, g[T6]);
+                }
+                // Bit 0 unless we came from the predecessor's first successor.
+                let lo = multu(g[A1], g[T0]).0;
+                sw(m, g[SP], 0, g[A1]);
+                g[T2] = lw(m, g[A0], 0xC);
+                g[T1] = lw(m, g[A2], 0x10);
+                g[T3] = lo;
+                g[T4] = addu(g[T2], g[T3]);
+                g[T5] = lh(m, g[T4], 4);
+                if g[T1] != g[T5] {
+                    g[T6] = lw(m, g[A2], 0x2C);
+                    g[T7] = g[T6] | 1;
+                    sw(m, g[A2], 0x2C, g[T7]);
+                    sw(m, g[SP], 0, g[A1]);
+                }
+            }
+        }
+        g[T8] = lw(m, g[A2], 0x24);
+        g[A1] = lw(m, g[SP], 0); // QUIRK: never written if the end flag was set
+        if g[T8] == 0 {
+            g[T9] = lh(m, g[A0], 0);
+            if g[T9] == 0 {
+                g[T2] = lw(m, g[A2], 0x18);
+                g[T3] = lw(m, g[A2], 0x14);
+                sw(m, g[A2], 0x1C, g[T2]);
+                sw(m, g[A2], 0x18, g[T3]);
+            }
+            g[T4] = lw(m, g[A2], 0x10);
+            sw(m, g[A2], 0x10, g[A1]);
+            sw(m, g[A2], 0x14, g[T4]);
+        }
+    }
+    g[SP] = addu(g[SP], 8);
 }
 
 /// Where [`func_80063344`] gets each type's pair (indexed by type - 1).

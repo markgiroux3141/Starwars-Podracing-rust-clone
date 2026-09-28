@@ -5,9 +5,10 @@
 //! callees through `imports`. It is a draft, not a port: every draft still
 //! goes through the per-function loop in CLAUDE.md.
 //!
-//! Integer and float code. Anything else is refused with a reason
-//! ([`Refusal`]): jump tables, indirect calls, `break`, unaligned and
-//! 64-bit accesses, 64-bit float conversions. Float arithmetic comes out
+//! Integer and float code, jump tables (a `match`, the default calling the
+//! runtime's `switch_error`) and `break` (the runtime's `do_break`).
+//! Anything else is refused with a reason ([`Refusal`]): indirect calls,
+//! unaligned and 64-bit accesses, 64-bit float conversions. Float arithmetic comes out
 //! round-to-nearest; conversions take FCR31's rounding bits, kept in a
 //! local (NOTES.md, "Floats").
 //!
@@ -274,6 +275,30 @@ L_80001010:
         ] {
             assert_eq!(translate(&sw(bad)).err().map(|r| r.kind), Some("jump table"), "{bad}");
         }
+    }
+
+    /// IDO's divide-by-zero guard: `do_break` becomes the runtime hook, and
+    /// the code after it still runs if it returns.
+    #[test]
+    fn break_calls_the_runtime() {
+        let b = body(
+            "    // 0x80001000: bne         $t1, $zero, L_8000100C
+    if (ctx->r9 != 0) {
+        // 0x80001004: nop
+
+            goto L_8000100C;
+    }
+    // 0x80001004: nop
+
+    // 0x80001008: break       7
+    do_break(2147487752);
+L_8000100C:
+    // 0x8000100C: jr          $ra
+    // 0x80001010: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+    return;",
+        );
+        assert!(b.contains("if g[T1] == 0 {\nimports::runtime::do_break(0x8000_1008);\n}\n// L_8000100C\ng[V0] = 1;"), "{b}");
     }
 
     #[test]

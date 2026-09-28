@@ -109,6 +109,10 @@ pub enum Op {
     /// index matched no case. The C carries on after the switch if it
     /// returns.
     SwitchError { func: String, jr: u32, table: u32 },
+    /// The runtime's `do_break(vram)`, N64Recomp's translation of `break`
+    /// (IDO's guards after `div`: `break 7` for a zero divisor, `break 6`
+    /// for `INT_MIN / -1`). The C carries on after it if it returns.
+    Break(u32),
     /// `let c<n> = cond;`: a branch condition read before its delay slot
     /// overwrites one of its registers.
     SaveCond(usize, Cond),
@@ -695,6 +699,10 @@ pub fn ops_of_line(stmts: &[crate::c::Stmt]) -> Result<Vec<Op>, Refusal> {
                 E::Call(n, args) if n == "pause_self" && args.as_slice() == [E::Ident("rdram".into())] => {
                     out.push(Op::PauseSelf)
                 }
+                E::Call(n, args) if n == "do_break" => match args.as_slice() {
+                    [E::Num(v)] if u32::try_from(*v).is_ok() => out.push(Op::Break(*v as u32)),
+                    _ => return Err(refusal_for_name(n, e)),
+                },
                 E::Call(n, _) => return Err(refusal_for_name(n, e)),
                 _ => return Err(unknown("statement", &format!("{e}"))),
             },
@@ -829,6 +837,7 @@ mod tests {
             [Op::MulDiv(MulDiv::Divu, Val::R(5), Val::R(1))]
         );
         assert_eq!(ops("func_8002FAFC(rdram, ctx);").unwrap(), [Op::Call("func_8002FAFC".into())]);
+        assert_eq!(ops("do_break(2147688548);").unwrap(), [Op::Break(0x8003_2064)]);
     }
 
     #[test]
@@ -865,7 +874,7 @@ mod tests {
         assert_eq!(ops("CHECK_FR(ctx, 9);").unwrap_err().kind, "float");
         assert_eq!(ops("ctx->f0.u64 = CVT_L_S(ctx->f2.fl);").unwrap_err().kind, "float");
         assert_eq!(ops("LOOKUP_FUNC(ctx->r25)(rdram, ctx);").unwrap_err().kind, "indirect call");
-        assert_eq!(ops("do_break(2147521760);").unwrap_err().kind, "break");
+        assert_eq!(ops("do_break(ctx->r4);").unwrap_err().kind, "break");
         assert_eq!(ops("ctx->r1 = do_lwr(rdram, ctx->r1, ctx->r14, 0X12);").unwrap_err().kind, "unaligned access");
     }
 

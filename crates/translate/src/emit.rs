@@ -204,7 +204,7 @@ fn op_uses(o: &Op, u: &mut Uses) {
             u.runtime = true;
         }
         Op::JrAddend(..) => u.gprs = true,
-        Op::SwitchError { .. } => u.runtime = true,
+        Op::SwitchError { .. } | Op::Break(_) => u.runtime = true,
         Op::SaveCond(_, c) => cond_uses(c, u),
         Op::Label(_) => {}
         Op::FLoad(..) => {
@@ -279,7 +279,7 @@ fn contains_call(code: &[S]) -> bool {
 /// Whether `s` reads or writes `g`.
 fn uses_g(s: &S) -> bool {
     match s {
-        S::Op(Op::Call(_) | Op::PauseSelf | Op::SwitchError { .. } | Op::Label(_)) => false,
+        S::Op(Op::Call(_) | Op::PauseSelf | Op::SwitchError { .. } | Op::Break(_) | Op::Label(_)) => false,
         S::Op(Op::MulDiv(_, a, b)) => matches!(a, Val::R(_)) || matches!(b, Val::R(_)),
         S::Op(Op::Mtc1(_, v) | Op::Mtc1Odd(_, v) | Op::Ctc1(v)) => matches!(v, Val::R(_)),
         S::Op(Op::FArith(..) | Op::FUn(..) | Op::Cvt(..) | Op::FCmp(..)) => false,
@@ -566,6 +566,7 @@ fn op(o: &Op, fcr31: bool) -> String {
         Op::MfHi(d) => format!("{} = hi;", r(*d)),
         Op::Call(f) => format!("call(imports::{f}, m, ctx);"),
         Op::PauseSelf => "imports::runtime::pause_self(m.as_mut_ptr());".into(),
+        Op::Break(vram) => format!("imports::runtime::do_break({});", hex(u64::from(*vram))),
         Op::JrAddend(jr, reg) => format!("let jr_addend_{jr:08X} = {};", r(*reg)),
         Op::SwitchError { func, jr, table } => format!(
             "imports::runtime::switch_error(c\"{func}\".as_ptr(), {}, {});",
