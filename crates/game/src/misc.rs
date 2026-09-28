@@ -526,6 +526,89 @@ pub unsafe extern "C" fn func_80008750(rdram: *mut u8, ctx: *mut RecompContext) 
     sb(m, g[AT], -0x5CDC, g[A0]);
 }
 
+/// The eight halfword tables [`func_80008F6C`] indexes, by kind: the table's
+/// length (the bound on the index), its offset from `0x800A0000` and the
+/// temporary the index's byte offset goes through. They sit back to back
+/// from `0x8009A6F0`, each 4-aligned.
+const HANDLE_TABLES: [(u64, i32, usize); 8] = [
+    (0x33, -0x5910, T7),
+    (0x26, -0x58A8, T8),
+    (0x39, -0x585C, T9),
+    (5, -0x57E8, T0),
+    (0x68, -0x57DC, T1),
+    (0xA9, -0x570C, T2),
+    (0x69, -0x55B8, T3),
+    (0xA8, -0x54E4, T4),
+];
+
+/// `func_80008F6C(kind, a1, index)`: a 32-bit handle, `(kind << 24) | (a1
+/// << 16) | table[kind][index] | 0x8000`, or -1 if an argument is out of
+/// range. It looks like the handles [`func_80007CE4`] decodes (bit 15,
+/// bytes 2 and 3), but that is a guess.
+///
+/// -1 when `index == -1` (full 64-bit compare), `kind >= 8` (unsigned), for
+/// kinds 0 and 1 only `a1` outside `[0, 0x17)` (signed), or `index` outside
+/// `(0, len)` (`> 0` signed, `< len` unsigned) for that kind's table in
+/// [`HANDLE_TABLES`]. Entry 0 is never read. QUIRK: the entry is loaded
+/// with `lh`, so a negative one sets every bit above 15 and wipes the kind
+/// and `a1` fields. Kinds 2-7 put any `a1` in the handle, shifted and
+/// truncated to 32 bits.
+///
+/// The kind picks its case through a jump table at `0x800A8200`. The C's
+/// `default` (`switch_error`) can't be reached: `kind < 8` is checked just
+/// before. Leaves `at` = the last range test (`-1` if `index == -1`), the
+/// kind's temporary = `index << 1` once `index > 0`, and `t5`/`t6`/`t7`/`v1`
+/// the handle's parts on success. On failure after the switch `t6` =
+/// `0x800A8200 + 4 * kind`, the table entry's address: N64Recomp turns the
+/// table's `lw` into an `addiu`. The hardware would have loaded the case
+/// address, and the port follows the C.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80008F6C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[AT] = u64::MAX;
+    if g[A2] == g[AT] {
+        g[V0] = u64::MAX;
+        return;
+    }
+    g[AT] = sltu(g[A0], 8);
+    g[T6] = sll(g[A0], 2);
+    if g[AT] == 0 {
+        g[V0] = u64::MAX;
+        return;
+    }
+    g[AT] = addu(li(0x800B_0000), g[T6]);
+    let jr_addend = g[T6];
+    g[T6] = addu(g[AT], (-0x7E00i64) as u64); // the table's lw, as N64Recomp emits it
+    let kind = (jr_addend >> 2) as usize; // 0..=7
+    let (len, table, t) = HANDLE_TABLES[kind];
+    if kind < 2 {
+        g[AT] = slt(g[A1], 0x17);
+        if (g[A1] as i64) < 0 || g[AT] == 0 {
+            g[V0] = u64::MAX;
+            return;
+        }
+    }
+    g[AT] = sltu(g[A2], len);
+    if (g[A2] as i64) <= 0 {
+        g[V0] = u64::MAX;
+        return;
+    }
+    g[t] = sll(g[A2], 1);
+    if g[AT] == 0 {
+        g[V0] = u64::MAX;
+        return;
+    }
+    g[V1] = lh(&mem, addu(li(0x800A_0000), g[t]), table);
+    g[T5] = sll(g[A0], 24);
+    g[T6] = g[V1] | g[T5];
+    g[T7] = sll(g[A1], 16);
+    g[V1] = g[T6] | g[T7];
+    g[V0] = g[V1] | 0x8000;
+}
+
 /// The last three values pushed by [`func_80009278`] (halfwords), searched
 /// by [`func_800092B0`]; `func_800092EC` uses both, a "recently seen" list.
 pub const RECENT: u32 = 0x8009_ADF4;

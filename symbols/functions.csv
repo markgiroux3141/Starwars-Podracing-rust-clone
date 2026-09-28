@@ -114,7 +114,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80008C58,func_80008C58,ours,3,,recomp,,,
 0x80008F28,func_80008F28,ours,14,,recomp,,,
 0x80008F58,func_80008F58,ours,0,,recomp,,,
-0x80008F6C,func_80008F6C,ours,0,,recomp,,,
+0x80008F6C,func_80008F6C,ours,0,,rust_verified,unit_diff,high,(kind<<24)|(a1<<16)|table[kind][index]|0x8000 or -1; jump table on kind (game::misc)
 0x80009134,func_80009134,ours,0,,recomp,,,
 0x800091B0,func_800091B0,ours,2,,recomp,,,
 0x80009278,func_80009278,ours,0,,rust_verified,unit_diff,high,push to the 3-entry recent list 0x8009ADF4; QUIRK unbounded slot (game::misc)
