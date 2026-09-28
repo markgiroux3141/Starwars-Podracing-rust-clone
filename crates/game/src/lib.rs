@@ -164,6 +164,8 @@ pub const PORTED: &[Ported] = &[
     Ported { vram: 0x8001_8460, name: "func_80018460", func: misc::func_80018460 },
     Ported { vram: 0x8001_8470, name: "func_80018470", func: misc::func_80018470 },
     Ported { vram: 0x8001_F464, name: "func_8001F464", func: misc::func_8001F464 },
+    Ported { vram: 0x8002_9298, name: "func_80029298", func: misc::func_80029298 },
+    Ported { vram: 0x8002_D598, name: "func_8002D598", func: misc::func_8002D598 },
     Ported { vram: 0x8002_FAC4, name: "func_8002FAC4", func: heap::func_8002FAC4 },
     Ported { vram: 0x8002_FAFC, name: "func_8002FAFC", func: heap::func_8002FAFC },
     Ported { vram: 0x8002_FC58, name: "func_8002FC58", func: heap::func_8002FC58 },
@@ -177,4 +179,5 @@ pub const PORTED: &[Ported] = &[
     Ported { vram: 0x8003_04AC, name: "func_800304AC", func: loader::func_800304AC },
     Ported { vram: 0x8003_0574, name: "func_80030574", func: loader::func_80030574 },
     Ported { vram: 0x8003_05E8, name: "func_800305E8", func: loader::func_800305E8 },
+    Ported { vram: 0x8006_3344, name: "func_80063344", func: misc::func_80063344 },
 ];

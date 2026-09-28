@@ -2479,3 +2479,236 @@ pub unsafe extern "C" fn func_8001F464(rdram: *mut u8, ctx: *mut RecompContext) 
     g[T7] = g[T6] & 2;
     g[V0] = u64::from(g[T7] != 0);
 }
+
+/// `func_80029298(x)`: set the horizontal position (**guess**) of the forty
+/// 32-byte records from `0x800A4C00` by the kind halfword at `+0x18`
+/// (signed): kinds -1 and 4 set `[+8] = x - 145.0`, kind 0 `[+8] = x -
+/// 60.0`, kind 1 `[+8] = [+0x14] = x - 157.0`, kind 2 `[+8] = x - 157.0`.
+/// Kind 3 and the rest leave the record alone.
+///
+/// The kind + 1 picks the case through a jump table at `0x800A9DF0`. The
+/// `sltiu 6` before it bounds it, so the C's `default` can't be reached.
+/// Domain: `x` not NaN (the oracle's `NAN_CHECK`), unless no record has an
+/// adding kind. Leaves `f2`/`f14`/`f16` = -60/-145/-157, `v0 = v1 =
+/// 0x800A5100`, and from the last record: `t6` = its kind, `at`/`t7` = the
+/// range test and `(kind + 1) << 2` if out of range, else `0x800B0000 + 4 *
+/// (kind + 1)` and the table entry's address (the table's `lw` as
+/// N64Recomp emits it). `f0`/`f4`/`f6`/`f8` keep the last sum each case
+/// computed.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80029298(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[AT] = li(0xC31D_0000); // -157.0
+    ctx.fpr[16].set_u32l(g[AT] as u32);
+    g[AT] = li(0xC311_0000); // -145.0
+    ctx.fpr[14].set_u32l(g[AT] as u32);
+    g[AT] = li(0xC270_0000); // -60.0
+    ctx.fpr[2].set_u32l(g[AT] as u32);
+    g[V0] = li(0x800A_5100);
+    g[V1] = li(0x800A_4C00);
+    g[T6] = lh(m, g[V1], 0x18);
+    loop {
+        g[T7] = addu(g[T6], 1);
+        g[AT] = sltu(g[T7], 6);
+        g[T7] = sll(g[T7], 2);
+        if g[AT] != 0 {
+            g[AT] = addu(li(0x800B_0000), g[T7]);
+            let case = g[T7] >> 2; // 0..=5
+            g[T7] = addu(g[AT], (-0x6210i64) as u64); // the table's lw, as N64Recomp emits it
+            let x = ctx.fpr[12].fl();
+            match case {
+                0 | 5 => {
+                    ctx.fpr[6].set_fl(ctx.fpr[14].fl() + x);
+                    sw(m, g[V1], 8, u64::from(ctx.fpr[6].u32l()));
+                }
+                1 => {
+                    ctx.fpr[4].set_fl(ctx.fpr[2].fl() + x);
+                    sw(m, g[V1], 8, u64::from(ctx.fpr[4].u32l()));
+                }
+                2 => {
+                    ctx.fpr[0].set_fl(ctx.fpr[16].fl() + x);
+                    sw(m, g[V1], 8, u64::from(ctx.fpr[0].u32l()));
+                    sw(m, g[V1], 0x14, u64::from(ctx.fpr[0].u32l()));
+                }
+                3 => {
+                    ctx.fpr[8].set_fl(ctx.fpr[16].fl() + x);
+                    sw(m, g[V1], 8, u64::from(ctx.fpr[8].u32l()));
+                }
+                _ => {} // 4: kind 3
+            }
+        }
+        g[V1] = addu(g[V1], 0x20);
+        if g[V1] == g[V0] {
+            break;
+        }
+        g[T6] = lh(m, g[V1], 0x18);
+    }
+}
+
+/// The track names [`func_8002D598`] returns, by track: strings in the data
+/// segment, back to back and 4-aligned, each starting with `~~`.
+pub const TRACK_NAMES: [u32; 25] = [
+    0x800A_98E4, 0x800A_9904, 0x800A_991C, 0x800A_9930, 0x800A_9940, 0x800A_9958, 0x800A_9970, 0x800A_9984, 0x800A_9994,
+    0x800A_99A8, 0x800A_99BC, 0x800A_99D0, 0x800A_99D8, 0x800A_99E8, 0x800A_99FC, 0x800A_9A14, 0x800A_9A20, 0x800A_9A38,
+    0x800A_9A4C, 0x800A_9A60, 0x800A_9A6C, 0x800A_9A7C, 0x800A_9A8C, 0x800A_9A9C, 0x800A_9AA8,
+];
+
+/// `func_8002D598(track)` = `track_name`: the address of the track's name
+/// in [`TRACK_NAMES`] (`track < 25`, unsigned 64-bit), else 0.
+///
+/// The case comes from a jump table at `0x800A9F24`. The C's `default`
+/// can't be reached. Leaves `v1 = 0x800B0000` for tracks 0-23 but the name
+/// for track 24 (its case ends differently), and 0 out of range. In range,
+/// `at = 0x800B0000 + 4 * track` and `t6` = the table entry's address
+/// (N64Recomp's `addiu` for the table's `lw`); out of range, `at = 0` and
+/// `t6` is untouched.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002D598(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (_mem, ctx) = enter(rdram, ctx);
+    let g = &mut ctx.gpr;
+    g[AT] = sltu(g[A0], 0x19);
+    g[V1] = 0;
+    if g[AT] != 0 {
+        g[T6] = sll(g[A0], 2);
+        g[AT] = addu(li(0x800B_0000), g[T6]);
+        let track = (g[T6] >> 2) as usize; // 0..=24
+        g[T6] = addu(g[AT], (-0x60DCi64) as u64);
+        g[V1] = li(0x800B_0000);
+        if track < 24 {
+            g[V0] = li(TRACK_NAMES[track]);
+            return;
+        }
+        g[V1] = li(TRACK_NAMES[24]);
+    }
+    g[V0] = g[V1];
+}
+
+/// Where [`func_80063344`] gets each type's pair (indexed by type - 1).
+#[derive(Clone, Copy)]
+enum PairSource {
+    /// Halfword pairs at `table + 4 * i`, each converted and multiplied by
+    /// the float at `0x800B0000 + scale`. The case's seven temporaries run
+    /// through [`T_CYCLE`] from `first`.
+    Table { table: u32, scale: i32, first: usize },
+    /// Two float words at `0x800B0000 + at`, through `fa` and `fb`.
+    Words { at: i32, fa: usize, fb: usize },
+    Zero,
+}
+
+/// The temporaries in the order the compiler cycles through them.
+const T_CYCLE: [usize; 10] = [T0, T1, T2, T3, T4, T5, T6, T7, T8, T9];
+
+const PAIRS: [PairSource; 12] = [
+    PairSource::Table { table: 0x800A_3090, scale: -0x2C14, first: 8 },
+    PairSource::Table { table: 0x800A_3104, scale: -0x2C10, first: 5 },
+    PairSource::Table { table: 0x800A_313C, scale: -0x2C0C, first: 2 },
+    PairSource::Words { at: -0x2C08, fa: 4, fb: 6 },
+    PairSource::Words { at: -0x2C00, fa: 8, fb: 10 },
+    PairSource::Zero,
+    PairSource::Words { at: -0x2BF8, fa: 16, fb: 18 },
+    PairSource::Table { table: 0x800A_31B0, scale: -0x2BE4, first: 0 },
+    PairSource::Table { table: 0x800A_31C4, scale: -0x2BE0, first: 7 },
+    PairSource::Table { table: 0x800A_317C, scale: -0x2BF0, first: 9 },
+    PairSource::Table { table: 0x800A_319C, scale: -0x2BE8, first: 3 },
+    PairSource::Table { table: 0x800A_318C, scale: -0x2BEC, first: 6 },
+];
+
+/// `func_80063344(obj, &x, &y)`: store a pair of floats chosen by the
+/// object's type `[obj + 8]` (1-12) and index `i = [obj + 0x88]`
+/// ([`PAIRS`] by type - 1). Types 1-3 and 8-12 scale a halfword pair from
+/// their table, `x = (f32) tbl[i].0 * scale` and `y = (f32) tbl[i].1 *
+/// scale`. Types 4, 5 and 7 copy two constant words. Type 6 and any type
+/// outside 1-12 store 0.0 in both. With `i == -1`, types 1, 2, 6 and 3
+/// return first and store nothing.
+///
+/// QUIRKs: the index is read again after `x` is stored, so an `x` that
+/// aliases `[obj + 0x88]` changes `y`'s entry. With `i == -1`, the table
+/// types 8-12 read `tbl[-1]`, the word before their table.
+///
+/// The type - 1 picks the case through a jump table at `0x800AD3BC`
+/// (bounded by `sltiu 12`; the C's `default` can't be reached). Domain:
+/// `obj`, `x`, `y` word-aligned and the entries in RDRAM, the scale floats
+/// not NaN (`NAN_CHECK`), and in a table case an `x` aliasing `[obj +
+/// 0x88]` only if the stored bits make an index that stays in RDRAM.
+/// Leaves `v0 = i`, `at` and `t6`/`t7` from the type test (`t7` the table
+/// entry's address, from N64Recomp's `addiu` for the table's `lw`), `v1` =
+/// the table, the case's temporaries, `f0` = the scale (or 0.0) and
+/// `f4`..`f18` as the case left them.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80063344(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V0] = lw(m, g[A0], 0x88);
+    g[AT] = u64::MAX;
+    if g[V0] == g[AT] {
+        g[V1] = lw(m, g[A0], 8);
+        // Types 1, 2, 6 and 3 return; each beq's delay slot loads the next.
+        g[AT] = 1;
+        for next in [2, 6, 3] {
+            let hit = g[V1] == g[AT];
+            g[AT] = next;
+            if hit {
+                return;
+            }
+        }
+        if g[V1] == g[AT] {
+            return;
+        }
+    }
+    g[T6] = lw(m, g[A0], 8);
+    g[T7] = addu(g[T6], u64::MAX);
+    g[AT] = sltu(g[T7], 12);
+    g[T7] = sll(g[T7], 2);
+    let source = if g[AT] == 0 {
+        PairSource::Zero
+    } else {
+        g[AT] = addu(li(0x800B_0000), g[T7]);
+        let case = (g[T7] >> 2) as usize; // 0..=11
+        g[T7] = addu(g[AT], (-0x2C44i64) as u64); // the table's lw, as N64Recomp emits it
+        PAIRS[case]
+    };
+    match source {
+        PairSource::Zero => {
+            ctx.fpr[0].set_u32l(0);
+            sw(m, g[A1], 0, 0);
+            sw(m, g[A2], 0, 0);
+        }
+        PairSource::Words { at, fa, fb } => {
+            g[AT] = li(0x800B_0000);
+            ctx.fpr[fa].set_u32l(lw(m, g[AT], at) as u32);
+            sw(m, g[A1], 0, u64::from(ctx.fpr[fa].u32l()));
+            ctx.fpr[fb].set_u32l(lw(m, g[AT], at + 4) as u32);
+            sw(m, g[A2], 0, u64::from(ctx.fpr[fb].u32l()));
+        }
+        PairSource::Table { table, scale, first } => {
+            let t = |k: usize| T_CYCLE[(first + k) % T_CYCLE.len()];
+            g[V1] = li(table);
+            g[t(0)] = sll(g[V0], 2);
+            g[t(1)] = addu(g[V1], g[t(0)]);
+            g[t(2)] = lh(m, g[t(1)], 0);
+            g[AT] = li(0x800B_0000);
+            ctx.fpr[0].set_u32l(lw(m, g[AT], scale) as u32);
+            ctx.fpr[4].set_u32l(g[t(2)] as u32);
+            ctx.fpr[6].set_fl(fpu::cvt_s_w(ctx.fpr[4].u32l(), fpu::NEAREST));
+            ctx.fpr[8].set_fl(ctx.fpr[6].fl() * ctx.fpr[0].fl());
+            sw(m, g[A1], 0, u64::from(ctx.fpr[8].u32l()));
+            g[t(3)] = lw(m, g[A0], 0x88); // QUIRK: read again after the store
+            g[t(4)] = sll(g[t(3)], 2);
+            g[t(5)] = addu(g[V1], g[t(4)]);
+            g[t(6)] = lh(m, g[t(5)], 2);
+            ctx.fpr[10].set_u32l(g[t(6)] as u32);
+            ctx.fpr[16].set_fl(fpu::cvt_s_w(ctx.fpr[10].u32l(), fpu::NEAREST));
+            ctx.fpr[18].set_fl(ctx.fpr[16].fl() * ctx.fpr[0].fl());
+            sw(m, g[A2], 0, u64::from(ctx.fpr[18].u32l()));
+        }
+    }
+}

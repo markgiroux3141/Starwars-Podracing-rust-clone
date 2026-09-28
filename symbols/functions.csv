@@ -385,7 +385,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80028D60,func_80028D60,ours,4,,recomp,,,
 0x80028E78,func_80028E78,ours,25,,recomp,,,
 0x800290A4,func_800290A4,ours,1,,recomp,,,
-0x80029298,func_80029298,ours,0,,recomp,,,
+0x80029298,func_80029298,ours,0,,rust_verified,unit_diff,high,40 records at 0x800A4C00: [+8] (and +0x14) = x + const by kind (jump table) (game::misc)
 0x8002932C,func_8002932C,ours,23,,recomp,,,
 0x80029494,func_80029494,ours,2,,recomp,,,
 0x8002963C,func_8002963C,ours,21,,recomp,,,
@@ -402,7 +402,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8002CC28,func_8002CC28,ours,1,,recomp,,,
 0x8002D048,func_8002D048,ours,10,,recomp,,,
 0x8002D4C4,func_8002D4C4,ours,3,,recomp,,,
-0x8002D598,func_8002D598,ours,0,,recomp,,,
+0x8002D598,track_name,ours,0,,rust_verified,unit_diff,high,"address of track name (25), else 0 (jump table) (game::misc)"
 0x8002D6EC,func_8002D6EC,ours,3,,recomp,,,
 0x8002D968,func_8002D968,ours,0,,recomp,,,
 0x8002D9D0,func_8002D9D0,ours,0,,recomp,,,
@@ -846,7 +846,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80062E14,func_80062E14,ours,2,,recomp,,,
 0x80062EC8,func_80062EC8,ours,3,,recomp,,,
 0x80063084,func_80063084,ours,22,,recomp,,,
-0x80063344,func_80063344,ours,0,,recomp,,,
+0x80063344,func_80063344,ours,0,,rust_verified,unit_diff,high,float pair by [obj+8] type and [obj+0x88] index (jump table) (game::misc)
 0x800636D0,func_800636D0,ours,1,,recomp,,,
 0x8006373C,func_8006373C,ours,22,,recomp,,,
 0x80063AA0,func_80063AA0,ours,22,,recomp,,,
