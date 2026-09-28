@@ -235,3 +235,33 @@ Findings from sp00nznet/racer we can use as facts (addresses, not code):
 
 **Suggested next step**
 - Port the heap helpers `func_8002FAFC` (cursor), `func_8002FAC4` (set cursor) and `func_8002FC58` (free space), probably tiny leaves, via `cargo xtask next-function --toward func_800305E8`. `--toward` currently reports that model_load reaches 116 functions (49 ready now), blocked below only by `func_80088538` (3 indirect calls), probably via the wait-loop helper `func_80008F28`. Then difftest `model_load`'s relocation logic with the ROM read stubbed: feed the DMA from baserom.z64 in an oracle stub, which needs a small "ROM read" hook in the stub runtime. After that, decode sprites (find their loader's use of the 0x14-byte header) for a second visual.
+
+### 2026-09-28 — Session 4
+
+**Done**
+- **How ports call callees: decided and built** (Facts: "How ports call other functions"). Ports call the N64Recomp C symbols (`game::imports`, `recomp::call`), and the linker picks the implementation. The oracle now defines every recompiled function, as either the generated C or a stub that runs a per-thread test double (`oracle::doubles`) or traps. Calls through stubs are traced with their registers, and `difftest::compare` requires identical traces. `lzss` moved to `assets::lzss`, so `assets`/`xtask` no longer link `game`.
+- **ROM-read doubles** (`difftest::rom`; Facts: "Test doubles for the ROM reads"). `rom_read`/`rom_read_small` copy from baserom.z64 at test time, restore saved registers the way the originals' `sw`/`lw` do, scramble caller-saved state, and refuse transfers the originals couldn't do cleanly.
+- **7 ports, all `rust_verified`, 9/1374 in total:** the heap helpers `heap_cursor`, `heap_check`, `heap_set_cursor`, `heap_free` (Facts: "Asset heap"), then `texture_read`, `texture_get`, `model_load` (Facts: "Texture and model loaders").
+  - Heap state is derived from `heap_init`, `mask_buffer_init` and `framebuffers_init` for both memory sizes; the only guess is other boot allocations before the first load.
+  - The tests load all 307 models from a fresh heap and check each against an independent statement of the format. They also cover sequential loads (texture cache hits, running out of heap in 8 MB and 4 MB layouts), proptest heap limits, tight Comp layouts, out-of-range and non-canonical indices, texture out-of-heap, the unknown-tag error path (a returning double for `func_800827C0`), and every texture through `texture_get`/`texture_read`.
+  - Five reachable mutants are caught, and double panics/traps now print past the harness's output capture.
+- **Sprites decoded** (Facts: "Sprites"): `assets::Sprite`, `decode_sprite`, and `cargo xtask extract` writes 172 sprite PNGs and `sprites.csv`.
+- Tests: 67 (was 43).
+
+**Surprises**
+- `model_load`'s index check is 64-bit, but the index's upper half is already gone: the first callee spills `s0` with `sw`/`lw`. A faithful double's register behaviour matters, not just its data.
+- **The Comp space checks ignore the decompression window.** With less than 4 KB between the output and the payload, the model comes out corrupt: 56 of 98 sampled tight layouts did, and 3 reached the error path. `& ~7` makes it happen even at exactly 0x1000 bytes of slack.
+- The Comp header (and the mask) are read before any space check.
+- The texture cache stores the address of the *first referencing model's* pointer pair, not the texture. If that first load ran out of heap, later references get nulls.
+- `heap_check` is an assert with nothing left in either branch.
+- Three of my own expected values were wrong at first (a count off by one, the index truncation, the `& ~7` window edge). Each time C and Rust agreed and the cause was in the code, and the test's statement was corrected to match the understood behaviour, not the output.
+
+**In progress / not done**
+- `func_800827C0` (model_error) isn't understood; the tests that reach it use a double that just returns.
+- The PI/`osRecvMesg`/`func_80008F28` chain under the ROM reads is still unverifiable (indirect calls below `func_80088538`).
+- `sprite_load`, `texture_block_init`, `heap_set_level` and `heap_init` aren't ported. `next-function` still reports the loaders' neighbours as blocked, because it doesn't know that rom_read/rom_read_small have doubles.
+- No "swap" build yet that runs Rust ports as each other's callees.
+
+**Suggested next step**
+- Teach `cargo xtask next-function` about doubled functions (e.g. a `doubled` column or a list in the oracle), so ports above rom_read become "ready with doubles". Then port `sprite_load` (`func_8002FF38`) against the sprite facts, plus `texture_block_init` (`func_8003043C`, its `b .` hang is a QUIRK that needs a child-process test) and `heap_set_level` (`func_8002FA00`; its callees `func_8002E034`, `func_80030574` and `func_80007E80` need checking first).
+- After that, the depth-0 leaves (510 ready; mostly tiny getters/setters at `0x8000052x` and `0x80005Axx`) are cheap, bulk-verifiable progress.
