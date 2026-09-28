@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/rom", "crates/n64mem", "crates/oracle", "crates/game", "xtask"]
+members = ["crates/rom", "crates/n64mem", "crates/oracle", "crates/game", "crates/difftest", "xtask"]
 
 [workspace.package]
 edition = "2021"
@@ -13,3 +13,4 @@ n64mem = { path = "crates/n64mem" }
 oracle = { path = "crates/oracle" }
 game = { path = "crates/game" }
 sha1 = "0.10"
+proptest = "1"

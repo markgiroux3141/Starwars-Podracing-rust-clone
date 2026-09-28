@@ -1,0 +1,15 @@
+[package]
+name = "difftest"
+version = "0.1.0"
+description = "Differential tests: recompiled C (oracle) vs Rust ports (game) on identical RDRAM and registers"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+n64mem.workspace = true
+game.workspace = true
+oracle.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
