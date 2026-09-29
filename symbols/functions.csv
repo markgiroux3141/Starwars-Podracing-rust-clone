@@ -247,9 +247,9 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80014C98,func_80014C98,ours,0,render,rust_verified,unit_diff,high,"gDPPipeSync (0xE7000000, 0) onto the display list at [0x801217B0] (game::render)"
 0x80014CC0,func_80014CC0,ours,1,,recomp,,,
 0x80014D20,func_80014D20,ours,2,,recomp,,,
-0x80014D4C,func_80014D4C,ours,0,,rust_verified,unit_diff,high,"asin(x) in degrees by the game's series (constants 0x800A8790..): +-90 beyond +-0.999999, reduction via sqrt(1-x^2) outside +-0.7071, r*180/pi in double (game::math)"
+0x80014D4C,func_80014D4C,ours,0,math,rust_verified,unit_diff,high,"asin(x) in degrees by the game's series (constants 0x800A8790..): +-90 beyond +-0.999999, reduction via sqrt(1-x^2) outside +-0.7071, r*180/pi in double (game::math)"
 0x80014F2C,func_80014F2C,ours,1,,recomp,,,
-0x80014F54,func_80014F54,ours,0,,rust_verified,unit_diff,high,"atan2(y=f12, x=f14) in degrees by the game's series (constants 0x800A87C0..): octant swap, t < 1e-4 -> 0, quadrant fixups at -1e-4 (game::math)"
+0x80014F54,func_80014F54,ours,0,math,rust_verified,unit_diff,high,"atan2(y=f12, x=f14) in degrees by the game's series (constants 0x800A87C0..): octant swap, t < 1e-4 -> 0, quadrant fixups at -1e-4 (game::math)"
 0x8001514C,vec2_add,ours,0,math,rust_verified,unit_diff,high,out = b + a (2 floats) (game::math)
 0x80015170,vec2_scale,ours,0,math,rust_verified,unit_diff,high,"out = v * s, s in a1 (game::math)"
 0x80015190,func_80015190,ours,0,math,rust_verified,unit_diff,high,vec2 out = q*s + p (s in a2) (game::math)
@@ -291,25 +291,25 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8001734C,func_8001734C,ours,2,,recomp,,,
 0x8001745C,func_8001745C,ours,3,,recomp,,,
 0x800174B8,func_800174B8,ours,3,,recomp,,,
-0x80017520,func_80017520,ours,0,,recomp,,,
-0x80017580,func_80017580,ours,0,,recomp,,,
+0x80017520,func_80017520,ours,0,math,rust_verified,unit_diff,high,"4x4 scale matrix diag(x, y, z, 1) (game::math)"
+0x80017580,func_80017580,ours,0,math,rust_verified,unit_diff,high,"4x4 translation matrix, row 3 = (x, y, z, 1) (game::math)"
 0x800175E0,func_800175E0,ours,2,,recomp,,,
 0x80017824,func_80017824,ours,3,,recomp,,,
-0x80017874,func_80017874,ours,0,,recomp,,,
+0x80017874,func_80017874,ours,0,math,rust_verified,unit_diff,high,4x4 identity (game::math)
 0x800178C4,func_800178C4,ours,3,,recomp,,,
-0x80017918,func_80017918,ours,0,,recomp,,,
+0x80017918,func_80017918,ours,0,math,rust_verified,unit_diff,high,"out = m (5th arg) with rows 0..2 times sx, sy, sz (game::math)"
 0x800179EC,func_800179EC,ours,2,,recomp,,,
 0x80017AC0,func_80017AC0,ours,2,,recomp,,,
 0x80017B34,func_80017B34,ours,3,,recomp,,,
-0x80017B7C,func_80017B7C,ours,0,,recomp,,,
-0x80017BA8,func_80017BA8,ours,0,,recomp,,,
-0x80017C18,func_80017C18,ours,0,,recomp,,,
-0x80017C98,func_80017C98,ours,0,,recomp,,,
+0x80017B7C,func_80017B7C,ours,0,,rust_verified,unit_diff,high,"node translation +0x40..+0x48 = (x, y, z); flags halfword +0xC |= 3 (game::misc)"
+0x80017BA8,func_80017BA8,ours,0,,rust_verified,unit_diff,high,node 3x4 transform +0x1C..+0x48 = 4x4 m's first three columns; flags |= 3 (game::misc)
+0x80017C18,func_80017C18,ours,0,,rust_verified,unit_diff,high,"4x4 m = node 3x4 transform with column 3 = (0,0,0,1) (game::misc)"
+0x80017C98,func_80017C98,ours,0,,rust_verified,unit_diff,high,identical code to 80017C18 (game::misc)
 0x80017D18,func_80017D18,ours,4,,recomp,,,
 0x80017D48,func_80017D48,ours,0,,rust_verified,unit_diff,high,[o+0x1C] = v (game::misc)
 0x80017D50,func_80017D50,ours,0,,rust_verified,unit_diff,high,[o+0x1C] (game::misc)
-0x80017D58,func_80017D58,ours,0,,recomp,,,
-0x80017D80,func_80017D80,ours,0,,recomp,,,
+0x80017D58,func_80017D58,ours,0,,rust_verified,unit_diff,high,0 <= k < 8 (64-bit): float [n+0x1C+4k] = a2 (game::misc)
+0x80017D80,func_80017D80,ours,0,,rust_verified,unit_diff,high,"0 <= k < 8: f0 = [n+0x1C+4k], else f0 unchanged (game::misc)"
 0x80017DA4,func_80017DA4,ours,0,,rust_verified,unit_diff,high,[o] (game::misc)
 0x80017DAC,func_80017DAC,ours,0,,rust_verified,unit_diff,high,[o+0x14] (game::misc)
 0x80017DB4,func_80017DB4,ours,0,,rust_verified,unit_diff,high,o ? [o+0x18][k] : 0; QUIRK unbounded k (game::misc)
@@ -317,7 +317,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80017DE4,func_80017DE4,ours,0,,rust_verified,unit_diff,high,(i16)[o+0x22] (game::misc)
 0x80017DEC,func_80017DEC,ours,0,,rust_verified,unit_diff,high,[o+0x24] (game::misc)
 0x80017DF4,func_80017DF4,ours,0,,rust_verified,unit_diff,high,"*a, *b = [o+0x2C], [o+0x28] or zeros (game::misc)"
-0x80017E20,func_80017E20,ours,0,,recomp,,,
+0x80017E20,func_80017E20,ours,0,,rust_verified,unit_diff,high,copy six floats n+8.. to a1 (game::misc)
 0x80017E54,func_80017E54,ours,0,,rust_verified,unit_diff,high,[o+0x14] (game::misc)
 0x80017E5C,func_80017E5C,ours,0,,rust_verified,unit_diff,high,[o+0x18][k]; QUIRK unbounded k (game::misc)
 0x80017E70,func_80017E70,ours,0,,rust_verified,unit_diff,high,[o+8] = v if which == 2 (game::misc)
@@ -332,17 +332,17 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80017F28,func_80017F28,ours,0,,rust_verified,unit_diff,high,"0x80120DF0 + 0x170k for 0 <= k < 4, else 0 (game::misc)"
 0x80017F64,func_80017F64,ours,3,,recomp,,,
 0x80017FD0,func_80017FD0,ours,1,,recomp,,,
-0x80018084,func_80018084,ours,0,,recomp,,,
-0x800180C8,func_800180C8,ours,0,,recomp,,,
+0x80018084,func_80018084,ours,0,,rust_verified,unit_diff,high,float a2 to +0x148/+0x14C/+0x150 for k = 2/3/5 (64-bit) (game::misc)
+0x800180C8,func_800180C8,ours,0,,rust_verified,unit_diff,high,"float +0x148/+0x14C/+0x150 for k = 2/3/5, else -1.0 (game::misc)"
 0x80018114,func_80018114,ours,0,,rust_verified,unit_diff,high,[o+0x168] = v (game::misc)
 0x8001811C,func_8001811C,ours,0,,rust_verified,unit_diff,high,set field by selector 4/3/6/5 -> +0x15C/+0x164/+0x158/+0x160 (game::misc)
 0x80018164,func_80018164,ours,0,,rust_verified,unit_diff,high,"get field by selector, else -1 (game::misc)"
 0x800181BC,func_800181BC,ours,1,,recomp,,,
 0x800182FC,func_800182FC,ours,0,,rust_verified,unit_diff,high,"k 0 -> [o+8], 2 -> [o+4], else 0 (game::misc)"
-0x80018324,func_80018324,ours,0,,recomp,,,
+0x80018324,func_80018324,ours,0,,rust_verified,unit_diff,high,"init node header (type, -1 links); type & 0x4000 clears +0x14/+0x18; 0xD065 gets identity transform (game::misc)"
 0x800183A8,func_800183A8,ours,0,,rust_verified,unit_diff,high,[o+4] (game::misc)
 0x800183B0,func_800183B0,ours,0,,rust_verified,unit_diff,high,[o+4] = v (game::misc)
-0x800183C0,func_800183C0,ours,0,,recomp,,,
+0x800183C0,func_800183C0,ours,0,,rust_verified,unit_diff,high,reset block 0x800D6960 (settings word +0x1C = 9) (game::misc)
 0x80018440,func_80018440,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
 0x80018448,func_80018448,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
 0x80018450,func_80018450,ours,0,,rust_verified,unit_diff,high,empty; spills a0 a1 (game::misc)

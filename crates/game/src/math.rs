@@ -1059,3 +1059,190 @@ pub unsafe extern "C" fn func_800156DC(rdram: *mut u8, ctx: *mut RecompContext) 
         }
     }
 }
+
+/// `func_80017520(m, x, y, z)` (4x4 scale matrix): `m` = diag(`x`, `y`, `z`,
+/// 1) with the floats in `a1`, `a2`, `a3` (`z` through its spill `[sp +
+/// 0xC]`), row-major. Stores zeros at `+4..+0x24` (off the diagonal), `x`,
+/// `y`, the zeros at `+0x2C..+0x38`, `z`, then 1.0 at `+0x3C`. Bits are
+/// copied, NaNs included.
+///
+/// Leaves `f0 = 0.0`, `f12 = x`, `f14 = y`, `f4 = z`, `f6 = 1.0`, `at =
+/// 0x3F800000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017520(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    f[0].set_u32l(0 as u32);
+    sw(m, g[SP], 0xC, g[A3]);
+    f[12].set_u32l(g[A1] as u32);
+    f[14].set_u32l(g[A2] as u32);
+    sw(m, g[A0], 4, u64::from(f[0].u32l()));
+    sw(m, g[A0], 8, u64::from(f[0].u32l()));
+    sw(m, g[A0], 0xC, u64::from(f[0].u32l()));
+    sw(m, g[A0], 0x10, u64::from(f[0].u32l()));
+    sw(m, g[A0], 0x18, u64::from(f[0].u32l()));
+    sw(m, g[A0], 0x1C, u64::from(f[0].u32l()));
+    sw(m, g[A0], 0x20, u64::from(f[0].u32l()));
+    sw(m, g[A0], 0x24, u64::from(f[0].u32l()));
+    sw(m, g[A0], 0, u64::from(f[12].u32l()));
+    sw(m, g[A0], 0x14, u64::from(f[14].u32l()));
+    f[4].set_u32l(lw(m, g[SP], 0xC) as u32);
+    g[AT] = li(0x3F80_0000);
+    f[6].set_u32l(g[AT] as u32);
+    sw(m, g[A0], 0x2C, u64::from(f[0].u32l()));
+    sw(m, g[A0], 0x30, u64::from(f[0].u32l()));
+    sw(m, g[A0], 0x34, u64::from(f[0].u32l()));
+    sw(m, g[A0], 0x38, u64::from(f[0].u32l()));
+    sw(m, g[A0], 0x28, u64::from(f[4].u32l()));
+    sw(m, g[A0], 0x3C, u64::from(f[6].u32l()));
+}
+
+/// `func_80017580(m, x, y, z)` (4x4 translation matrix): `m` = identity
+/// with the translation row `+0x30..+0x38 = (x, y, z)` (floats in `a1`,
+/// `a2`, `a3`, `z` through its spill). Zeros first, then the diagonal ones,
+/// `x`, `y`, 1.0 at `+0x3C` and `z` last.
+///
+/// Leaves `f2 = 0.0`, `f0 = 1.0`, `f12 = x`, `f14 = y`, `f4 = z`, `at =
+/// 0x3F800000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017580(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    sw(m, g[SP], 0xC, g[A3]);
+    f[2].set_u32l(0 as u32);
+    g[AT] = li(0x3F80_0000);
+    f[0].set_u32l(g[AT] as u32);
+    f[12].set_u32l(g[A1] as u32);
+    f[14].set_u32l(g[A2] as u32);
+    sw(m, g[A0], 4, u64::from(f[2].u32l()));
+    sw(m, g[A0], 8, u64::from(f[2].u32l()));
+    sw(m, g[A0], 0xC, u64::from(f[2].u32l()));
+    sw(m, g[A0], 0x10, u64::from(f[2].u32l()));
+    sw(m, g[A0], 0x18, u64::from(f[2].u32l()));
+    sw(m, g[A0], 0x1C, u64::from(f[2].u32l()));
+    sw(m, g[A0], 0x20, u64::from(f[2].u32l()));
+    sw(m, g[A0], 0x24, u64::from(f[2].u32l()));
+    sw(m, g[A0], 0x2C, u64::from(f[2].u32l()));
+    sw(m, g[A0], 0, u64::from(f[0].u32l()));
+    sw(m, g[A0], 0x14, u64::from(f[0].u32l()));
+    sw(m, g[A0], 0x28, u64::from(f[0].u32l()));
+    sw(m, g[A0], 0x30, u64::from(f[12].u32l()));
+    sw(m, g[A0], 0x34, u64::from(f[14].u32l()));
+    f[4].set_u32l(lw(m, g[SP], 0xC) as u32);
+    sw(m, g[A0], 0x3C, u64::from(f[0].u32l()));
+    sw(m, g[A0], 0x38, u64::from(f[4].u32l()));
+}
+
+/// `func_80017874(m)` (4x4 identity): the twelve off-diagonal words = 0.0,
+/// then the four diagonal ones = 1.0.
+///
+/// Leaves `f2 = 0.0`, `f0 = 1.0`, `at = 0x3F800000`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017874(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    f[2].set_u32l(0 as u32);
+    g[AT] = li(0x3F80_0000);
+    f[0].set_u32l(g[AT] as u32);
+    sw(m, g[A0], 4, u64::from(f[2].u32l()));
+    sw(m, g[A0], 8, u64::from(f[2].u32l()));
+    sw(m, g[A0], 0xC, u64::from(f[2].u32l()));
+    sw(m, g[A0], 0x10, u64::from(f[2].u32l()));
+    sw(m, g[A0], 0x18, u64::from(f[2].u32l()));
+    sw(m, g[A0], 0x1C, u64::from(f[2].u32l()));
+    sw(m, g[A0], 0x20, u64::from(f[2].u32l()));
+    sw(m, g[A0], 0x24, u64::from(f[2].u32l()));
+    sw(m, g[A0], 0x2C, u64::from(f[2].u32l()));
+    sw(m, g[A0], 0x30, u64::from(f[2].u32l()));
+    sw(m, g[A0], 0x34, u64::from(f[2].u32l()));
+    sw(m, g[A0], 0x38, u64::from(f[2].u32l()));
+    sw(m, g[A0], 0, u64::from(f[0].u32l()));
+    sw(m, g[A0], 0x14, u64::from(f[0].u32l()));
+    sw(m, g[A0], 0x28, u64::from(f[0].u32l()));
+    sw(m, g[A0], 0x3C, u64::from(f[0].u32l()));
+}
+
+/// `func_80017918(out, sx, sy, sz, m)` (row-scaled 4x4 matrix): `out` = `m`
+/// (the fifth argument, `sp + 0x10`, loaded into `a1`) with row 0 times
+/// `sx`, row 1 times `sy`, row 2 times `sz` (floats in `a1`..`a3`; `sz`
+/// re-read from its spill `[sp + 0xC]` for each element), row 3 copied.
+/// Element by element, each stored before the next is loaded.
+///
+/// Leaves `a1 = m`, `f12 = sx`, `f14 = sy`, and `f4`..`f18` from the last
+/// elements.
+///
+/// Domain: canonical pointers to 64 bytes; the scales and the first three
+/// rows not NaN (row 3 is copied bit for bit).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80017918(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    f[12].set_u32l(g[A1] as u32);
+    g[A1] = lw(m, g[SP], 0x10);
+    sw(m, g[SP], 0xC, g[A3]);
+    f[14].set_u32l(g[A2] as u32);
+    f[4].set_u32l(lw(m, g[A1], 0) as u32);
+    f[6].set_fl(f[4].fl() * f[12].fl());
+    sw(m, g[A0], 0, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A1], 4) as u32);
+    f[10].set_fl(f[8].fl() * f[12].fl());
+    sw(m, g[A0], 4, u64::from(f[10].u32l()));
+    f[16].set_u32l(lw(m, g[A1], 8) as u32);
+    f[18].set_fl(f[16].fl() * f[12].fl());
+    sw(m, g[A0], 8, u64::from(f[18].u32l()));
+    f[4].set_u32l(lw(m, g[A1], 0xC) as u32);
+    f[6].set_fl(f[4].fl() * f[12].fl());
+    sw(m, g[A0], 0xC, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A1], 0x10) as u32);
+    f[10].set_fl(f[8].fl() * f[14].fl());
+    sw(m, g[A0], 0x10, u64::from(f[10].u32l()));
+    f[16].set_u32l(lw(m, g[A1], 0x14) as u32);
+    f[18].set_fl(f[16].fl() * f[14].fl());
+    sw(m, g[A0], 0x14, u64::from(f[18].u32l()));
+    f[4].set_u32l(lw(m, g[A1], 0x18) as u32);
+    f[6].set_fl(f[4].fl() * f[14].fl());
+    sw(m, g[A0], 0x18, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A1], 0x1C) as u32);
+    f[10].set_fl(f[8].fl() * f[14].fl());
+    sw(m, g[A0], 0x1C, u64::from(f[10].u32l()));
+    f[18].set_u32l(lw(m, g[SP], 0xC) as u32);
+    f[16].set_u32l(lw(m, g[A1], 0x20) as u32);
+    f[4].set_fl(f[16].fl() * f[18].fl());
+    sw(m, g[A0], 0x20, u64::from(f[4].u32l()));
+    f[8].set_u32l(lw(m, g[SP], 0xC) as u32);
+    f[6].set_u32l(lw(m, g[A1], 0x24) as u32);
+    f[10].set_fl(f[6].fl() * f[8].fl());
+    sw(m, g[A0], 0x24, u64::from(f[10].u32l()));
+    f[18].set_u32l(lw(m, g[SP], 0xC) as u32);
+    f[16].set_u32l(lw(m, g[A1], 0x28) as u32);
+    f[4].set_fl(f[16].fl() * f[18].fl());
+    sw(m, g[A0], 0x28, u64::from(f[4].u32l()));
+    f[8].set_u32l(lw(m, g[SP], 0xC) as u32);
+    f[6].set_u32l(lw(m, g[A1], 0x2C) as u32);
+    f[10].set_fl(f[6].fl() * f[8].fl());
+    sw(m, g[A0], 0x2C, u64::from(f[10].u32l()));
+    f[16].set_u32l(lw(m, g[A1], 0x30) as u32);
+    sw(m, g[A0], 0x30, u64::from(f[16].u32l()));
+    f[18].set_u32l(lw(m, g[A1], 0x34) as u32);
+    sw(m, g[A0], 0x34, u64::from(f[18].u32l()));
+    f[4].set_u32l(lw(m, g[A1], 0x38) as u32);
+    sw(m, g[A0], 0x38, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A1], 0x3C) as u32);
+    sw(m, g[A0], 0x3C, u64::from(f[6].u32l()));
+}
