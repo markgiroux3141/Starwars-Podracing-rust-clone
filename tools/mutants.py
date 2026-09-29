@@ -49,7 +49,22 @@ def restore(before):
             os.remove(p)
     for p, data in before.items():
         if open(p, 'rb').read() != data:
-            open(p, 'wb').write(data)
+            write(p, data)
+
+
+def write(path, data):
+    """Write a file, retrying for a while: on Windows another process (an
+    editor, a build) can hold it open for a moment, and failing to restore
+    a mutated source is the one thing this runner must not do."""
+    for attempt in range(60):
+        try:
+            with open(path, 'wb') as f:
+                f.write(data)
+            return
+        except OSError:
+            if attempt == 59:
+                raise
+            time.sleep(1)
 
 
 def run_one(m, show):
@@ -71,17 +86,20 @@ def run_one(m, show):
         cmd += ['--', m['filter']]
     t = time.time()
     try:
-        open(path, 'wb').write(text.replace(old, new).encode('utf-8'))
+        write(path, text.replace(old, new).encode('utf-8'))
         try:
+            # A mutant is caught by the first failing case: don't shrink it
+            # (whole-RDRAM checks made shrinking take minutes).
+            env = {**os.environ, 'PROPTEST_MAX_SHRINK_ITERS': '0'}
             r = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace',
-                               timeout=m.get('timeout', 300))
+                               timeout=m.get('timeout', 300), env=env)
         except subprocess.TimeoutExpired:
             # subprocess.run kills cargo; the test binary it started may
             # outlive it, so kill that too.
             subprocess.run(['taskkill', '/F', '/T', '/IM', m['test'] + '-*'], capture_output=True)
             return 'caught/timeout', time.time() - t
     finally:
-        open(path, 'wb').write(original)
+        write(path, original)
         restore(before)
     dt = time.time() - t
     out = r.stdout + r.stderr
