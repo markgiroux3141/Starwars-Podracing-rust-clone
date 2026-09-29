@@ -161,8 +161,8 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8000B1B0,func_8000B1B0,ours,0,,rust_verified,unit_diff,high,select ENTRIES[id] (0x8009B798) (game::misc)
 0x8000B254,func_8000B254,ours,1,,rust_verified,unit_diff,high,"node transform as 4x4 by mode, identity for non-0xD065 nodes; QUIRK type tested twice (game::misc)"
 0x8000B318,func_8000B318,ours,5,,recomp,,,
-0x8000B98C,func_8000B98C,ours,1,,recomp,,,
-0x8000BB78,func_8000BB78,ours,1,,recomp,,,
+0x8000B98C,func_8000B98C,ours,1,,rust_verified,unit_diff,high,"the nearer selected entry's matrix (records 1 and 2), identity if none; QUIRK only r2 selected gives identity (game::misc)"
+0x8000BB78,func_8000BB78,ours,1,,rust_verified,unit_diff,high,1 if one of the 4 records has bit 0 and [r+4] == o (game::misc)
 0x8000BC10,func_8000BC10,ours,6,,recomp,,,
 0x8000C530,func_8000C530,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
 0x8000C540,func_8000C540,ours,8,,recomp,,,
@@ -171,16 +171,16 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8000C6C8,func_8000C6C8,ours,0,,rust_verified,unit_diff,high,"*p += x*y (floats), then clamp to lo (a3), then hi (stack) (game::misc)"
 0x8000C724,func_8000C724,ours,0,,rust_verified,unit_diff,high,"*p = trunc(f32(*p) + x*y), clamp lo (64-bit a3), hi (stack); returns v (game::misc)"
 0x8000C77C,func_8000C77C,ours,6,,recomp,,,
-0x8000CC1C,func_8000CC1C,ours,1,,recomp,,,
+0x8000CC1C,func_8000CC1C,ours,1,,rust_verified,unit_diff,high,"tuning editor: clamp-add one of 16 fields of the selected Test element and copy it, or step the selection (case 0; QUIRK wraps upward) (game::misc)"
 0x8000D130,func_8000D130,ours,6,,recomp,,,
 0x8000D4E8,func_8000D4E8,ours,6,,recomp,,,
-0x8000D5EC,func_8000D5EC,ours,1,,recomp,,,
-0x8000D7DC,func_8000D7DC,ours,1,,recomp,,,
+0x8000D5EC,func_8000D5EC,ours,1,,rust_verified,unit_diff,high,"settings editor: int clamp, toggles, float clamp-adds by menu flags (game::misc)"
+0x8000D7DC,func_8000D7DC,ours,1,,rust_verified,unit_diff,high,push id 1 on key 8 if menu flag bit 1 (game::misc)
 0x8000D818,func_8000D818,ours,4,,recomp,,,
 0x8000D89C,func_8000D89C,ours,7,,recomp,,,
 0x8000D90C,func_8000D90C,ours,2,,recomp,,,
 0x8000D960,func_8000D960,ours,5,,recomp,,,
-0x8000D9A8,func_8000D9A8,ours,1,,recomp,,,
+0x8000D9A8,func_8000D9A8,ours,1,,rust_verified,unit_diff,high,reset the id stack (Jdge pool element 0's bit 12 picks id 0 or 2) (game::misc)
 0x8000DA6C,func_8000DA6C,ours,0,,rust_verified,unit_diff,high,returns [0x8009B7E4] (game::misc)
 0x8000DA78,func_8000DA78,ours,8,,recomp,,,
 0x8000E680,func_8000E680,ours,1,,recomp,,,

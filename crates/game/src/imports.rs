@@ -20,11 +20,15 @@ recomp_imports! {
     func_80008718, // special sound id
     func_8000A44C, // record init
     func_8000AED4, // entry flags |=
+    func_8000C5F0, // push current id
+    func_8000C6C8, // float clamp-add
+    func_8000C724, // int clamp-add
     func_80011940, // comp_decompress
     func_80011CDC, // rom_read
     func_80011D60, // rom_read_small
     func_80015538, // vec3 cross
     func_800155EC, // vec3 multiply-add
+    func_800156DC, // 4x4 copy
     func_800160BC, // matrix inverse
     func_80016BF4, // vec3 x 3x3
     func_80016CAC, // point x 4x4
@@ -35,6 +39,9 @@ recomp_imports! {
     func_80017E70, // node +8 setter
     func_80017EE4, // [o + 4]
     func_80017EEC, // [o + 4] = v
+    func_80017EF4, // [o]
+    func_80017F20, // returns 4
+    func_80017F28, // RECORDS_170 + 0x170 k
     func_8002FAC4, // heap_set_cursor
     func_8002FAFC, // heap_cursor
     func_8002FC58, // heap_free
@@ -46,7 +53,9 @@ recomp_imports! {
     func_800315D8, // channel +0xC = 0 (self-call)
     func_80031640, // channel +8 = 0 (self-call)
     func_8003D488, // [0x800A48D4] = v & 0xFFFF
+    func_8003F714, // pool element by tag
     func_8003F7B8, // pool count by id
+    func_8003F800, // pool iteration begin
     func_80051FF4, // first zero of four words
     func_80081A2C, // closest point on a segment
     func_800827C0, // model_load's error path (not yet understood)
