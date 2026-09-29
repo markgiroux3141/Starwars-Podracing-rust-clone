@@ -510,7 +510,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80031F94,func_80031F94,ours,0,,rust_verified,unit_diff,high,animation dest = 0 (game::misc)
 0x80031FA4,func_80031FA4,ours,0,,rust_verified,unit_diff,high,"cycle animation step of [0x800A2DD4] (timer, phases, dest[map[i]] = src[phase]); do_break unreachable (game::misc)"
 0x800320E0,func_800320E0,ours,0,,recomp,,,
-0x800321F0,func_800321F0,ours,0,,recomp,,,
+0x800321F0,func_800321F0,ours,0,,rust_verified,unit_diff,high,"7 float stats of a0 by a1 (sltu 7), level a2 1..5: += c*a3 or *= b + a*(1-a3), clamp hi then lo; table-driven port (STATS) with per-block registers; pod upgrades (guess) (game::misc)"
 0x80032F2C,func_80032F2C,ours,1,,recomp,,,
 0x80033010,func_80033010,ours,5,,recomp,,,
 0x80033140,func_80033140,ours,5,,recomp,,,

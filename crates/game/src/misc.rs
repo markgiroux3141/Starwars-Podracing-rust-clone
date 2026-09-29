@@ -4761,6 +4761,276 @@ pub unsafe extern "C" fn func_80031FA4(rdram: *mut u8, ctx: *mut RecompContext) 
     }
 }
 
+/// Where [`func_800321F0`] gets a constant: an immediate (`lui at, hi;
+/// mtc1 at`), a float in the data segment (`lwc1 [at + off]` with `at =
+/// 0x800B0000`), or zero (`mtc1 zero`, `at` untouched).
+#[derive(Clone, Copy)]
+enum Konst {
+    Imm(u32),
+    Data(i32),
+    Zero,
+}
+
+impl Konst {
+    /// Load it into `f[r]` as the code does, `at` included.
+    fn load(self, m: &Mem, g: &mut [u64; 32], f: &mut [crate::recomp::Fpr; 32], r: usize) {
+        match self {
+            Konst::Imm(v) => {
+                g[AT] = li(v);
+                f[r].set_u32l(v);
+            }
+            Konst::Data(off) => {
+                g[AT] = li(0x800B_0000);
+                f[r].set_u32l(lw(m, g[AT], off) as u32);
+            }
+            Konst::Zero => f[r].set_u32l(0),
+        }
+    }
+}
+
+/// One level's update in [`func_800321F0`], with the registers it uses.
+#[derive(Clone, Copy)]
+enum Step {
+    /// `field += c * a3`: registers `[c, field, product, sum]`.
+    Add(Konst, [usize; 4]),
+    /// `field *= b + a * (1 - a3)` (`f2` holds 1.0): registers `[1 - a3, a,
+    /// b, product, field, factor, result]`, used in that order.
+    Mul(Konst, Konst, [usize; 7]),
+}
+
+/// One stat of [`func_800321F0`] (**guess**: a pod upgrade category).
+struct Stat {
+    /// The field's offset from `a0`.
+    off: i32,
+    /// The register level 1 reads `a3` into (later levels use `f16`).
+    a3: usize,
+    /// The bound registers: `hi` is tested first.
+    hi: usize,
+    lo: usize,
+    /// The bounds as level 1 loads them (inside its block), and as the glue
+    /// after level 1 loads them for levels 2..5.
+    bounds1: &'static [(usize, Konst)],
+    bounds: &'static [(usize, Konst)],
+    /// Whether `f16` is re-read from the spill before levels 3, 4 and 5.
+    reload: bool,
+    /// Whether levels 3..5 set `at` for their constant before testing the
+    /// level (the fallthrough case 0), rather than inside the block.
+    at_first: bool,
+    levels: [Step; 5],
+}
+
+const fn add(k: Konst, r: [usize; 4]) -> Step {
+    Step::Add(k, r)
+}
+
+const fn mul(a: i32, b: i32, r: [usize; 7]) -> Step {
+    Step::Mul(Konst::Data(a), Konst::Data(b), r)
+}
+
+use Konst::{Data, Imm, Zero};
+
+/// The seven stats by `a1`, from the code (constants in the ROM: see the
+/// function's doc).
+const STATS: [Stat; 7] = [
+    Stat {
+        off: 0, a3: 16, hi: 2, lo: 12,
+        bounds1: &[(2, Imm(0x3F80_0000)), (12, Data(-0x5C34))],
+        bounds: &[(2, Imm(0x3F80_0000)), (12, Data(-0x5C30))],
+        reload: false, at_first: true,
+        levels: [
+            add(Data(-0x5C38), [6, 4, 8, 10]), add(Data(-0x5C2C), [6, 18, 4, 8]), add(Data(-0x5C28), [6, 10, 18, 4]),
+            add(Data(-0x5C24), [6, 8, 10, 18]), add(Imm(0x3E80_0000), [6, 4, 8, 10]),
+        ],
+    },
+    Stat {
+        off: 4, a3: 6, hi: 12, lo: 2,
+        bounds1: &[(12, Imm(0x447A_0000)), (2, Imm(0x4248_0000))],
+        bounds: &[(2, Imm(0x4248_0000)), (12, Imm(0x447A_0000))],
+        reload: true, at_first: false,
+        levels: [
+            add(Imm(0x42E8_0000), [18, 8, 4, 10]), add(Imm(0x4368_0000), [6, 18, 8, 4]), add(Imm(0x43AE_0000), [6, 10, 18, 8]),
+            add(Imm(0x43E8_0000), [6, 4, 10, 18]), add(Data(-0x5C20), [6, 8, 4, 10]),
+        ],
+    },
+    Stat {
+        off: 0xC, a3: 16, hi: 12, lo: 14,
+        bounds1: &[(2, Imm(0x3F80_0000)), (12, Imm(0x40A0_0000)), (14, Data(-0x5C14))],
+        bounds: &[(2, Imm(0x3F80_0000)), (12, Imm(0x40A0_0000)), (14, Data(-0x5C10))],
+        reload: false, at_first: false,
+        levels: [
+            mul(-0x5C1C, -0x5C18, [6, 18, 4, 8, 18, 10, 6]), mul(-0x5C0C, -0x5C08, [8, 4, 10, 18, 4, 6, 8]),
+            mul(-0x5C04, -0x5C00, [18, 10, 6, 4, 10, 8, 18]), mul(-0x5BFC, -0x5BF8, [4, 6, 8, 10, 6, 18, 4]),
+            mul(-0x5BF4, -0x5BF0, [10, 8, 18, 6, 8, 4, 10]),
+        ],
+    },
+    Stat {
+        off: 0x10, a3: 6, hi: 2, lo: 12,
+        bounds1: &[(2, Data(-0x5BEC)), (12, Imm(0x43E1_0000))],
+        bounds: &[(2, Data(-0x5BE8)), (12, Imm(0x43E1_0000))],
+        reload: true, at_first: false,
+        levels: [
+            add(Imm(0x4220_0000), [18, 4, 8, 10]), add(Imm(0x42A0_0000), [6, 18, 4, 8]), add(Imm(0x42F0_0000), [6, 10, 18, 4]),
+            add(Imm(0x4320_0000), [6, 8, 10, 18]), add(Imm(0x4348_0000), [6, 4, 8, 10]),
+        ],
+    },
+    Stat {
+        off: 0x14, a3: 6, hi: 12, lo: 2,
+        bounds1: &[(2, Imm(0x3F80_0000)), (12, Imm(0x447A_0000))],
+        bounds: &[(2, Imm(0x3F80_0000)), (12, Imm(0x447A_0000))],
+        reload: true, at_first: false,
+        levels: [
+            mul(-0x5BE4, -0x5BE0, [4, 18, 10, 8, 18, 6, 4]), mul(-0x5BDC, -0x5BD8, [8, 10, 6, 18, 10, 4, 8]),
+            mul(-0x5BD4, -0x5BD0, [18, 6, 4, 10, 6, 8, 18]), mul(-0x5BCC, -0x5BC8, [10, 4, 8, 6, 4, 18, 10]),
+            mul(-0x5BC4, -0x5BC0, [6, 8, 18, 4, 8, 10, 6]),
+        ],
+    },
+    Stat {
+        off: 0x24, a3: 4, hi: 12, lo: 2,
+        bounds1: &[(12, Imm(0x41A0_0000)), (2, Imm(0x3F80_0000))],
+        bounds: &[(2, Imm(0x3F80_0000)), (12, Imm(0x41A0_0000))],
+        reload: true, at_first: false,
+        levels: [
+            add(Data(-0x5BBC), [18, 10, 8, 6]), add(Data(-0x5BB8), [4, 18, 10, 8]), add(Data(-0x5BB4), [4, 6, 18, 10]),
+            add(Data(-0x5BB0), [4, 8, 6, 18]), add(Imm(0x4100_0000), [4, 10, 8, 6]),
+        ],
+    },
+    Stat {
+        off: 0x2C, a3: 4, hi: 2, lo: 12,
+        bounds1: &[(2, Imm(0x3F80_0000)), (12, Zero)],
+        bounds: &[(2, Imm(0x3F80_0000)), (12, Zero)],
+        reload: true, at_first: false,
+        levels: [
+            add(Data(-0x5BAC), [18, 8, 10, 6]), add(Data(-0x5BA8), [4, 18, 8, 10]), add(Data(-0x5BA4), [4, 6, 18, 8]),
+            add(Data(-0x5BA0), [4, 10, 6, 18]), add(Data(-0x5B9C), [4, 8, 10, 6]),
+        ],
+    },
+];
+
+/// Run one level's step on the stat's field, then clamp it: `v = field`
+/// re-read; `hi < v` stores `hi` (and re-reads); then `v < lo` stores `lo`.
+fn level_step(m: &mut Mem, g: &mut [u64; 32], f: &mut [crate::recomp::Fpr; 32], st: &Stat, step: Step, a3: usize) {
+    let off = st.off;
+    match step {
+        Step::Add(k, [c, fld, p, s]) => {
+            k.load(m, g, f, c);
+            f[fld].set_u32l(lw(m, g[A0], off) as u32);
+            f[p].set_fl(f[c].fl() * f[a3].fl());
+            f[s].set_fl(f[fld].fl() + f[p].fl());
+            sw(m, g[A0], off, u64::from(f[s].u32l()));
+        }
+        Step::Mul(a, b, [t, ra, rb, p, fld, s, r]) => {
+            f[t].set_fl(f[2].fl() - f[a3].fl());
+            a.load(m, g, f, ra);
+            b.load(m, g, f, rb);
+            f[p].set_fl(f[ra].fl() * f[t].fl());
+            f[fld].set_u32l(lw(m, g[A0], off) as u32);
+            f[s].set_fl(f[rb].fl() + f[p].fl());
+            f[r].set_fl(f[fld].fl() * f[s].fl());
+            sw(m, g[A0], off, u64::from(f[r].u32l()));
+        }
+    }
+    f[0].set_u32l(lw(m, g[A0], off) as u32);
+    if f[st.hi].fl() < f[0].fl() {
+        sw(m, g[A0], off, u64::from(f[st.hi].u32l()));
+        f[0].set_u32l(lw(m, g[A0], off) as u32);
+    }
+    if f[0].fl() < f[st.lo].fl() {
+        sw(m, g[A0], off, u64::from(f[st.lo].u32l()));
+    }
+}
+
+/// `func_800321F0(p, stat, level, x)` with the float `x` in `a3`: update
+/// one of seven float fields of `p` by `level` 1..5 (**guess**: a pod's
+/// stats by upgrade category, level and part condition `x`), then clamp it
+/// to `[lo, hi]`. `stat >= 7` (unsigned) or a level outside 1..5 does
+/// nothing but spill `a3` to `[sp + 0xC]` (done first in every case).
+///
+/// By `stat` (constants from the data segment at `0x800AA3C8..`, values
+/// in the ROM):
+///
+/// | stat | field | update | per-level constants | bounds `[lo, hi]` |
+/// |---|---|---|---|---|
+/// | 0 | `+0` | `+= c * x` | 0.05, 0.1, 0.15, 0.2, 0.25 | `[0.01, 1]` |
+/// | 1 | `+4` | `+= c * x` | 116, 232, 348, 464, 578 | `[50, 1000]` |
+/// | 2 | `+0xC` | `*= b + a * (1 - x)` | (a, b) pairs, e.g. (0.14, 0.86) | `[0.1, 5]` |
+/// | 3 | `+0x10` | `+= c * x` | 40, 80, 120, 160, 200 | `[450, 650]` |
+/// | 4 | `+0x14` | `*= b + a * (1 - x)` | (a, b) pairs | `[1, 1000]` |
+/// | 5 | `+0x24` | `+= c * x` | 1.6, 3.2, 4.8, 6.4, 8 | `[1, 20]` |
+/// | 6 | `+0x2C` | `+= c * x` | 0.1 .. 0.45 | `[0, 1]` |
+///
+/// The clamp stores the result, re-reads it, stores `hi` if `hi < v`
+/// (re-reading again), then `lo` if `v < lo`; so `hi` loses to `lo` when
+/// `hi < lo`, and NaN results stay. Nothing is fused.
+///
+/// Registers follow the code block by block ([`STATS`]): the jump table
+/// leaves `t6` = the table entry's address (N64Recomp's `lw` becomes an
+/// `addiu`, NOTES.md "Translator"), each case its bound, constant and
+/// temporary FPRs, `f16` (or the case's level-1 register) = `x`, and `at` =
+/// the next level number, or the last constant's upper half after a level
+/// ran (`0x3E800000` in case 0 when no level 5 ran).
+///
+/// Domain: canonical `p` with the field in RDRAM; for the level that runs,
+/// `x`, the field and every intermediate not NaN (the results may be NaN
+/// only if the last operation makes one, e.g. `0 * inf`).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800321F0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    g[AT] = sltu(g[A1], 7);
+    sw(m, g[SP], 0xC, g[A3]);
+    if g[AT] == 0 {
+        return;
+    }
+    g[T6] = sll(g[A1], 2);
+    g[AT] = addu(li(0x800B_0000), g[T6]);
+    g[T6] = addu(g[AT], (-0x5C54i64) as u64);
+    let st = &STATS[g[A1] as usize];
+    // Level 1, with its own bounds, then the bounds for levels 2..5.
+    g[AT] = 1;
+    f[st.a3].set_u32l(lw(m, g[SP], 0xC) as u32);
+    if g[A2] == g[AT] {
+        for &(r, k) in st.bounds1 {
+            k.load(m, g, f, r);
+        }
+        level_step(m, g, f, st, st.levels[0], st.a3);
+    }
+    for &(r, k) in st.bounds {
+        k.load(m, g, f, r);
+    }
+    g[AT] = 2;
+    f[16].set_u32l(lw(m, g[SP], 0xC) as u32);
+    if g[A2] == g[AT] {
+        level_step(m, g, f, st, st.levels[1], 16);
+    }
+    for level in 3..=5 {
+        g[AT] = level;
+        if st.reload {
+            f[16].set_u32l(lw(m, g[SP], 0xC) as u32);
+        }
+        let step = st.levels[level as usize - 1];
+        let hit = g[A2] == g[AT];
+        if st.at_first {
+            // Case 0 sets `at` for the constant before testing the level.
+            g[AT] = li(match step {
+                Step::Add(Imm(v), _) => v,
+                _ => 0x800B_0000,
+            });
+        }
+        if hit {
+            level_step(m, g, f, st, step, 16);
+            if level == 5 {
+                return;
+            }
+        } else if level == 5 {
+            return;
+        }
+    }
+}
+
 /// `func_80033B14(p)`: 1 if `p != 0`, `o = *p != 0` and bit 29 of the
 /// object's flags `[o + 0x100]` is set (NOTES.md, the object table), else
 /// 0. Leaves `v0`, and `t6`/`t7` = the flags and `flags << 2` when read.
