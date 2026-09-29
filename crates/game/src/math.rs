@@ -1060,6 +1060,1073 @@ pub unsafe extern "C" fn func_800156DC(rdram: *mut u8, ctx: *mut RecompContext) 
     }
 }
 
+/// `func_80015724(out, a, b)` (4x4 matrix product, row-major): `out = a *
+/// b`, `out[i][j] = a[i][3] * b[3][j] + ((b[0][j] * a[i][0] + b[1][j] *
+/// a[i][1]) + b[2][j] * a[i][2])` (sums in that order, nothing fused).
+/// Both inputs are first copied to a 0x80-byte frame (`a` at `sp - 0x40`,
+/// `b` at `sp - 0x80`) and the product is computed from the copies, so
+/// `out` may alias either input. The compiler starts entry `[0][0]` inside
+/// the copy of `b` and rotates its registers entry by entry; the port keeps
+/// its instruction order (straight-line, like the C).
+///
+/// Leaves the frame holding the copies and `f4`..`f18` from the last
+/// entries.
+///
+/// Domain: canonical pointers to 64 bytes; the entries, products and
+/// partial sums not NaN (the entries of `out` may be).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80015724(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    f[4].set_u32l(lw(m, g[A1], 0) as u32);
+    g[SP] = addu(g[SP], (-0x80i64) as u64);
+    sw(m, g[SP], 0x40, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A1], 4) as u32);
+    sw(m, g[SP], 0x44, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A1], 8) as u32);
+    sw(m, g[SP], 0x48, u64::from(f[8].u32l()));
+    f[10].set_u32l(lw(m, g[A1], 0xC) as u32);
+    sw(m, g[SP], 0x4C, u64::from(f[10].u32l()));
+    f[16].set_u32l(lw(m, g[A1], 0x10) as u32);
+    sw(m, g[SP], 0x50, u64::from(f[16].u32l()));
+    f[18].set_u32l(lw(m, g[A1], 0x14) as u32);
+    sw(m, g[SP], 0x54, u64::from(f[18].u32l()));
+    f[4].set_u32l(lw(m, g[A1], 0x18) as u32);
+    sw(m, g[SP], 0x58, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A1], 0x1C) as u32);
+    sw(m, g[SP], 0x5C, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A1], 0x20) as u32);
+    sw(m, g[SP], 0x60, u64::from(f[8].u32l()));
+    f[10].set_u32l(lw(m, g[A1], 0x24) as u32);
+    sw(m, g[SP], 0x64, u64::from(f[10].u32l()));
+    f[16].set_u32l(lw(m, g[A1], 0x28) as u32);
+    sw(m, g[SP], 0x68, u64::from(f[16].u32l()));
+    f[18].set_u32l(lw(m, g[A1], 0x2C) as u32);
+    sw(m, g[SP], 0x6C, u64::from(f[18].u32l()));
+    f[4].set_u32l(lw(m, g[A1], 0x30) as u32);
+    sw(m, g[SP], 0x70, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A1], 0x34) as u32);
+    sw(m, g[SP], 0x74, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A1], 0x38) as u32);
+    sw(m, g[SP], 0x78, u64::from(f[8].u32l()));
+    f[10].set_u32l(lw(m, g[A1], 0x3C) as u32);
+    sw(m, g[SP], 0x7C, u64::from(f[10].u32l()));
+    f[16].set_u32l(lw(m, g[A2], 0) as u32);
+    sw(m, g[SP], 0, u64::from(f[16].u32l()));
+    f[18].set_u32l(lw(m, g[A2], 4) as u32);
+    sw(m, g[SP], 4, u64::from(f[18].u32l()));
+    f[4].set_u32l(lw(m, g[A2], 8) as u32);
+    sw(m, g[SP], 8, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A2], 0xC) as u32);
+    sw(m, g[SP], 0xC, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A2], 0x10) as u32);
+    sw(m, g[SP], 0x10, u64::from(f[8].u32l()));
+    f[10].set_u32l(lw(m, g[A2], 0x14) as u32);
+    sw(m, g[SP], 0x14, u64::from(f[10].u32l()));
+    f[16].set_u32l(lw(m, g[A2], 0x18) as u32);
+    sw(m, g[SP], 0x18, u64::from(f[16].u32l()));
+    f[18].set_u32l(lw(m, g[A2], 0x1C) as u32);
+    sw(m, g[SP], 0x1C, u64::from(f[18].u32l()));
+    f[4].set_u32l(lw(m, g[A2], 0x20) as u32);
+    sw(m, g[SP], 0x20, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A2], 0x24) as u32);
+    sw(m, g[SP], 0x24, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A2], 0x28) as u32);
+    sw(m, g[SP], 0x28, u64::from(f[8].u32l()));
+    f[10].set_u32l(lw(m, g[A2], 0x2C) as u32);
+    f[8].set_u32l(lw(m, g[SP], 0) as u32);
+    sw(m, g[SP], 0x2C, u64::from(f[10].u32l()));
+    f[16].set_u32l(lw(m, g[A2], 0x30) as u32);
+    f[10].set_u32l(lw(m, g[SP], 0x40) as u32);
+    sw(m, g[SP], 0x30, u64::from(f[16].u32l()));
+    f[18].set_u32l(lw(m, g[A2], 0x34) as u32);
+    f[16].set_fl(f[8].fl() * f[10].fl());
+    f[10].set_u32l(lw(m, g[SP], 0x20) as u32);
+    sw(m, g[SP], 0x34, u64::from(f[18].u32l()));
+    f[4].set_u32l(lw(m, g[A2], 0x38) as u32);
+    f[18].set_u32l(lw(m, g[SP], 0x10) as u32);
+    sw(m, g[SP], 0x38, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A2], 0x3C) as u32);
+    f[4].set_u32l(lw(m, g[SP], 0x44) as u32);
+    sw(m, g[SP], 0x3C, u64::from(f[6].u32l()));
+    f[6].set_fl(f[18].fl() * f[4].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x48) as u32);
+    f[4].set_fl(f[10].fl() * f[18].fl());
+    f[10].set_u32l(lw(m, g[SP], 0x30) as u32);
+    f[8].set_fl(f[16].fl() + f[6].fl());
+    f[6].set_u32l(lw(m, g[SP], 0x4C) as u32);
+    f[18].set_fl(f[6].fl() * f[10].fl());
+    f[16].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[18].fl() + f[16].fl());
+    sw(m, g[A0], 0, u64::from(f[8].u32l()));
+    f[4].set_u32l(lw(m, g[SP], 4) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x40) as u32);
+    f[18].set_u32l(lw(m, g[SP], 0x14) as u32);
+    f[16].set_u32l(lw(m, g[SP], 0x44) as u32);
+    f[10].set_fl(f[4].fl() * f[6].fl());
+    f[6].set_u32l(lw(m, g[SP], 0x24) as u32);
+    f[8].set_fl(f[18].fl() * f[16].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x48) as u32);
+    f[16].set_fl(f[6].fl() * f[18].fl());
+    f[6].set_u32l(lw(m, g[SP], 0x34) as u32);
+    f[4].set_fl(f[10].fl() + f[8].fl());
+    f[8].set_u32l(lw(m, g[SP], 0x4C) as u32);
+    f[18].set_fl(f[8].fl() * f[6].fl());
+    f[10].set_fl(f[4].fl() + f[16].fl());
+    f[4].set_fl(f[18].fl() + f[10].fl());
+    sw(m, g[A0], 4, u64::from(f[4].u32l()));
+    f[16].set_u32l(lw(m, g[SP], 8) as u32);
+    f[8].set_u32l(lw(m, g[SP], 0x40) as u32);
+    f[18].set_u32l(lw(m, g[SP], 0x18) as u32);
+    f[10].set_u32l(lw(m, g[SP], 0x44) as u32);
+    f[6].set_fl(f[16].fl() * f[8].fl());
+    f[8].set_u32l(lw(m, g[SP], 0x28) as u32);
+    f[4].set_fl(f[18].fl() * f[10].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x48) as u32);
+    f[10].set_fl(f[8].fl() * f[18].fl());
+    f[8].set_u32l(lw(m, g[SP], 0x38) as u32);
+    f[16].set_fl(f[6].fl() + f[4].fl());
+    f[4].set_u32l(lw(m, g[SP], 0x4C) as u32);
+    f[18].set_fl(f[4].fl() * f[8].fl());
+    f[6].set_fl(f[16].fl() + f[10].fl());
+    f[16].set_fl(f[18].fl() + f[6].fl());
+    sw(m, g[A0], 8, u64::from(f[16].u32l()));
+    f[10].set_u32l(lw(m, g[SP], 0xC) as u32);
+    f[4].set_u32l(lw(m, g[SP], 0x40) as u32);
+    f[18].set_u32l(lw(m, g[SP], 0x1C) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x44) as u32);
+    f[8].set_fl(f[10].fl() * f[4].fl());
+    f[4].set_u32l(lw(m, g[SP], 0x2C) as u32);
+    f[16].set_fl(f[18].fl() * f[6].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x48) as u32);
+    f[6].set_fl(f[4].fl() * f[18].fl());
+    f[4].set_u32l(lw(m, g[SP], 0x3C) as u32);
+    f[10].set_fl(f[8].fl() + f[16].fl());
+    f[16].set_u32l(lw(m, g[SP], 0x4C) as u32);
+    f[18].set_fl(f[16].fl() * f[4].fl());
+    f[8].set_fl(f[10].fl() + f[6].fl());
+    f[10].set_fl(f[18].fl() + f[8].fl());
+    sw(m, g[A0], 0xC, u64::from(f[10].u32l()));
+    f[6].set_u32l(lw(m, g[SP], 0) as u32);
+    f[16].set_u32l(lw(m, g[SP], 0x50) as u32);
+    f[18].set_u32l(lw(m, g[SP], 0x10) as u32);
+    f[8].set_u32l(lw(m, g[SP], 0x54) as u32);
+    f[4].set_fl(f[6].fl() * f[16].fl());
+    f[16].set_u32l(lw(m, g[SP], 0x20) as u32);
+    f[10].set_fl(f[18].fl() * f[8].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x58) as u32);
+    f[8].set_fl(f[16].fl() * f[18].fl());
+    f[16].set_u32l(lw(m, g[SP], 0x30) as u32);
+    f[6].set_fl(f[4].fl() + f[10].fl());
+    f[10].set_u32l(lw(m, g[SP], 0x5C) as u32);
+    f[18].set_fl(f[10].fl() * f[16].fl());
+    f[4].set_fl(f[6].fl() + f[8].fl());
+    f[6].set_fl(f[18].fl() + f[4].fl());
+    sw(m, g[A0], 0x10, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[SP], 4) as u32);
+    f[10].set_u32l(lw(m, g[SP], 0x50) as u32);
+    f[18].set_u32l(lw(m, g[SP], 0x14) as u32);
+    f[4].set_u32l(lw(m, g[SP], 0x54) as u32);
+    f[16].set_fl(f[8].fl() * f[10].fl());
+    f[10].set_u32l(lw(m, g[SP], 0x24) as u32);
+    f[6].set_fl(f[18].fl() * f[4].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x58) as u32);
+    f[4].set_fl(f[10].fl() * f[18].fl());
+    f[10].set_u32l(lw(m, g[SP], 0x34) as u32);
+    f[8].set_fl(f[16].fl() + f[6].fl());
+    f[6].set_u32l(lw(m, g[SP], 0x5C) as u32);
+    f[18].set_fl(f[6].fl() * f[10].fl());
+    f[16].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[18].fl() + f[16].fl());
+    sw(m, g[A0], 0x14, u64::from(f[8].u32l()));
+    f[4].set_u32l(lw(m, g[SP], 8) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x50) as u32);
+    f[18].set_u32l(lw(m, g[SP], 0x18) as u32);
+    f[16].set_u32l(lw(m, g[SP], 0x54) as u32);
+    f[10].set_fl(f[4].fl() * f[6].fl());
+    f[6].set_u32l(lw(m, g[SP], 0x28) as u32);
+    f[8].set_fl(f[18].fl() * f[16].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x58) as u32);
+    f[16].set_fl(f[6].fl() * f[18].fl());
+    f[6].set_u32l(lw(m, g[SP], 0x38) as u32);
+    f[4].set_fl(f[10].fl() + f[8].fl());
+    f[8].set_u32l(lw(m, g[SP], 0x5C) as u32);
+    f[18].set_fl(f[8].fl() * f[6].fl());
+    f[10].set_fl(f[4].fl() + f[16].fl());
+    f[4].set_fl(f[18].fl() + f[10].fl());
+    sw(m, g[A0], 0x18, u64::from(f[4].u32l()));
+    f[16].set_u32l(lw(m, g[SP], 0xC) as u32);
+    f[8].set_u32l(lw(m, g[SP], 0x50) as u32);
+    f[18].set_u32l(lw(m, g[SP], 0x1C) as u32);
+    f[10].set_u32l(lw(m, g[SP], 0x54) as u32);
+    f[6].set_fl(f[16].fl() * f[8].fl());
+    f[8].set_u32l(lw(m, g[SP], 0x2C) as u32);
+    f[4].set_fl(f[18].fl() * f[10].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x58) as u32);
+    f[10].set_fl(f[8].fl() * f[18].fl());
+    f[8].set_u32l(lw(m, g[SP], 0x3C) as u32);
+    f[16].set_fl(f[6].fl() + f[4].fl());
+    f[4].set_u32l(lw(m, g[SP], 0x5C) as u32);
+    f[18].set_fl(f[4].fl() * f[8].fl());
+    f[6].set_fl(f[16].fl() + f[10].fl());
+    f[16].set_fl(f[18].fl() + f[6].fl());
+    sw(m, g[A0], 0x1C, u64::from(f[16].u32l()));
+    f[10].set_u32l(lw(m, g[SP], 0) as u32);
+    f[4].set_u32l(lw(m, g[SP], 0x60) as u32);
+    f[18].set_u32l(lw(m, g[SP], 0x10) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x64) as u32);
+    f[8].set_fl(f[10].fl() * f[4].fl());
+    f[4].set_u32l(lw(m, g[SP], 0x20) as u32);
+    f[16].set_fl(f[18].fl() * f[6].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x68) as u32);
+    f[6].set_fl(f[4].fl() * f[18].fl());
+    f[4].set_u32l(lw(m, g[SP], 0x30) as u32);
+    f[10].set_fl(f[8].fl() + f[16].fl());
+    f[16].set_u32l(lw(m, g[SP], 0x6C) as u32);
+    f[18].set_fl(f[16].fl() * f[4].fl());
+    f[8].set_fl(f[10].fl() + f[6].fl());
+    f[10].set_fl(f[18].fl() + f[8].fl());
+    sw(m, g[A0], 0x20, u64::from(f[10].u32l()));
+    f[6].set_u32l(lw(m, g[SP], 4) as u32);
+    f[16].set_u32l(lw(m, g[SP], 0x60) as u32);
+    f[18].set_u32l(lw(m, g[SP], 0x14) as u32);
+    f[8].set_u32l(lw(m, g[SP], 0x64) as u32);
+    f[4].set_fl(f[6].fl() * f[16].fl());
+    f[16].set_u32l(lw(m, g[SP], 0x24) as u32);
+    f[10].set_fl(f[18].fl() * f[8].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x68) as u32);
+    f[8].set_fl(f[16].fl() * f[18].fl());
+    f[16].set_u32l(lw(m, g[SP], 0x34) as u32);
+    f[6].set_fl(f[4].fl() + f[10].fl());
+    f[10].set_u32l(lw(m, g[SP], 0x6C) as u32);
+    f[18].set_fl(f[10].fl() * f[16].fl());
+    f[4].set_fl(f[6].fl() + f[8].fl());
+    f[6].set_fl(f[18].fl() + f[4].fl());
+    sw(m, g[A0], 0x24, u64::from(f[6].u32l()));
+    f[10].set_u32l(lw(m, g[SP], 0x60) as u32);
+    f[8].set_u32l(lw(m, g[SP], 8) as u32);
+    f[4].set_u32l(lw(m, g[SP], 0x64) as u32);
+    f[18].set_u32l(lw(m, g[SP], 0x18) as u32);
+    f[16].set_fl(f[8].fl() * f[10].fl());
+    f[10].set_u32l(lw(m, g[SP], 0x28) as u32);
+    f[6].set_fl(f[18].fl() * f[4].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x68) as u32);
+    f[4].set_fl(f[10].fl() * f[18].fl());
+    f[10].set_u32l(lw(m, g[SP], 0x38) as u32);
+    f[8].set_fl(f[16].fl() + f[6].fl());
+    f[6].set_u32l(lw(m, g[SP], 0x6C) as u32);
+    f[18].set_fl(f[6].fl() * f[10].fl());
+    f[16].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[18].fl() + f[16].fl());
+    sw(m, g[A0], 0x28, u64::from(f[8].u32l()));
+    f[6].set_u32l(lw(m, g[SP], 0x60) as u32);
+    f[4].set_u32l(lw(m, g[SP], 0xC) as u32);
+    f[16].set_u32l(lw(m, g[SP], 0x64) as u32);
+    f[18].set_u32l(lw(m, g[SP], 0x1C) as u32);
+    f[10].set_fl(f[4].fl() * f[6].fl());
+    f[6].set_u32l(lw(m, g[SP], 0x2C) as u32);
+    f[8].set_fl(f[18].fl() * f[16].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x68) as u32);
+    f[16].set_fl(f[6].fl() * f[18].fl());
+    f[6].set_u32l(lw(m, g[SP], 0x3C) as u32);
+    f[4].set_fl(f[10].fl() + f[8].fl());
+    f[8].set_u32l(lw(m, g[SP], 0x6C) as u32);
+    f[18].set_fl(f[8].fl() * f[6].fl());
+    f[10].set_fl(f[4].fl() + f[16].fl());
+    f[4].set_fl(f[18].fl() + f[10].fl());
+    sw(m, g[A0], 0x2C, u64::from(f[4].u32l()));
+    f[8].set_u32l(lw(m, g[SP], 0x70) as u32);
+    f[16].set_u32l(lw(m, g[SP], 0) as u32);
+    f[10].set_u32l(lw(m, g[SP], 0x74) as u32);
+    f[18].set_u32l(lw(m, g[SP], 0x10) as u32);
+    f[6].set_fl(f[16].fl() * f[8].fl());
+    f[8].set_u32l(lw(m, g[SP], 0x20) as u32);
+    f[4].set_fl(f[18].fl() * f[10].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x78) as u32);
+    f[10].set_fl(f[8].fl() * f[18].fl());
+    f[8].set_u32l(lw(m, g[SP], 0x30) as u32);
+    f[16].set_fl(f[6].fl() + f[4].fl());
+    f[4].set_u32l(lw(m, g[SP], 0x7C) as u32);
+    f[18].set_fl(f[4].fl() * f[8].fl());
+    f[6].set_fl(f[16].fl() + f[10].fl());
+    f[16].set_fl(f[18].fl() + f[6].fl());
+    sw(m, g[A0], 0x30, u64::from(f[16].u32l()));
+    f[4].set_u32l(lw(m, g[SP], 0x70) as u32);
+    f[10].set_u32l(lw(m, g[SP], 4) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x74) as u32);
+    f[18].set_u32l(lw(m, g[SP], 0x14) as u32);
+    f[8].set_fl(f[10].fl() * f[4].fl());
+    f[4].set_u32l(lw(m, g[SP], 0x24) as u32);
+    f[16].set_fl(f[18].fl() * f[6].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x78) as u32);
+    f[10].set_fl(f[8].fl() + f[16].fl());
+    f[6].set_fl(f[4].fl() * f[18].fl());
+    f[4].set_u32l(lw(m, g[SP], 0x34) as u32);
+    f[16].set_u32l(lw(m, g[SP], 0x7C) as u32);
+    f[18].set_fl(f[16].fl() * f[4].fl());
+    f[8].set_fl(f[10].fl() + f[6].fl());
+    f[10].set_fl(f[18].fl() + f[8].fl());
+    sw(m, g[A0], 0x34, u64::from(f[10].u32l()));
+    f[16].set_u32l(lw(m, g[SP], 0x70) as u32);
+    f[6].set_u32l(lw(m, g[SP], 8) as u32);
+    f[8].set_u32l(lw(m, g[SP], 0x74) as u32);
+    f[18].set_u32l(lw(m, g[SP], 0x18) as u32);
+    f[4].set_fl(f[6].fl() * f[16].fl());
+    f[16].set_u32l(lw(m, g[SP], 0x28) as u32);
+    f[10].set_fl(f[18].fl() * f[8].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x78) as u32);
+    f[8].set_fl(f[16].fl() * f[18].fl());
+    f[16].set_u32l(lw(m, g[SP], 0x38) as u32);
+    f[6].set_fl(f[4].fl() + f[10].fl());
+    f[10].set_u32l(lw(m, g[SP], 0x7C) as u32);
+    f[18].set_fl(f[10].fl() * f[16].fl());
+    f[4].set_fl(f[6].fl() + f[8].fl());
+    f[6].set_fl(f[18].fl() + f[4].fl());
+    sw(m, g[A0], 0x38, u64::from(f[6].u32l()));
+    f[10].set_u32l(lw(m, g[SP], 0x70) as u32);
+    f[8].set_u32l(lw(m, g[SP], 0xC) as u32);
+    f[4].set_u32l(lw(m, g[SP], 0x74) as u32);
+    f[18].set_u32l(lw(m, g[SP], 0x1C) as u32);
+    f[16].set_fl(f[8].fl() * f[10].fl());
+    f[10].set_u32l(lw(m, g[SP], 0x2C) as u32);
+    f[6].set_fl(f[18].fl() * f[4].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x78) as u32);
+    f[4].set_fl(f[10].fl() * f[18].fl());
+    f[10].set_u32l(lw(m, g[SP], 0x3C) as u32);
+    f[8].set_fl(f[16].fl() + f[6].fl());
+    f[6].set_u32l(lw(m, g[SP], 0x7C) as u32);
+    g[SP] = addu(g[SP], 0x80);
+    f[18].set_fl(f[6].fl() * f[10].fl());
+    f[16].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[18].fl() + f[16].fl());
+    sw(m, g[A0], 0x3C, u64::from(f[8].u32l()));
+}
+
+/// `func_80015C30(m, n)` (4x4 matrix product in place): `m = n * m`,
+/// `m[i][j] = n[i][3] * m0[3][j] + ((m0[0][j] * n[i][0] + m0[1][j] *
+/// n[i][1]) + m0[2][j] * n[i][2])` with `m0` = `m`'s copy in a 0x40-byte
+/// frame (`sp - 0x40`, made first). `n` is read in place, so it must not
+/// be `m`: it would see the rows already written. Straight-line, in the
+/// C's order.
+///
+/// Leaves the frame holding the copy and `f4`..`f18` from the last
+/// entries.
+///
+/// Domain: canonical pointers to 64 bytes, not overlapping; the entries,
+/// products and partial sums not NaN.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80015C30(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    f[4].set_u32l(lw(m, g[A0], 0) as u32);
+    g[SP] = addu(g[SP], (-0x40i64) as u64);
+    sw(m, g[SP], 0, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A0], 4) as u32);
+    sw(m, g[SP], 4, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A0], 8) as u32);
+    sw(m, g[SP], 8, u64::from(f[8].u32l()));
+    f[10].set_u32l(lw(m, g[A0], 0xC) as u32);
+    sw(m, g[SP], 0xC, u64::from(f[10].u32l()));
+    f[16].set_u32l(lw(m, g[A0], 0x10) as u32);
+    sw(m, g[SP], 0x10, u64::from(f[16].u32l()));
+    f[18].set_u32l(lw(m, g[A0], 0x14) as u32);
+    sw(m, g[SP], 0x14, u64::from(f[18].u32l()));
+    f[4].set_u32l(lw(m, g[A0], 0x18) as u32);
+    sw(m, g[SP], 0x18, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A0], 0x1C) as u32);
+    sw(m, g[SP], 0x1C, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A0], 0x20) as u32);
+    sw(m, g[SP], 0x20, u64::from(f[8].u32l()));
+    f[10].set_u32l(lw(m, g[A0], 0x24) as u32);
+    sw(m, g[SP], 0x24, u64::from(f[10].u32l()));
+    f[16].set_u32l(lw(m, g[A0], 0x28) as u32);
+    sw(m, g[SP], 0x28, u64::from(f[16].u32l()));
+    f[18].set_u32l(lw(m, g[A0], 0x2C) as u32);
+    f[16].set_u32l(lw(m, g[SP], 0) as u32);
+    sw(m, g[SP], 0x2C, u64::from(f[18].u32l()));
+    f[4].set_u32l(lw(m, g[A0], 0x30) as u32);
+    sw(m, g[SP], 0x30, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A0], 0x34) as u32);
+    sw(m, g[SP], 0x34, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A0], 0x38) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x10) as u32);
+    sw(m, g[SP], 0x38, u64::from(f[8].u32l()));
+    f[10].set_u32l(lw(m, g[A0], 0x3C) as u32);
+    sw(m, g[SP], 0x3C, u64::from(f[10].u32l()));
+    f[18].set_u32l(lw(m, g[A1], 0) as u32);
+    f[8].set_u32l(lw(m, g[A1], 4) as u32);
+    f[4].set_fl(f[16].fl() * f[18].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x20) as u32);
+    f[10].set_fl(f[6].fl() * f[8].fl());
+    f[6].set_u32l(lw(m, g[A1], 8) as u32);
+    f[8].set_fl(f[18].fl() * f[6].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x30) as u32);
+    f[16].set_fl(f[4].fl() + f[10].fl());
+    f[10].set_u32l(lw(m, g[A1], 0xC) as u32);
+    f[6].set_fl(f[10].fl() * f[18].fl());
+    f[4].set_fl(f[16].fl() + f[8].fl());
+    f[16].set_fl(f[6].fl() + f[4].fl());
+    sw(m, g[A0], 0, u64::from(f[16].u32l()));
+    f[8].set_u32l(lw(m, g[SP], 4) as u32);
+    f[10].set_u32l(lw(m, g[A1], 0) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x14) as u32);
+    f[4].set_u32l(lw(m, g[A1], 4) as u32);
+    f[18].set_fl(f[8].fl() * f[10].fl());
+    f[10].set_u32l(lw(m, g[SP], 0x24) as u32);
+    f[16].set_fl(f[6].fl() * f[4].fl());
+    f[6].set_u32l(lw(m, g[A1], 8) as u32);
+    f[4].set_fl(f[10].fl() * f[6].fl());
+    f[10].set_u32l(lw(m, g[SP], 0x34) as u32);
+    f[8].set_fl(f[18].fl() + f[16].fl());
+    f[16].set_u32l(lw(m, g[A1], 0xC) as u32);
+    f[6].set_fl(f[16].fl() * f[10].fl());
+    f[18].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[6].fl() + f[18].fl());
+    sw(m, g[A0], 4, u64::from(f[8].u32l()));
+    f[4].set_u32l(lw(m, g[SP], 8) as u32);
+    f[16].set_u32l(lw(m, g[A1], 0) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x18) as u32);
+    f[18].set_u32l(lw(m, g[A1], 4) as u32);
+    f[10].set_fl(f[4].fl() * f[16].fl());
+    f[16].set_u32l(lw(m, g[SP], 0x28) as u32);
+    f[8].set_fl(f[6].fl() * f[18].fl());
+    f[6].set_u32l(lw(m, g[A1], 8) as u32);
+    f[18].set_fl(f[16].fl() * f[6].fl());
+    f[16].set_u32l(lw(m, g[SP], 0x38) as u32);
+    f[4].set_fl(f[10].fl() + f[8].fl());
+    f[8].set_u32l(lw(m, g[A1], 0xC) as u32);
+    f[6].set_fl(f[8].fl() * f[16].fl());
+    f[10].set_fl(f[4].fl() + f[18].fl());
+    f[4].set_fl(f[6].fl() + f[10].fl());
+    sw(m, g[A0], 8, u64::from(f[4].u32l()));
+    f[18].set_u32l(lw(m, g[SP], 0xC) as u32);
+    f[8].set_u32l(lw(m, g[A1], 0) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x1C) as u32);
+    f[10].set_u32l(lw(m, g[A1], 4) as u32);
+    f[16].set_fl(f[18].fl() * f[8].fl());
+    f[8].set_u32l(lw(m, g[SP], 0x2C) as u32);
+    f[4].set_fl(f[6].fl() * f[10].fl());
+    f[6].set_u32l(lw(m, g[A1], 8) as u32);
+    f[10].set_fl(f[8].fl() * f[6].fl());
+    f[8].set_u32l(lw(m, g[SP], 0x3C) as u32);
+    f[18].set_fl(f[16].fl() + f[4].fl());
+    f[4].set_u32l(lw(m, g[A1], 0xC) as u32);
+    f[6].set_fl(f[4].fl() * f[8].fl());
+    f[16].set_fl(f[18].fl() + f[10].fl());
+    f[18].set_fl(f[6].fl() + f[16].fl());
+    sw(m, g[A0], 0xC, u64::from(f[18].u32l()));
+    f[10].set_u32l(lw(m, g[SP], 0) as u32);
+    f[4].set_u32l(lw(m, g[A1], 0x10) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x10) as u32);
+    f[16].set_u32l(lw(m, g[A1], 0x14) as u32);
+    f[8].set_fl(f[10].fl() * f[4].fl());
+    f[4].set_u32l(lw(m, g[SP], 0x20) as u32);
+    f[18].set_fl(f[6].fl() * f[16].fl());
+    f[6].set_u32l(lw(m, g[A1], 0x18) as u32);
+    f[16].set_fl(f[4].fl() * f[6].fl());
+    f[4].set_u32l(lw(m, g[SP], 0x30) as u32);
+    f[10].set_fl(f[8].fl() + f[18].fl());
+    f[18].set_u32l(lw(m, g[A1], 0x1C) as u32);
+    f[6].set_fl(f[18].fl() * f[4].fl());
+    f[8].set_fl(f[10].fl() + f[16].fl());
+    f[10].set_fl(f[6].fl() + f[8].fl());
+    sw(m, g[A0], 0x10, u64::from(f[10].u32l()));
+    f[16].set_u32l(lw(m, g[SP], 4) as u32);
+    f[18].set_u32l(lw(m, g[A1], 0x10) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x14) as u32);
+    f[8].set_u32l(lw(m, g[A1], 0x14) as u32);
+    f[4].set_fl(f[16].fl() * f[18].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x24) as u32);
+    f[10].set_fl(f[6].fl() * f[8].fl());
+    f[6].set_u32l(lw(m, g[A1], 0x18) as u32);
+    f[8].set_fl(f[18].fl() * f[6].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x34) as u32);
+    f[16].set_fl(f[4].fl() + f[10].fl());
+    f[10].set_u32l(lw(m, g[A1], 0x1C) as u32);
+    f[6].set_fl(f[10].fl() * f[18].fl());
+    f[4].set_fl(f[16].fl() + f[8].fl());
+    f[16].set_fl(f[6].fl() + f[4].fl());
+    sw(m, g[A0], 0x14, u64::from(f[16].u32l()));
+    f[8].set_u32l(lw(m, g[SP], 8) as u32);
+    f[10].set_u32l(lw(m, g[A1], 0x10) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x18) as u32);
+    f[4].set_u32l(lw(m, g[A1], 0x14) as u32);
+    f[18].set_fl(f[8].fl() * f[10].fl());
+    f[10].set_u32l(lw(m, g[SP], 0x28) as u32);
+    f[16].set_fl(f[6].fl() * f[4].fl());
+    f[6].set_u32l(lw(m, g[A1], 0x18) as u32);
+    f[4].set_fl(f[10].fl() * f[6].fl());
+    f[10].set_u32l(lw(m, g[SP], 0x38) as u32);
+    f[8].set_fl(f[18].fl() + f[16].fl());
+    f[16].set_u32l(lw(m, g[A1], 0x1C) as u32);
+    f[6].set_fl(f[16].fl() * f[10].fl());
+    f[18].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[6].fl() + f[18].fl());
+    sw(m, g[A0], 0x18, u64::from(f[8].u32l()));
+    f[4].set_u32l(lw(m, g[SP], 0xC) as u32);
+    f[16].set_u32l(lw(m, g[A1], 0x10) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x1C) as u32);
+    f[18].set_u32l(lw(m, g[A1], 0x14) as u32);
+    f[10].set_fl(f[4].fl() * f[16].fl());
+    f[16].set_u32l(lw(m, g[SP], 0x2C) as u32);
+    f[8].set_fl(f[6].fl() * f[18].fl());
+    f[6].set_u32l(lw(m, g[A1], 0x18) as u32);
+    f[18].set_fl(f[16].fl() * f[6].fl());
+    f[16].set_u32l(lw(m, g[SP], 0x3C) as u32);
+    f[4].set_fl(f[10].fl() + f[8].fl());
+    f[8].set_u32l(lw(m, g[A1], 0x1C) as u32);
+    f[6].set_fl(f[8].fl() * f[16].fl());
+    f[10].set_fl(f[4].fl() + f[18].fl());
+    f[4].set_fl(f[6].fl() + f[10].fl());
+    sw(m, g[A0], 0x1C, u64::from(f[4].u32l()));
+    f[18].set_u32l(lw(m, g[SP], 0) as u32);
+    f[8].set_u32l(lw(m, g[A1], 0x20) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x10) as u32);
+    f[10].set_u32l(lw(m, g[A1], 0x24) as u32);
+    f[16].set_fl(f[18].fl() * f[8].fl());
+    f[8].set_u32l(lw(m, g[SP], 0x20) as u32);
+    f[4].set_fl(f[6].fl() * f[10].fl());
+    f[6].set_u32l(lw(m, g[A1], 0x28) as u32);
+    f[10].set_fl(f[8].fl() * f[6].fl());
+    f[8].set_u32l(lw(m, g[SP], 0x30) as u32);
+    f[18].set_fl(f[16].fl() + f[4].fl());
+    f[4].set_u32l(lw(m, g[A1], 0x2C) as u32);
+    f[6].set_fl(f[4].fl() * f[8].fl());
+    f[16].set_fl(f[18].fl() + f[10].fl());
+    f[18].set_fl(f[6].fl() + f[16].fl());
+    sw(m, g[A0], 0x20, u64::from(f[18].u32l()));
+    f[10].set_u32l(lw(m, g[SP], 4) as u32);
+    f[4].set_u32l(lw(m, g[A1], 0x20) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x14) as u32);
+    f[16].set_u32l(lw(m, g[A1], 0x24) as u32);
+    f[8].set_fl(f[10].fl() * f[4].fl());
+    f[4].set_u32l(lw(m, g[SP], 0x24) as u32);
+    f[18].set_fl(f[6].fl() * f[16].fl());
+    f[6].set_u32l(lw(m, g[A1], 0x28) as u32);
+    f[16].set_fl(f[4].fl() * f[6].fl());
+    f[4].set_u32l(lw(m, g[SP], 0x34) as u32);
+    f[10].set_fl(f[8].fl() + f[18].fl());
+    f[18].set_u32l(lw(m, g[A1], 0x2C) as u32);
+    f[6].set_fl(f[18].fl() * f[4].fl());
+    f[8].set_fl(f[10].fl() + f[16].fl());
+    f[10].set_fl(f[6].fl() + f[8].fl());
+    sw(m, g[A0], 0x24, u64::from(f[10].u32l()));
+    f[16].set_u32l(lw(m, g[SP], 8) as u32);
+    f[18].set_u32l(lw(m, g[A1], 0x20) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x18) as u32);
+    f[8].set_u32l(lw(m, g[A1], 0x24) as u32);
+    f[4].set_fl(f[16].fl() * f[18].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x28) as u32);
+    f[10].set_fl(f[6].fl() * f[8].fl());
+    f[6].set_u32l(lw(m, g[A1], 0x28) as u32);
+    f[8].set_fl(f[18].fl() * f[6].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x38) as u32);
+    f[16].set_fl(f[4].fl() + f[10].fl());
+    f[10].set_u32l(lw(m, g[A1], 0x2C) as u32);
+    f[6].set_fl(f[10].fl() * f[18].fl());
+    f[4].set_fl(f[16].fl() + f[8].fl());
+    f[16].set_fl(f[6].fl() + f[4].fl());
+    sw(m, g[A0], 0x28, u64::from(f[16].u32l()));
+    f[8].set_u32l(lw(m, g[SP], 0xC) as u32);
+    f[10].set_u32l(lw(m, g[A1], 0x20) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x1C) as u32);
+    f[4].set_u32l(lw(m, g[A1], 0x24) as u32);
+    f[18].set_fl(f[8].fl() * f[10].fl());
+    f[10].set_u32l(lw(m, g[SP], 0x2C) as u32);
+    f[16].set_fl(f[6].fl() * f[4].fl());
+    f[6].set_u32l(lw(m, g[A1], 0x28) as u32);
+    f[4].set_fl(f[10].fl() * f[6].fl());
+    f[10].set_u32l(lw(m, g[SP], 0x3C) as u32);
+    f[8].set_fl(f[18].fl() + f[16].fl());
+    f[16].set_u32l(lw(m, g[A1], 0x2C) as u32);
+    f[6].set_fl(f[16].fl() * f[10].fl());
+    f[18].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[6].fl() + f[18].fl());
+    sw(m, g[A0], 0x2C, u64::from(f[8].u32l()));
+    f[16].set_u32l(lw(m, g[A1], 0x30) as u32);
+    f[4].set_u32l(lw(m, g[SP], 0) as u32);
+    f[18].set_u32l(lw(m, g[A1], 0x34) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x10) as u32);
+    f[10].set_fl(f[4].fl() * f[16].fl());
+    f[16].set_u32l(lw(m, g[SP], 0x20) as u32);
+    f[8].set_fl(f[6].fl() * f[18].fl());
+    f[6].set_u32l(lw(m, g[A1], 0x38) as u32);
+    f[18].set_fl(f[16].fl() * f[6].fl());
+    f[16].set_u32l(lw(m, g[SP], 0x30) as u32);
+    f[4].set_fl(f[10].fl() + f[8].fl());
+    f[8].set_u32l(lw(m, g[A1], 0x3C) as u32);
+    f[6].set_fl(f[8].fl() * f[16].fl());
+    f[10].set_fl(f[4].fl() + f[18].fl());
+    f[4].set_fl(f[6].fl() + f[10].fl());
+    sw(m, g[A0], 0x30, u64::from(f[4].u32l()));
+    f[8].set_u32l(lw(m, g[A1], 0x30) as u32);
+    f[18].set_u32l(lw(m, g[SP], 4) as u32);
+    f[10].set_u32l(lw(m, g[A1], 0x34) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x14) as u32);
+    f[16].set_fl(f[18].fl() * f[8].fl());
+    f[8].set_u32l(lw(m, g[SP], 0x24) as u32);
+    f[4].set_fl(f[6].fl() * f[10].fl());
+    f[6].set_u32l(lw(m, g[A1], 0x38) as u32);
+    f[10].set_fl(f[8].fl() * f[6].fl());
+    f[8].set_u32l(lw(m, g[SP], 0x34) as u32);
+    f[18].set_fl(f[16].fl() + f[4].fl());
+    f[4].set_u32l(lw(m, g[A1], 0x3C) as u32);
+    f[6].set_fl(f[4].fl() * f[8].fl());
+    f[16].set_fl(f[18].fl() + f[10].fl());
+    f[18].set_fl(f[6].fl() + f[16].fl());
+    sw(m, g[A0], 0x34, u64::from(f[18].u32l()));
+    f[4].set_u32l(lw(m, g[A1], 0x30) as u32);
+    f[10].set_u32l(lw(m, g[SP], 8) as u32);
+    f[16].set_u32l(lw(m, g[A1], 0x34) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x18) as u32);
+    f[8].set_fl(f[10].fl() * f[4].fl());
+    f[4].set_u32l(lw(m, g[SP], 0x28) as u32);
+    f[18].set_fl(f[6].fl() * f[16].fl());
+    f[6].set_u32l(lw(m, g[A1], 0x38) as u32);
+    f[16].set_fl(f[4].fl() * f[6].fl());
+    f[4].set_u32l(lw(m, g[SP], 0x38) as u32);
+    f[10].set_fl(f[8].fl() + f[18].fl());
+    f[18].set_u32l(lw(m, g[A1], 0x3C) as u32);
+    f[6].set_fl(f[18].fl() * f[4].fl());
+    f[8].set_fl(f[10].fl() + f[16].fl());
+    f[10].set_fl(f[6].fl() + f[8].fl());
+    sw(m, g[A0], 0x38, u64::from(f[10].u32l()));
+    f[18].set_u32l(lw(m, g[A1], 0x30) as u32);
+    f[16].set_u32l(lw(m, g[SP], 0xC) as u32);
+    f[8].set_u32l(lw(m, g[A1], 0x34) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x1C) as u32);
+    f[4].set_fl(f[16].fl() * f[18].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x2C) as u32);
+    f[10].set_fl(f[6].fl() * f[8].fl());
+    f[16].set_fl(f[4].fl() + f[10].fl());
+    f[6].set_u32l(lw(m, g[A1], 0x38) as u32);
+    f[10].set_u32l(lw(m, g[A1], 0x3C) as u32);
+    f[8].set_fl(f[18].fl() * f[6].fl());
+    f[18].set_u32l(lw(m, g[SP], 0x3C) as u32);
+    g[SP] = addu(g[SP], 0x40);
+    f[6].set_fl(f[10].fl() * f[18].fl());
+    f[4].set_fl(f[16].fl() + f[8].fl());
+    f[16].set_fl(f[6].fl() + f[4].fl());
+    sw(m, g[A0], 0x3C, u64::from(f[16].u32l()));
+}
+
+/// `func_800160BC(out, m)` (inverse of a scaled rotation plus translation,
+/// **guess** at the use: a camera or node transform): with `s_i` the
+/// squared length of row `i` of `m` (`s_i = m[i][2]^2 + (m[i][0]^2 +
+/// m[i][1]^2)`, rows 1 and 2 through a frame at `sp - 0x20`), `out[j][i] =
+/// m[i][j] / s_i` for the 3x3 part (stored in the order `[0][1] [0][2]
+/// [1][2] [1][0] [2][0] [2][1] [0][0] [1][1]`, then the zero column `+0xC,
+/// +0x1C, +0x2C`, `1.0` at `+0x3C`, then `[2][2]`), and the translation row
+/// `out[3][j] = -(out[2][j] * t.z + (t.x * out[0][j] + t.y * out[1][j]))`
+/// with `t` = `m`'s row 3, reading `out` back. So `out` must not overlap
+/// `m` for the statement (the C and the port agree either way).
+///
+/// Leaves `f0`, `f2`, `f12` = `t`, `f14 = 0.0`, `f4`..`f10` from the last
+/// column, `at = 0x3F800000`.
+///
+/// Domain: canonical pointers to 64 bytes; the rows, `t`, every square,
+/// sum and quotient, and every product and sum of the translation not NaN
+/// (the negations are guarded too).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800160BC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    f[16].set_u32l(lw(m, g[A1], 0) as u32);
+    f[18].set_u32l(lw(m, g[A1], 4) as u32);
+    f[14].set_u32l(lw(m, g[A1], 8) as u32);
+    f[4].set_fl(f[16].fl() * f[16].fl());
+    g[SP] = addu(g[SP], (-0x20i64) as u64);
+    g[AT] = li(0x3F80_0000);
+    f[6].set_fl(f[18].fl() * f[18].fl());
+    f[8].set_fl(f[4].fl() + f[6].fl());
+    f[10].set_fl(f[14].fl() * f[14].fl());
+    f[4].set_u32l(lw(m, g[A1], 0x18) as u32);
+    f[14].set_u32l(0 as u32);
+    sw(m, g[SP], 0x10, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A1], 0x10) as u32);
+    f[0].set_fl(f[10].fl() + f[8].fl());
+    sw(m, g[SP], 0xC, u64::from(f[6].u32l()));
+    f[10].set_u32l(lw(m, g[A1], 0x14) as u32);
+    f[8].set_u32l(lw(m, g[SP], 0xC) as u32);
+    sw(m, g[SP], 8, u64::from(f[10].u32l()));
+    f[4].set_fl(f[8].fl() * f[8].fl());
+    f[6].set_u32l(lw(m, g[SP], 8) as u32);
+    f[10].set_fl(f[6].fl() * f[6].fl());
+    f[6].set_fl(f[4].fl() + f[10].fl());
+    f[4].set_u32l(lw(m, g[SP], 0x10) as u32);
+    f[10].set_fl(f[4].fl() * f[4].fl());
+    f[4].set_u32l(lw(m, g[A1], 0x28) as u32);
+    sw(m, g[SP], 0x10, u64::from(f[4].u32l()));
+    f[2].set_fl(f[10].fl() + f[6].fl());
+    f[10].set_u32l(lw(m, g[A1], 0x20) as u32);
+    sw(m, g[SP], 8, u64::from(f[10].u32l()));
+    f[6].set_u32l(lw(m, g[A1], 0x24) as u32);
+    f[4].set_u32l(lw(m, g[SP], 8) as u32);
+    sw(m, g[SP], 4, u64::from(f[6].u32l()));
+    f[10].set_fl(f[4].fl() * f[4].fl());
+    f[6].set_u32l(lw(m, g[SP], 4) as u32);
+    f[4].set_fl(f[6].fl() * f[6].fl());
+    f[6].set_fl(f[10].fl() + f[4].fl());
+    f[10].set_u32l(lw(m, g[SP], 0x10) as u32);
+    f[4].set_fl(f[10].fl() * f[10].fl());
+    f[10].set_fl(f[8].fl() / f[2].fl());
+    f[12].set_fl(f[4].fl() + f[6].fl());
+    sw(m, g[A0], 4, u64::from(f[10].u32l()));
+    f[4].set_u32l(lw(m, g[A1], 0x20) as u32);
+    f[6].set_fl(f[4].fl() / f[12].fl());
+    sw(m, g[A0], 8, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A1], 0x24) as u32);
+    f[10].set_fl(f[8].fl() / f[12].fl());
+    sw(m, g[A0], 0x18, u64::from(f[10].u32l()));
+    f[4].set_u32l(lw(m, g[A1], 4) as u32);
+    f[6].set_fl(f[4].fl() / f[0].fl());
+    sw(m, g[A0], 0x10, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A1], 8) as u32);
+    f[10].set_fl(f[8].fl() / f[0].fl());
+    sw(m, g[A0], 0x20, u64::from(f[10].u32l()));
+    f[4].set_u32l(lw(m, g[A1], 0x18) as u32);
+    f[6].set_fl(f[4].fl() / f[2].fl());
+    sw(m, g[A0], 0x24, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A1], 0) as u32);
+    f[10].set_fl(f[8].fl() / f[0].fl());
+    sw(m, g[A0], 0, u64::from(f[10].u32l()));
+    f[4].set_u32l(lw(m, g[A1], 0x14) as u32);
+    f[6].set_fl(f[4].fl() / f[2].fl());
+    f[4].set_u32l(g[AT] as u32);
+    sw(m, g[A0], 0x14, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A1], 0x28) as u32);
+    sw(m, g[A0], 0xC, u64::from(f[14].u32l()));
+    sw(m, g[A0], 0x1C, u64::from(f[14].u32l()));
+    f[10].set_fl(f[8].fl() / f[12].fl());
+    sw(m, g[A0], 0x2C, u64::from(f[14].u32l()));
+    sw(m, g[A0], 0x3C, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A0], 0) as u32);
+    sw(m, g[A0], 0x28, u64::from(f[10].u32l()));
+    f[0].set_u32l(lw(m, g[A1], 0x30) as u32);
+    f[2].set_u32l(lw(m, g[A1], 0x34) as u32);
+    f[10].set_u32l(lw(m, g[A0], 0x10) as u32);
+    f[8].set_fl(f[0].fl() * f[6].fl());
+    f[12].set_u32l(lw(m, g[A1], 0x38) as u32);
+    f[4].set_fl(f[2].fl() * f[10].fl());
+    f[10].set_u32l(lw(m, g[A0], 0x20) as u32);
+    f[6].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[10].fl() * f[12].fl());
+    f[4].set_fl(f[8].fl() + f[6].fl());
+    f[8].set_u32l(lw(m, g[A0], 4) as u32);
+    f[10].set_fl(-f[4].fl());
+    f[6].set_fl(f[0].fl() * f[8].fl());
+    f[4].set_u32l(lw(m, g[A0], 0x14) as u32);
+    sw(m, g[A0], 0x30, u64::from(f[10].u32l()));
+    f[10].set_fl(f[2].fl() * f[4].fl());
+    f[4].set_u32l(lw(m, g[A0], 0x24) as u32);
+    f[8].set_fl(f[6].fl() + f[10].fl());
+    f[6].set_fl(f[4].fl() * f[12].fl());
+    f[10].set_fl(f[6].fl() + f[8].fl());
+    f[6].set_u32l(lw(m, g[A0], 8) as u32);
+    f[4].set_fl(-f[10].fl());
+    f[8].set_fl(f[0].fl() * f[6].fl());
+    f[10].set_u32l(lw(m, g[A0], 0x18) as u32);
+    sw(m, g[A0], 0x34, u64::from(f[4].u32l()));
+    f[4].set_fl(f[2].fl() * f[10].fl());
+    f[10].set_u32l(lw(m, g[A0], 0x28) as u32);
+    g[SP] = addu(g[SP], 0x20);
+    f[6].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[10].fl() * f[12].fl());
+    f[4].set_fl(f[8].fl() + f[6].fl());
+    f[10].set_fl(-f[4].fl());
+    sw(m, g[A0], 0x38, u64::from(f[10].u32l()));
+}
+
+/// `func_80016BF4(out, v, m)` (vec3 times the 3x3 part of a 4x4 matrix,
+/// row vector): `out[j] = v.z * m[2][j] + (m[0][j] * v.x + m[1][j] * v.y)`,
+/// all three computed into a frame (`sp - 0x10 + 4..`) before `out` is
+/// written, so `out` may alias `v`.
+///
+/// Leaves `f8` = `out.x`, `f6`/`f18` = `out.y`/`out.z` reloaded, and
+/// `f4`..`f16` from the last component.
+///
+/// Domain: canonical pointers (12 and 64 bytes); the inputs, products and
+/// partial sums not NaN.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80016BF4(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    f[4].set_u32l(lw(m, g[A2], 0) as u32);
+    f[6].set_u32l(lw(m, g[A1], 0) as u32);
+    f[10].set_u32l(lw(m, g[A2], 0x10) as u32);
+    f[16].set_u32l(lw(m, g[A1], 4) as u32);
+    f[8].set_fl(f[4].fl() * f[6].fl());
+    f[6].set_u32l(lw(m, g[A1], 8) as u32);
+    g[SP] = addu(g[SP], (-0x10i64) as u64);
+    f[18].set_fl(f[10].fl() * f[16].fl());
+    f[10].set_u32l(lw(m, g[A2], 0x20) as u32);
+    f[16].set_fl(f[6].fl() * f[10].fl());
+    f[4].set_fl(f[8].fl() + f[18].fl());
+    f[8].set_fl(f[16].fl() + f[4].fl());
+    sw(m, g[SP], 4, u64::from(f[8].u32l()));
+    f[6].set_u32l(lw(m, g[A1], 0) as u32);
+    f[18].set_u32l(lw(m, g[A2], 4) as u32);
+    f[4].set_u32l(lw(m, g[A1], 4) as u32);
+    f[16].set_u32l(lw(m, g[A2], 0x14) as u32);
+    f[10].set_fl(f[18].fl() * f[6].fl());
+    f[18].set_fl(f[16].fl() * f[4].fl());
+    f[4].set_u32l(lw(m, g[A2], 0x24) as u32);
+    f[16].set_u32l(lw(m, g[A1], 8) as u32);
+    f[6].set_fl(f[10].fl() + f[18].fl());
+    f[10].set_fl(f[16].fl() * f[4].fl());
+    f[18].set_fl(f[10].fl() + f[6].fl());
+    sw(m, g[SP], 8, u64::from(f[18].u32l()));
+    f[4].set_u32l(lw(m, g[A1], 0) as u32);
+    f[16].set_u32l(lw(m, g[A2], 8) as u32);
+    f[18].set_u32l(lw(m, g[A1], 4) as u32);
+    f[6].set_u32l(lw(m, g[A2], 0x18) as u32);
+    f[10].set_fl(f[16].fl() * f[4].fl());
+    f[16].set_fl(f[6].fl() * f[18].fl());
+    f[18].set_u32l(lw(m, g[A2], 0x28) as u32);
+    f[6].set_u32l(lw(m, g[A1], 8) as u32);
+    f[4].set_fl(f[10].fl() + f[16].fl());
+    f[10].set_fl(f[6].fl() * f[18].fl());
+    f[16].set_fl(f[10].fl() + f[4].fl());
+    sw(m, g[SP], 0xC, u64::from(f[16].u32l()));
+    sw(m, g[A0], 0, u64::from(f[8].u32l()));
+    f[6].set_u32l(lw(m, g[SP], 8) as u32);
+    sw(m, g[A0], 4, u64::from(f[6].u32l()));
+    f[18].set_u32l(lw(m, g[SP], 0xC) as u32);
+    g[SP] = addu(g[SP], 0x10);
+    sw(m, g[A0], 8, u64::from(f[18].u32l()));
+}
+
+/// `func_80016CAC(out, v, m)` (vec3 point times a 4x4 matrix, row vector):
+/// `out[j] = m[3][j] + ((m[0][j] * v.x + m[1][j] * v.y) + m[2][j] * v.z)`,
+/// computed into a frame before `out` is written (so `out` may alias `v`).
+///
+/// Leaves `f6` = `out.x`, `f18`/`f16` = `out.y`/`out.z` reloaded, and
+/// `f4`..`f10` from the last component.
+///
+/// Domain: as for [`func_80016BF4`].
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80016CAC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    f[4].set_u32l(lw(m, g[A2], 0) as u32);
+    f[6].set_u32l(lw(m, g[A1], 0) as u32);
+    f[10].set_u32l(lw(m, g[A2], 0x10) as u32);
+    f[16].set_u32l(lw(m, g[A1], 4) as u32);
+    f[8].set_fl(f[4].fl() * f[6].fl());
+    f[6].set_u32l(lw(m, g[A2], 0x20) as u32);
+    g[SP] = addu(g[SP], (-0x10i64) as u64);
+    f[18].set_fl(f[10].fl() * f[16].fl());
+    f[10].set_u32l(lw(m, g[A1], 8) as u32);
+    f[16].set_fl(f[6].fl() * f[10].fl());
+    f[4].set_fl(f[8].fl() + f[18].fl());
+    f[18].set_u32l(lw(m, g[A2], 0x30) as u32);
+    f[8].set_fl(f[4].fl() + f[16].fl());
+    f[6].set_fl(f[18].fl() + f[8].fl());
+    sw(m, g[SP], 4, u64::from(f[6].u32l()));
+    f[4].set_u32l(lw(m, g[A1], 0) as u32);
+    f[10].set_u32l(lw(m, g[A2], 4) as u32);
+    f[8].set_u32l(lw(m, g[A1], 4) as u32);
+    f[18].set_u32l(lw(m, g[A2], 0x14) as u32);
+    f[16].set_fl(f[10].fl() * f[4].fl());
+    f[4].set_u32l(lw(m, g[A2], 0x24) as u32);
+    f[6].set_fl(f[18].fl() * f[8].fl());
+    f[18].set_u32l(lw(m, g[A1], 8) as u32);
+    f[8].set_fl(f[4].fl() * f[18].fl());
+    f[10].set_fl(f[16].fl() + f[6].fl());
+    f[6].set_u32l(lw(m, g[A2], 0x34) as u32);
+    f[16].set_fl(f[10].fl() + f[8].fl());
+    f[4].set_fl(f[6].fl() + f[16].fl());
+    sw(m, g[SP], 8, u64::from(f[4].u32l()));
+    f[10].set_u32l(lw(m, g[A1], 0) as u32);
+    f[18].set_u32l(lw(m, g[A2], 8) as u32);
+    f[16].set_u32l(lw(m, g[A1], 4) as u32);
+    f[6].set_u32l(lw(m, g[A2], 0x18) as u32);
+    f[8].set_fl(f[18].fl() * f[10].fl());
+    f[10].set_u32l(lw(m, g[A2], 0x28) as u32);
+    f[4].set_fl(f[6].fl() * f[16].fl());
+    f[6].set_u32l(lw(m, g[A1], 8) as u32);
+    f[16].set_fl(f[10].fl() * f[6].fl());
+    f[6].set_u32l(lw(m, g[SP], 4) as u32);
+    f[18].set_fl(f[8].fl() + f[4].fl());
+    f[4].set_u32l(lw(m, g[A2], 0x38) as u32);
+    f[8].set_fl(f[18].fl() + f[16].fl());
+    f[10].set_fl(f[4].fl() + f[8].fl());
+    sw(m, g[SP], 0xC, u64::from(f[10].u32l()));
+    sw(m, g[A0], 0, u64::from(f[6].u32l()));
+    f[18].set_u32l(lw(m, g[SP], 8) as u32);
+    sw(m, g[A0], 4, u64::from(f[18].u32l()));
+    f[16].set_u32l(lw(m, g[SP], 0xC) as u32);
+    g[SP] = addu(g[SP], 0x10);
+    sw(m, g[A0], 8, u64::from(f[16].u32l()));
+}
+
+/// `func_80016D78(out, x, y, z, w)` (vec4 set): `out = (x, y, z, w)` with
+/// the floats in `a1`, `a2`, `a3` (through its spill `[sp + 0xC]`) and the
+/// stack argument at `sp + 0x10`. Bits are copied.
+///
+/// Leaves `f12 = x`, `f14 = y`, `f4 = z`, `f6 = w`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80016D78(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    f[12].set_u32l(g[A1] as u32);
+    f[14].set_u32l(g[A2] as u32);
+    sw(m, g[SP], 0xC, g[A3]);
+    sw(m, g[A0], 0, u64::from(f[12].u32l()));
+    sw(m, g[A0], 4, u64::from(f[14].u32l()));
+    f[4].set_u32l(lw(m, g[SP], 0xC) as u32);
+    sw(m, g[A0], 8, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[SP], 0x10) as u32);
+    sw(m, g[A0], 0xC, u64::from(f[6].u32l()));
+}
+
+/// `func_80016DA0(out, s, v)` (vec4 scale): `out = v * s`, with the float
+/// `s` in `a1`, component by component (so `out` may alias `v`).
+///
+/// Leaves `f12 = s`, `f4`/`f6` = the last component and product, and
+/// `f8`..`f18` from the others.
+///
+/// Domain: canonical pointers to 16 bytes; `s` and the components not NaN.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80016DA0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    f[12].set_u32l(g[A1] as u32);
+    f[4].set_u32l(lw(m, g[A2], 0) as u32);
+    f[6].set_fl(f[4].fl() * f[12].fl());
+    sw(m, g[A0], 0, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A2], 4) as u32);
+    f[10].set_fl(f[8].fl() * f[12].fl());
+    sw(m, g[A0], 4, u64::from(f[10].u32l()));
+    f[16].set_u32l(lw(m, g[A2], 8) as u32);
+    f[18].set_fl(f[16].fl() * f[12].fl());
+    sw(m, g[A0], 8, u64::from(f[18].u32l()));
+    f[4].set_u32l(lw(m, g[A2], 0xC) as u32);
+    f[6].set_fl(f[4].fl() * f[12].fl());
+    sw(m, g[A0], 0xC, u64::from(f[6].u32l()));
+}
+
+/// `func_80016DD8(out, v, m)` (vec4 times a 4x4 matrix, row vector):
+/// `out[j] = v.w * m[3][j] + ((m[0][j] * v.x + m[1][j] * v.y) + m[2][j] *
+/// v.z)`, all four computed into a frame (`sp - 0x10`) before `out` is
+/// written (so `out` may alias `v`).
+///
+/// Leaves `f4` = `out.x`, `f10`/`f18`/`f6` = the others reloaded, and
+/// `f8`, `f16` from the last component.
+///
+/// Domain: canonical pointers (16 and 64 bytes); the inputs, products and
+/// partial sums not NaN.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80016DD8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    f[4].set_u32l(lw(m, g[A2], 0) as u32);
+    f[6].set_u32l(lw(m, g[A1], 0) as u32);
+    f[10].set_u32l(lw(m, g[A2], 0x10) as u32);
+    f[16].set_u32l(lw(m, g[A1], 4) as u32);
+    f[8].set_fl(f[4].fl() * f[6].fl());
+    f[6].set_u32l(lw(m, g[A2], 0x20) as u32);
+    g[SP] = addu(g[SP], (-0x10i64) as u64);
+    f[18].set_fl(f[10].fl() * f[16].fl());
+    f[10].set_u32l(lw(m, g[A1], 8) as u32);
+    f[16].set_fl(f[6].fl() * f[10].fl());
+    f[6].set_u32l(lw(m, g[A2], 0x30) as u32);
+    f[4].set_fl(f[8].fl() + f[18].fl());
+    f[18].set_u32l(lw(m, g[A1], 0xC) as u32);
+    f[10].set_fl(f[18].fl() * f[6].fl());
+    f[8].set_fl(f[4].fl() + f[16].fl());
+    f[4].set_fl(f[10].fl() + f[8].fl());
+    sw(m, g[SP], 0, u64::from(f[4].u32l()));
+    f[18].set_u32l(lw(m, g[A1], 0) as u32);
+    f[16].set_u32l(lw(m, g[A2], 4) as u32);
+    f[8].set_u32l(lw(m, g[A1], 4) as u32);
+    f[10].set_u32l(lw(m, g[A2], 0x14) as u32);
+    f[6].set_fl(f[16].fl() * f[18].fl());
+    f[16].set_fl(f[10].fl() * f[8].fl());
+    f[8].set_u32l(lw(m, g[A1], 8) as u32);
+    f[10].set_u32l(lw(m, g[A2], 0x24) as u32);
+    f[18].set_fl(f[6].fl() + f[16].fl());
+    f[6].set_fl(f[10].fl() * f[8].fl());
+    f[8].set_u32l(lw(m, g[A2], 0x34) as u32);
+    f[10].set_u32l(lw(m, g[A1], 0xC) as u32);
+    f[16].set_fl(f[18].fl() + f[6].fl());
+    f[18].set_fl(f[10].fl() * f[8].fl());
+    f[6].set_fl(f[18].fl() + f[16].fl());
+    sw(m, g[SP], 4, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A1], 0) as u32);
+    f[10].set_u32l(lw(m, g[A2], 8) as u32);
+    f[6].set_u32l(lw(m, g[A1], 4) as u32);
+    f[16].set_u32l(lw(m, g[A2], 0x18) as u32);
+    f[18].set_fl(f[10].fl() * f[8].fl());
+    f[10].set_fl(f[16].fl() * f[6].fl());
+    f[6].set_u32l(lw(m, g[A1], 8) as u32);
+    f[16].set_u32l(lw(m, g[A2], 0x28) as u32);
+    f[8].set_fl(f[18].fl() + f[10].fl());
+    f[18].set_fl(f[16].fl() * f[6].fl());
+    f[6].set_u32l(lw(m, g[A2], 0x38) as u32);
+    f[16].set_u32l(lw(m, g[A1], 0xC) as u32);
+    f[10].set_fl(f[8].fl() + f[18].fl());
+    f[8].set_fl(f[16].fl() * f[6].fl());
+    f[18].set_fl(f[8].fl() + f[10].fl());
+    sw(m, g[SP], 8, u64::from(f[18].u32l()));
+    f[6].set_u32l(lw(m, g[A1], 0) as u32);
+    f[16].set_u32l(lw(m, g[A2], 0xC) as u32);
+    f[18].set_u32l(lw(m, g[A1], 4) as u32);
+    f[10].set_u32l(lw(m, g[A2], 0x1C) as u32);
+    f[8].set_fl(f[16].fl() * f[6].fl());
+    f[16].set_fl(f[10].fl() * f[18].fl());
+    f[18].set_u32l(lw(m, g[A1], 8) as u32);
+    f[10].set_u32l(lw(m, g[A2], 0x2C) as u32);
+    f[6].set_fl(f[8].fl() + f[16].fl());
+    f[8].set_fl(f[10].fl() * f[18].fl());
+    f[18].set_u32l(lw(m, g[A2], 0x3C) as u32);
+    f[10].set_u32l(lw(m, g[A1], 0xC) as u32);
+    f[16].set_fl(f[6].fl() + f[8].fl());
+    f[6].set_fl(f[10].fl() * f[18].fl());
+    f[8].set_fl(f[6].fl() + f[16].fl());
+    sw(m, g[SP], 0xC, u64::from(f[8].u32l()));
+    sw(m, g[A0], 0, u64::from(f[4].u32l()));
+    f[10].set_u32l(lw(m, g[SP], 4) as u32);
+    sw(m, g[A0], 4, u64::from(f[10].u32l()));
+    f[18].set_u32l(lw(m, g[SP], 8) as u32);
+    sw(m, g[A0], 8, u64::from(f[18].u32l()));
+    f[6].set_u32l(lw(m, g[SP], 0xC) as u32);
+    g[SP] = addu(g[SP], 0x10);
+    sw(m, g[A0], 0xC, u64::from(f[6].u32l()));
+}
+
 /// `func_80017520(m, x, y, z)` (4x4 scale matrix): `m` = diag(`x`, `y`, `z`,
 /// 1) with the floats in `a1`, `a2`, `a3` (`z` through its spill `[sp +
 /// 0xC]`), row-major. Stores zeros at `+4..+0x24` (off the diagonal), `x`,

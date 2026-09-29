@@ -275,17 +275,17 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80015694,func_80015694,ours,0,math,rust_verified,unit_diff,high,matrix row k (16-byte rows) = v (game::math)
 0x800156B8,func_800156B8,ours,0,math,rust_verified,unit_diff,high,out = matrix row k (game::math)
 0x800156DC,func_800156DC,ours,0,math,rust_verified,unit_diff,high,4x4 matrix copy (game::math)
-0x80015724,func_80015724,ours,0,,recomp,,,
-0x80015C30,func_80015C30,ours,0,,recomp,,,
-0x800160BC,func_800160BC,ours,0,,recomp,,,
+0x80015724,func_80015724,ours,0,math,rust_verified,unit_diff,high,4x4 out = a * b from frame copies (aliasing safe) (game::math)
+0x80015C30,func_80015C30,ours,0,math,rust_verified,unit_diff,high,4x4 m = n * m in place (n read in place) (game::math)
+0x800160BC,func_800160BC,ours,0,math,rust_verified,unit_diff,high,"inverse of scaled rotation + translation: transpose / squared row lengths, t' = -(t . columns) (game::math)"
 0x80016260,func_80016260,ours,0,,recomp,,,
 0x800167E4,func_800167E4,ours,0,,recomp,,,
 0x80016A20,func_80016A20,ours,1,,recomp,,,
-0x80016BF4,func_80016BF4,ours,0,,recomp,,,
-0x80016CAC,func_80016CAC,ours,0,,recomp,,,
-0x80016D78,func_80016D78,ours,0,,recomp,,,
-0x80016DA0,func_80016DA0,ours,0,,recomp,,,
-0x80016DD8,func_80016DD8,ours,0,,recomp,,,
+0x80016BF4,func_80016BF4,ours,0,math,rust_verified,unit_diff,high,"out = v x 3x3 part (row vector), via frame (game::math)"
+0x80016CAC,func_80016CAC,ours,0,math,rust_verified,unit_diff,high,"out = v x 4x4 with translation, via frame (game::math)"
+0x80016D78,func_80016D78,ours,0,math,rust_verified,unit_diff,high,"vec4 set (z spill, w stack) (game::math)"
+0x80016DA0,func_80016DA0,ours,0,math,rust_verified,unit_diff,high,vec4 scale (game::math)
+0x80016DD8,func_80016DD8,ours,0,math,rust_verified,unit_diff,high,"out = vec4 x 4x4, via frame (game::math)"
 0x80016F0C,func_80016F0C,ours,2,,recomp,,,
 0x8001723C,func_8001723C,ours,2,,recomp,,,
 0x8001734C,func_8001734C,ours,2,,recomp,,,
