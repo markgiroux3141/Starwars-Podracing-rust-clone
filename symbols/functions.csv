@@ -7,9 +7,9 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80000544,func_80000544,ours,0,,rust_verified,unit_diff,high,empty (game::util)
 0x8000054C,func_8000054C,ours,0,,rust_verified,unit_diff,high,empty; spills a0 to [sp] (game::util)
 0x80000554,func_80000554,ours,0,util,rust_verified,unit_diff,high,zero a1 words at a0 (game::util)
-0x800005B4,func_800005B4,ours,1,,recomp,,,
+0x800005B4,func_800005B4,ours,1,,rust_verified,unit_diff,high,"point in triangle: u x v zero -> 0; edge crosses c1..c3 signs on the dominant axis, thresholds K1/K2 at 0x800A80F0/F4 (game::math)"
 0x8000097C,func_8000097C,ours,0,,rust_verified,unit_diff,high,record time/pos/dir at 0x800AE8B0 unless T-E < t and d.S >= d.r (d = p-q) (game::misc)
-0x80000B00,func_80000B00,ours,1,,recomp,,,
+0x80000B00,func_80000B00,ours,1,,rust_verified,unit_diff,high,"nearest of three edge points (func_80081A2C) to q, offered to func_8000097C if D <= T (game::collide)"
 0x80000D80,func_80000D80,ours,2,,recomp,,,
 0x80000E94,func_80000E94,ours,3,,recomp,,,
 0x80001864,func_80001864,ours,4,,recomp,,,
@@ -22,14 +22,14 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80002FFC,func_80002FFC,ours,5,,recomp,,,
 0x80003348,func_80003348,ours,5,,recomp,,,
 0x800035BC,func_800035BC,ours,1,,recomp,,,
-0x800038E8,func_800038E8,ours,1,,recomp,,,
-0x80003B44,func_80003B44,ours,1,,recomp,,,
+0x800038E8,func_800038E8,ours,1,,rust_verified,unit_diff,high,"query point and plane into model space by flags (matrix stack top, inverse) (game::collide)"
+0x80003B44,func_80003B44,ours,1,,rust_verified,unit_diff,high,query result back to world space by flags; direction unless mode 2 (game::collide)
 0x80003BF8,func_80003BF8,ours,2,,recomp,,,
 0x80003E4C,func_80003E4C,ours,3,,recomp,,,
-0x80004000,func_80004000,ours,1,,recomp,,,
+0x80004000,func_80004000,ours,1,,rust_verified,unit_diff,high,"collision query setup: sphere c r, plane pair, mode 3, callbacks, matrix reset (game::collide)"
 0x80004160,func_80004160,ours,2,,recomp,,,
 0x80004670,func_80004670,ours,4,,recomp,,,
-0x80004704,func_80004704,ours,1,,recomp,,,
+0x80004704,func_80004704,ours,1,,rust_verified,unit_diff,high,n 28-byte records into model space by flags; word 6 untouched (game::collide)
 0x800049FC,func_800049FC,ours,2,,recomp,,,
 0x80004DFC,func_80004DFC,ours,3,,recomp,,,
 0x80004FB0,func_80004FB0,ours,4,,recomp,,,

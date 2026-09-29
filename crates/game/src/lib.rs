@@ -18,6 +18,7 @@
 pub mod anim;
 pub mod asset;
 pub mod channels;
+pub mod collide;
 pub mod heap;
 pub mod imports;
 pub mod input;
@@ -60,10 +61,16 @@ pub const PORTED: &[Ported] = &[
     Ported { vram: 0x8000_0544, name: "func_80000544", func: util::func_80000544 },
     Ported { vram: 0x8000_054C, name: "func_8000054C", func: util::func_8000054C },
     Ported { vram: 0x8000_0554, name: "func_80000554", func: util::func_80000554 },
+    Ported { vram: 0x8000_05B4, name: "func_800005B4", func: math::func_800005B4 },
     Ported { vram: 0x8000_097C, name: "func_8000097C", func: misc::func_8000097C },
+    Ported { vram: 0x8000_0B00, name: "func_80000B00", func: collide::func_80000B00 },
     Ported { vram: 0x8000_1D34, name: "func_80001D34", func: math::func_80001D34 },
     Ported { vram: 0x8000_2BD4, name: "func_80002BD4", func: misc::func_80002BD4 },
     Ported { vram: 0x8000_2E2C, name: "func_80002E2C", func: misc::func_80002E2C },
+    Ported { vram: 0x8000_38E8, name: "func_800038E8", func: collide::func_800038E8 },
+    Ported { vram: 0x8000_3B44, name: "func_80003B44", func: collide::func_80003B44 },
+    Ported { vram: 0x8000_4000, name: "func_80004000", func: collide::func_80004000 },
+    Ported { vram: 0x8000_4704, name: "func_80004704", func: collide::func_80004704 },
     Ported { vram: 0x8000_550C, name: "func_8000550C", func: matrix::func_8000550C },
     Ported { vram: 0x8000_556C, name: "func_8000556C", func: matrix::func_8000556C },
     Ported { vram: 0x8000_59A8, name: "func_800059A8", func: matrix::func_800059A8 },

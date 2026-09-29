@@ -9,9 +9,16 @@
 use crate::recomp::recomp_imports;
 
 recomp_imports! {
+    func_8000097C, // collision record step
+    func_8000550C, // matrix stack reset
+    func_800059A8, // matrix stack top
     func_80011940, // comp_decompress
     func_80011CDC, // rom_read
     func_80011D60, // rom_read_small
+    func_80015538, // vec3 cross
+    func_800160BC, // matrix inverse
+    func_80016BF4, // vec3 x 3x3
+    func_80016CAC, // point x 4x4
     func_8002FAC4, // heap_set_cursor
     func_8002FAFC, // heap_cursor
     func_8002FC58, // heap_free
@@ -22,6 +29,7 @@ recomp_imports! {
     func_80031560, // channel start (self-call for all four)
     func_800315D8, // channel +0xC = 0 (self-call)
     func_80031640, // channel +8 = 0 (self-call)
+    func_80081A2C, // closest point on a segment
     func_800827C0, // model_load's error path (not yet understood)
 }
 

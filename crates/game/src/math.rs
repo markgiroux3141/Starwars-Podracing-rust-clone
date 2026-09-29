@@ -9,7 +9,251 @@
 // Ports keep N64Recomp's names (func_8001514C), capitals included.
 #![allow(non_snake_case)]
 
-use crate::recomp::{addu, enter, fpu, ld, li, lw, reg::*, sd, sll, slt, sltu, subu, sw, RecompContext};
+use crate::imports;
+use crate::recomp::{addu, call, enter, fpu, ld, li, lw, reg::*, sd, sll, slt, sltu, subu, sw, RecompContext};
+
+/// `func_800005B4(p, a, b, c, u, v, w)` (point in triangle, **guess**: an
+/// edge-cross test with `u`, `v`, `w` the edges): all vec3 pointers, the
+/// last three on the stack. It returns 0 if `u x v` is zero (each component
+/// equal to 0.0, so -0.0 counts). Otherwise, with `c1 = (a - p) x u`, `c2 =
+/// (b - p) x v`, `c3 = (c - p) x w` ([`func_80015538`] on frame copies),
+/// `|x|` the absolute value as `-x` only when `x < 0` (so -0.0 stays), `s(c)
+/// = (|c.x| + |c.y|) + |c.z|` and `dom(c)` the axis of `c`'s largest
+/// absolute component (if `|x| < |y|`: 2 if `|y| < |z|`, else 1; otherwise
+/// 2 if `|x| < |z|`, else 0):
+/// - if `K1 < s(c1)` (`K1` the float at `0x800A80F0`), with `i = dom(c1)`:
+///   1 if `c1[i] < 0` (compared in double), `c2[i] <= 0` and `c3[i] <= 0`,
+///   or if `c1[i]` is not below 0, `0 <= c2[i]` and `0 <= c3[i]`; else 0.
+/// - else if `s(c2) < K2` (`0x800A80F4`): 1.
+/// - else, with `i = dom(c2)`: `c3[i] <= 0` if `c2[i] < 0` (in double),
+///   else `0 <= c3[i]`, as 1 or 0.
+///
+/// Frame (`sp - 0x78`): `ra` at `+0x14`; `a - p`, `b - p`, `c - p` at
+/// `+0x6C`, `+0x60`, `+0x54` (component by component, each stored after
+/// its subtraction), `u x v` then `c1` at `+0x48`, `c2` at `+0x3C`, `c3`
+/// at `+0x30`. `p`, `a`, `b` are spilled to their home slots `sp + 0..8`.
+/// Leaves `a0 = sp - 0x78 + 0x48` on the zero path and `sp - 0x78 + 0x30`
+/// otherwise, `a1`, `a2` and the temporaries from the last cross product,
+/// `v1` the axis and `t*`/`at` from the tests, and `f0`..`f18` as the path
+/// used them (`f16 = 0.0`, `f14` a third component, `f12`/`f2` absolute
+/// values, `f8`/`f18` `K1`/`K2`, `f10:f11` the double 0.0).
+///
+/// Domain: canonical pointers to 12 bytes in RDRAM, not overlapping the
+/// frame; no NaN operand of a subtraction, a negation, a sum, a `cvt.d.s`,
+/// or [`func_80015538`]'s arithmetic (the compares may see NaN).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800005B4(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    'b_8000096C: {
+        // The three differences to the frame, then u x v.
+        g[SP] = addu(g[SP], (-0x78i64) as u64);
+        sw(m, g[SP], 0x14, g[RA]);
+        sw(m, g[SP], 0x78, g[A0]);
+        sw(m, g[SP], 0x7C, g[A1]);
+        sw(m, g[SP], 0x80, g[A2]);
+        ctx.fpr[6].set_u32l(lw(m, g[A0], 0) as u32);
+        ctx.fpr[4].set_u32l(lw(m, g[A1], 0) as u32);
+        ctx.fpr[8].set_fl(ctx.fpr[4].fl() - ctx.fpr[6].fl());
+        sw(m, g[SP], 0x6C, u64::from(ctx.fpr[8].u32l()));
+        ctx.fpr[18].set_u32l(lw(m, g[A0], 4) as u32);
+        ctx.fpr[10].set_u32l(lw(m, g[A1], 4) as u32);
+        ctx.fpr[4].set_fl(ctx.fpr[10].fl() - ctx.fpr[18].fl());
+        sw(m, g[SP], 0x70, u64::from(ctx.fpr[4].u32l()));
+        ctx.fpr[8].set_u32l(lw(m, g[A0], 8) as u32);
+        ctx.fpr[6].set_u32l(lw(m, g[A1], 8) as u32);
+        g[A1] = lw(m, g[SP], 0x88);
+        ctx.fpr[10].set_fl(ctx.fpr[6].fl() - ctx.fpr[8].fl());
+        sw(m, g[SP], 0x74, u64::from(ctx.fpr[10].u32l()));
+        ctx.fpr[4].set_u32l(lw(m, g[A0], 0) as u32);
+        ctx.fpr[18].set_u32l(lw(m, g[A2], 0) as u32);
+        ctx.fpr[6].set_fl(ctx.fpr[18].fl() - ctx.fpr[4].fl());
+        sw(m, g[SP], 0x60, u64::from(ctx.fpr[6].u32l()));
+        ctx.fpr[10].set_u32l(lw(m, g[A0], 4) as u32);
+        ctx.fpr[8].set_u32l(lw(m, g[A2], 4) as u32);
+        ctx.fpr[18].set_fl(ctx.fpr[8].fl() - ctx.fpr[10].fl());
+        sw(m, g[SP], 0x64, u64::from(ctx.fpr[18].u32l()));
+        ctx.fpr[6].set_u32l(lw(m, g[A0], 8) as u32);
+        ctx.fpr[4].set_u32l(lw(m, g[A2], 8) as u32);
+        g[A2] = lw(m, g[SP], 0x8C);
+        ctx.fpr[8].set_fl(ctx.fpr[4].fl() - ctx.fpr[6].fl());
+        sw(m, g[SP], 0x68, u64::from(ctx.fpr[8].u32l()));
+        ctx.fpr[18].set_u32l(lw(m, g[A0], 0) as u32);
+        ctx.fpr[10].set_u32l(lw(m, g[A3], 0) as u32);
+        ctx.fpr[4].set_fl(ctx.fpr[10].fl() - ctx.fpr[18].fl());
+        sw(m, g[SP], 0x54, u64::from(ctx.fpr[4].u32l()));
+        ctx.fpr[8].set_u32l(lw(m, g[A0], 4) as u32);
+        ctx.fpr[6].set_u32l(lw(m, g[A3], 4) as u32);
+        ctx.fpr[10].set_fl(ctx.fpr[6].fl() - ctx.fpr[8].fl());
+        sw(m, g[SP], 0x58, u64::from(ctx.fpr[10].u32l()));
+        ctx.fpr[4].set_u32l(lw(m, g[A0], 8) as u32);
+        ctx.fpr[18].set_u32l(lw(m, g[A3], 8) as u32);
+        g[A0] = addu(g[SP], 0x48);
+        ctx.fpr[6].set_fl(ctx.fpr[18].fl() - ctx.fpr[4].fl());
+        sw(m, g[SP], 0x5C, u64::from(ctx.fpr[6].u32l()));
+        call(imports::func_80015538, m, ctx);
+        let g = &mut ctx.gpr;
+        // u x v == 0: return 0 (each load in the previous compare's slot).
+        ctx.fpr[0].set_u32l(lw(m, g[SP], 0x48) as u32);
+        ctx.fpr[2].set_u32l(0);
+        g[A0] = addu(g[SP], 0x48);
+        g[A1] = addu(g[SP], 0x6C);
+        let zero_x = ctx.fpr[2].fl() == ctx.fpr[0].fl();
+        ctx.fpr[0].set_u32l(lw(m, g[SP], 0x4C) as u32);
+        if zero_x {
+            let zero_y = ctx.fpr[2].fl() == ctx.fpr[0].fl();
+            ctx.fpr[14].set_u32l(lw(m, g[SP], 0x50) as u32);
+            if zero_y && ctx.fpr[2].fl() == ctx.fpr[14].fl() {
+                g[V0] = 0;
+                break 'b_8000096C;
+            }
+        }
+        // c1, c2, c3; then f12, f2, f0 = |c1| and f18 = s(c1).
+        g[A2] = lw(m, g[SP], 0x88);
+        call(imports::func_80015538, m, ctx);
+        let g = &mut ctx.gpr;
+        g[A0] = addu(g[SP], 0x3C);
+        g[A1] = addu(g[SP], 0x60);
+        g[A2] = lw(m, g[SP], 0x8C);
+        call(imports::func_80015538, m, ctx);
+        let g = &mut ctx.gpr;
+        g[A0] = addu(g[SP], 0x30);
+        g[A1] = addu(g[SP], 0x54);
+        g[A2] = lw(m, g[SP], 0x90);
+        call(imports::func_80015538, m, ctx);
+        let g = &mut ctx.gpr;
+        ctx.fpr[0].set_u32l(lw(m, g[SP], 0x48) as u32);
+        ctx.fpr[16].set_u32l(0);
+        g[A0] = addu(g[SP], 0x30);
+        ctx.fpr[14].set_u32l(lw(m, g[SP], 0x50) as u32);
+        if !(ctx.fpr[0].fl() < ctx.fpr[16].fl()) {
+            ctx.fpr[12].set_u32l(ctx.fpr[0].u32l());
+        } else {
+            ctx.fpr[12].set_fl(-ctx.fpr[0].fl());
+        }
+        ctx.fpr[0].set_u32l(lw(m, g[SP], 0x4C) as u32);
+        if !(ctx.fpr[0].fl() < ctx.fpr[16].fl()) {
+            ctx.fpr[2].set_u32l(ctx.fpr[0].u32l());
+        } else {
+            ctx.fpr[2].set_fl(-ctx.fpr[0].fl());
+        }
+        let z_neg = ctx.fpr[14].fl() < ctx.fpr[16].fl();
+        ctx.fpr[10].set_fl(ctx.fpr[12].fl() + ctx.fpr[2].fl());
+        if !z_neg {
+            ctx.fpr[0].set_u32l(ctx.fpr[14].u32l());
+        } else {
+            ctx.fpr[0].set_fl(-ctx.fpr[14].fl());
+        }
+        ctx.fpr[18].set_fl(ctx.fpr[10].fl() + ctx.fpr[0].fl());
+        g[AT] = li(0x800B_0000);
+        ctx.fpr[8].set_u32l(lw(m, g[AT], -0x7F10) as u32);
+        ctx.fpr[14].set_u32l(lw(m, g[SP], 0x44) as u32);
+        if !(ctx.fpr[8].fl() < ctx.fpr[18].fl()) {
+            // c1 too small: f12, f2, f0 = |c2| and f8 = s(c2).
+            ctx.fpr[0].set_u32l(lw(m, g[SP], 0x3C) as u32);
+            if !(ctx.fpr[0].fl() < ctx.fpr[16].fl()) {
+                ctx.fpr[12].set_u32l(ctx.fpr[0].u32l());
+            } else {
+                ctx.fpr[12].set_fl(-ctx.fpr[0].fl());
+            }
+            ctx.fpr[0].set_u32l(lw(m, g[SP], 0x40) as u32);
+            if !(ctx.fpr[0].fl() < ctx.fpr[16].fl()) {
+                ctx.fpr[2].set_u32l(ctx.fpr[0].u32l());
+            } else {
+                ctx.fpr[2].set_fl(-ctx.fpr[0].fl());
+            }
+            let z_neg = ctx.fpr[14].fl() < ctx.fpr[16].fl();
+            g[AT] = li(0x800B_0000);
+            ctx.fpr[10].set_fl(ctx.fpr[12].fl() + ctx.fpr[2].fl());
+            if !z_neg {
+                ctx.fpr[0].set_u32l(ctx.fpr[14].u32l());
+            } else {
+                ctx.fpr[0].set_fl(-ctx.fpr[14].fl());
+            }
+            ctx.fpr[8].set_fl(ctx.fpr[10].fl() + ctx.fpr[0].fl());
+            ctx.fpr[18].set_u32l(lw(m, g[AT], -0x7F0C) as u32);
+            if !(ctx.fpr[8].fl() < ctx.fpr[18].fl()) {
+                // v1 = dom(c2); c2[i]'s sign picks c3[i]'s test.
+                if !(ctx.fpr[12].fl() < ctx.fpr[2].fl()) {
+                    let z = ctx.fpr[12].fl() < ctx.fpr[0].fl();
+                    g[V1] = 0;
+                    if z {
+                        g[V1] = 2;
+                    }
+                } else if !(ctx.fpr[2].fl() < ctx.fpr[0].fl()) {
+                    g[V1] = 1;
+                } else {
+                    g[V1] = 2;
+                }
+                g[V0] = sll(g[V1], 2);
+                g[T4] = addu(g[SP], g[V0]);
+                ctx.fpr[4].set_u32l(lw(m, g[T4], 0x3C) as u32);
+                ctx.fpr[10].set_u32h(0); // f11
+                ctx.fpr[10].set_u32l(0);
+                ctx.fpr[6].set_d(f64::from(ctx.fpr[4].fl()));
+                g[T5] = addu(g[A0], g[V0]);
+                let neg = ctx.fpr[6].d() < ctx.fpr[10].d();
+                g[T6] = addu(g[A0], g[V0]);
+                if !neg {
+                    ctx.fpr[18].set_u32l(lw(m, g[T6], 0) as u32);
+                    g[V0] = u64::from(ctx.fpr[16].fl() <= ctx.fpr[18].fl());
+                } else {
+                    ctx.fpr[8].set_u32l(lw(m, g[T5], 0) as u32);
+                    g[V0] = u64::from(ctx.fpr[8].fl() <= ctx.fpr[16].fl());
+                }
+            } else {
+                g[V0] = 1;
+            }
+        } else {
+            // v1 = dom(c1); c1[i]'s sign picks c2[i]'s and c3[i]'s tests.
+            if !(ctx.fpr[12].fl() < ctx.fpr[2].fl()) {
+                let z = ctx.fpr[12].fl() < ctx.fpr[0].fl();
+                g[V1] = 0;
+                if z {
+                    g[V1] = 2;
+                }
+            } else if !(ctx.fpr[2].fl() < ctx.fpr[0].fl()) {
+                g[V1] = 1;
+            } else {
+                g[V1] = 2;
+            }
+            g[V0] = sll(g[V1], 2);
+            g[T9] = addu(g[SP], g[V0]);
+            ctx.fpr[4].set_u32l(lw(m, g[T9], 0x48) as u32);
+            ctx.fpr[10].set_u32h(0); // f11
+            ctx.fpr[10].set_u32l(0);
+            ctx.fpr[6].set_d(f64::from(ctx.fpr[4].fl()));
+            g[T0] = addu(g[SP], g[V0]);
+            let neg = ctx.fpr[6].d() < ctx.fpr[10].d();
+            g[T2] = addu(g[SP], g[V0]);
+            if !neg {
+                ctx.fpr[4].set_u32l(lw(m, g[T2], 0x3C) as u32);
+                g[T3] = addu(g[A0], g[V0]);
+                if !(ctx.fpr[16].fl() <= ctx.fpr[4].fl()) {
+                    g[V0] = 0;
+                } else {
+                    ctx.fpr[6].set_u32l(lw(m, g[T3], 0) as u32);
+                    g[V0] = u64::from(ctx.fpr[16].fl() <= ctx.fpr[6].fl());
+                }
+            } else {
+                ctx.fpr[8].set_u32l(lw(m, g[T0], 0x3C) as u32);
+                g[T1] = addu(g[A0], g[V0]);
+                if !(ctx.fpr[8].fl() <= ctx.fpr[16].fl()) {
+                    g[V0] = 0;
+                } else {
+                    ctx.fpr[18].set_u32l(lw(m, g[T1], 0) as u32);
+                    g[V0] = u64::from(ctx.fpr[18].fl() <= ctx.fpr[16].fl());
+                }
+            }
+        }
+    }
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x78);
+}
 
 /// `func_80001D34(plane, ray, out)` (ray_plane, **guess** at the name):
 /// where the ray `o + t v` meets the plane `n . x = d`, returning `t` in
