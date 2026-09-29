@@ -247,9 +247,9 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80014C98,func_80014C98,ours,0,render,rust_verified,unit_diff,high,"gDPPipeSync (0xE7000000, 0) onto the display list at [0x801217B0] (game::render)"
 0x80014CC0,func_80014CC0,ours,1,,recomp,,,
 0x80014D20,func_80014D20,ours,2,,recomp,,,
-0x80014D4C,func_80014D4C,ours,0,,recomp,,,
+0x80014D4C,func_80014D4C,ours,0,,rust_verified,unit_diff,high,"asin(x) in degrees by the game's series (constants 0x800A8790..): +-90 beyond +-0.999999, reduction via sqrt(1-x^2) outside +-0.7071, r*180/pi in double (game::math)"
 0x80014F2C,func_80014F2C,ours,1,,recomp,,,
-0x80014F54,func_80014F54,ours,0,,recomp,,,
+0x80014F54,func_80014F54,ours,0,,rust_verified,unit_diff,high,"atan2(y=f12, x=f14) in degrees by the game's series (constants 0x800A87C0..): octant swap, t < 1e-4 -> 0, quadrant fixups at -1e-4 (game::math)"
 0x8001514C,vec2_add,ours,0,math,rust_verified,unit_diff,high,out = b + a (2 floats) (game::math)
 0x80015170,vec2_scale,ours,0,math,rust_verified,unit_diff,high,"out = v * s, s in a1 (game::math)"
 0x80015190,func_80015190,ours,0,math,rust_verified,unit_diff,high,vec2 out = q*s + p (s in a2) (game::math)

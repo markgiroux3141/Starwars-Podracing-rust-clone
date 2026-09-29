@@ -9,7 +9,7 @@
 // Ports keep N64Recomp's names (func_8001514C), capitals included.
 #![allow(non_snake_case)]
 
-use crate::recomp::{addu, enter, ld, li, lw, reg::*, sd, sll, sw, RecompContext};
+use crate::recomp::{addu, enter, fpu, ld, li, lw, reg::*, sd, sll, sw, RecompContext};
 
 /// `func_80001D34(plane, ray, out)` (ray_plane, **guess** at the name):
 /// where the ray `o + t v` meets the plane `n . x = d`, returning `t` in
@@ -117,6 +117,265 @@ pub unsafe extern "C" fn func_80001D34(rdram: *mut u8, ctx: *mut RecompContext) 
     }
     f[20].u64 = ld(m, g[SP], 8);
     g[SP] = addu(g[SP], 0x10);
+}
+
+/// `func_80014D4C(x)` (arcsine in degrees, **guess** at the name): `asin(x)`
+/// in degrees in `f0`, by the game's own series. With the floats `C0..C5`
+/// at `0x800A8790` (0.999999, -0.999999, 0.7071068, -0.7071068, 0.001,
+/// -0.001 in the ROM), `P1..P4` at `0x800A87A8` (1/6, 3/40, 15/336,
+/// 0.047446) and the double `D` at `0x800A87B8` (pi):
+///
+/// - `C0 < x`: 90.0; `x < C1`: -90.0.
+/// - Unless `C3 < x < C2`, it spills `x` to `[sp - 8]` and works on `y =
+///   sqrt(1 - x*x)` (negated for `x < 0`) instead, flagging `v0 = 1`;
+///   otherwise `y = x`, `v0 = 0`.
+/// - `r = y` if `C5 < y < C4`, else `r = (((y^3*P1 + y) + y^5*P2) + y^7*P3)
+///   + y^9*P4` with `y^3 = y*y^2`, `y^5 = y^3*y^2`, `y^7 = y^5*y^2`, `y^9 =
+///   y^7*y^2` (all f32, not fused).
+/// - `d = f32(f64(r * 180.0) / D)` (the multiply in f32, the division in
+///   double, rounded to nearest).
+/// - With `v0 = 1`: `-90 - d` if the spilled `x < 0`, else `90 - d`.
+///
+/// Leaves `at` = the last constant's upper half, and the FPRs of the path
+/// (`f4`..`f18`, `f2` = the result before the move to `f0`).
+///
+/// Domain: `x` not NaN (every non-NaN `x` is fine with the ROM's
+/// constants: the square root's operand stays positive).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80014D4C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    g[AT] = li(0x800B_0000);
+    f[4].set_u32l(lw(m, g[AT], -0x7870) as u32);
+    g[SP] = addu(g[SP], (-8i64) as u64);
+    'done: {
+        if f[4].fl() < f[12].fl() {
+            g[AT] = li(0x42B4_0000);
+            f[0].set_u32l(g[AT] as u32);
+            break 'done;
+        }
+        f[6].set_u32l(lw(m, g[AT], -0x786C) as u32);
+        if f[12].fl() < f[6].fl() {
+            g[AT] = li(0xC2B4_0000);
+            f[0].set_u32l(g[AT] as u32);
+            break 'done;
+        }
+        'reduced: {
+            f[8].set_u32l(lw(m, g[AT], -0x7868) as u32);
+            if f[12].fl() < f[8].fl() {
+                f[10].set_u32l(lw(m, g[AT], -0x7864) as u32);
+                if f[10].fl() < f[12].fl() {
+                    // Near 0: the series on x itself.
+                    g[V0] = 0;
+                    break 'reduced;
+                }
+            }
+            // Near +-1: y = +-sqrt(1 - x*x).
+            f[4].set_u32l(0);
+            g[V0] = 1;
+            sw(m, g[SP], 0, u64::from(f[12].u32l()));
+            g[AT] = li(0x3F80_0000);
+            if f[12].fl() < f[4].fl() {
+                f[8].set_fl(f[12].fl() * f[12].fl());
+                f[6].set_u32l(g[AT] as u32);
+                f[0].set_fl(f[6].fl() - f[8].fl());
+                f[0].set_fl(f[0].fl().sqrt());
+                f[12].set_fl(-f[0].fl());
+            } else {
+                f[4].set_fl(f[12].fl() * f[12].fl());
+                f[10].set_u32l(g[AT] as u32);
+                f[0].set_fl(f[10].fl() - f[4].fl());
+                f[12].set_fl(f[0].fl().sqrt());
+            }
+        }
+        g[AT] = li(0x800B_0000);
+        'series: {
+            f[6].set_u32l(lw(m, g[AT], -0x7860) as u32);
+            if f[12].fl() < f[6].fl() {
+                f[8].set_u32l(lw(m, g[AT], -0x785C) as u32);
+                if f[8].fl() < f[12].fl() {
+                    f[2].set_u32l(f[12].u32l());
+                    break 'series;
+                }
+            }
+            f[0].set_fl(f[12].fl() * f[12].fl());
+            f[10].set_u32l(lw(m, g[AT], -0x7858) as u32);
+            f[8].set_u32l(lw(m, g[AT], -0x7854) as u32);
+            f[14].set_fl(f[12].fl() * f[0].fl());
+            f[16].set_fl(f[14].fl() * f[0].fl());
+            f[18].set_fl(f[16].fl() * f[0].fl());
+            f[4].set_fl(f[14].fl() * f[10].fl());
+            f[6].set_fl(f[4].fl() + f[12].fl());
+            f[10].set_fl(f[16].fl() * f[8].fl());
+            f[8].set_u32l(lw(m, g[AT], -0x7850) as u32);
+            f[4].set_fl(f[6].fl() + f[10].fl());
+            f[6].set_fl(f[18].fl() * f[8].fl());
+            f[10].set_fl(f[4].fl() + f[6].fl());
+            f[8].set_fl(f[18].fl() * f[0].fl());
+            f[4].set_u32l(lw(m, g[AT], -0x784C) as u32);
+            f[6].set_fl(f[8].fl() * f[4].fl());
+            f[2].set_fl(f[10].fl() + f[6].fl());
+        }
+        // Degrees: r * 180 / pi, the division in double.
+        g[AT] = li(0x4334_0000);
+        f[8].set_u32l(g[AT] as u32);
+        g[AT] = li(0x800B_0000);
+        f[6].u64 = ld(m, g[AT], -0x7848);
+        f[4].set_fl(f[2].fl() * f[8].fl());
+        f[10].set_d(f64::from(f[4].fl()));
+        f[4].set_u32l(lw(m, g[SP], 0) as u32);
+        f[8].set_d(f[10].d() / f[6].d());
+        f[2].set_fl(fpu::cvt_s_d(f[8].d(), fpu::NEAREST));
+        if g[V0] != 0 {
+            f[10].set_u32l(0);
+            g[AT] = li(0x42B4_0000);
+            if f[4].fl() < f[10].fl() {
+                g[AT] = li(0xC2B4_0000);
+                f[6].set_u32l(g[AT] as u32);
+                f[2].set_fl(f[6].fl() - f[2].fl());
+            } else {
+                f[8].set_u32l(g[AT] as u32);
+                f[2].set_fl(f[8].fl() - f[2].fl());
+            }
+        }
+        f[0].set_u32l(f[2].u32l());
+    }
+    g[SP] = addu(g[SP], 8);
+}
+
+/// `func_80014F54(y, x)` (atan2 in degrees, **guess** at the name) with
+/// the floats in `f12`/`f14`: the angle of `(x, y)` in degrees in `f0`, by
+/// the game's own series. With the floats `K0..K3` at `0x800A87C0` (1e-4,
+/// then -1e-4 three times in the ROM), `Q1..Q4` at `0x800A87D0` (1/3, 1/5,
+/// 1/7, 0.063235), the double `D` at `0x800A87E0` (pi) and `K8`, `K9` at
+/// `0x800A87E8` (-1e-4 twice):
+///
+/// - `K1 <= x < K0`: `a = 90`. Else `K2 <= y < K0`: `a = 0`.
+/// - Else with `ay = |y|`, `ax = |x|` (negated when `< 0`): `t = ay / ax`,
+///   or `t = ax / ay` with `v0 = 1` if `ax < ay`. `y` and `x` are spilled
+///   to `[sp]`/`[sp + 4]` (the caller's argument slots). `a = 0` if `K3 <= t
+///   < K0`, else `a = f32(f64(p * 180.0) / D)` with `p = (((t - t^3*Q1) +
+///   t^5*Q2) - t^7*Q3) + t^9*Q4` (powers by repeated `* t^2`, f32, not
+///   fused; `y`, `x` reloaded from the slots). Then `a = 90 - a` if `v0`.
+/// - Finally `a = 180 - a` if `x < K8`, then `a = -a` if `y < K9`.
+///
+/// Leaves `v0` as above (0 on the early paths), `f18` = `a` (also in `f0`),
+/// `at` = the last constant's upper half, and the path's FPRs.
+///
+/// Domain: `x`, `y` not NaN, and not both infinite (`t` would be NaN and
+/// reach the series).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80014F54(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    'quadrant: {
+        g[AT] = li(0x800B_0000);
+        f[18].set_u32l(lw(m, g[AT], -0x7840) as u32);
+        // `y < K0`, computed in one of two delay slots.
+        let y_small;
+        if f[14].fl() < f[18].fl() {
+            f[4].set_u32l(lw(m, g[AT], -0x783C) as u32);
+            g[AT] = li(0x42B4_0000);
+            if f[4].fl() <= f[14].fl() {
+                f[18].set_u32l(g[AT] as u32);
+                break 'quadrant;
+            }
+        }
+        y_small = f[12].fl() < f[18].fl();
+        g[AT] = li(0x800B_0000);
+        if y_small {
+            f[6].set_u32l(lw(m, g[AT], -0x7838) as u32);
+            if f[6].fl() <= f[12].fl() {
+                f[18].set_u32l(0);
+                break 'quadrant;
+            }
+        }
+        f[2].set_u32l(0);
+        g[V0] = 0;
+        if f[12].fl() < f[2].fl() {
+            f[0].set_fl(-f[12].fl());
+        } else {
+            f[0].set_u32l(f[12].u32l());
+        }
+        if f[14].fl() < f[2].fl() {
+            f[16].set_fl(-f[14].fl());
+        } else {
+            f[16].set_u32l(f[14].u32l());
+        }
+        if f[16].fl() < f[0].fl() {
+            g[V0] = 1;
+            f[2].set_fl(f[16].fl() / f[0].fl());
+        } else {
+            f[2].set_fl(f[0].fl() / f[16].fl());
+        }
+        'series: {
+            let t_small = f[2].fl() < f[18].fl();
+            sw(m, g[SP], 0, u64::from(f[12].u32l()));
+            sw(m, g[SP], 4, u64::from(f[14].u32l()));
+            if t_small {
+                f[8].set_u32l(lw(m, g[AT], -0x7834) as u32);
+                sw(m, g[SP], 0, u64::from(f[12].u32l()));
+                sw(m, g[SP], 4, u64::from(f[14].u32l()));
+                if f[8].fl() <= f[2].fl() {
+                    f[18].set_u32l(0);
+                    break 'series;
+                }
+            }
+            f[0].set_fl(f[2].fl() * f[2].fl());
+            f[10].set_u32l(lw(m, g[AT], -0x7830) as u32);
+            f[8].set_u32l(lw(m, g[AT], -0x782C) as u32);
+            f[12].set_fl(f[2].fl() * f[0].fl());
+            f[14].set_fl(f[12].fl() * f[0].fl());
+            f[16].set_fl(f[14].fl() * f[0].fl());
+            f[4].set_fl(f[12].fl() * f[10].fl());
+            f[12].set_u32l(lw(m, g[SP], 0) as u32);
+            f[10].set_fl(f[14].fl() * f[8].fl());
+            f[8].set_u32l(lw(m, g[AT], -0x7828) as u32);
+            f[14].set_u32l(lw(m, g[SP], 4) as u32);
+            f[6].set_fl(f[2].fl() - f[4].fl());
+            f[4].set_fl(f[6].fl() + f[10].fl());
+            f[6].set_fl(f[16].fl() * f[8].fl());
+            f[10].set_fl(f[4].fl() - f[6].fl());
+            f[8].set_fl(f[16].fl() * f[0].fl());
+            f[4].set_u32l(lw(m, g[AT], -0x7824) as u32);
+            g[AT] = li(0x4334_0000);
+            f[6].set_fl(f[8].fl() * f[4].fl());
+            f[4].set_u32l(g[AT] as u32);
+            g[AT] = li(0x800B_0000);
+            f[8].set_fl(f[10].fl() + f[6].fl());
+            f[10].set_fl(f[8].fl() * f[4].fl());
+            f[8].u64 = ld(m, g[AT], -0x7820);
+            f[6].set_d(f64::from(f[10].fl()));
+            f[4].set_d(f[6].d() / f[8].d());
+            f[18].set_fl(fpu::cvt_s_d(f[4].d(), fpu::NEAREST));
+        }
+        g[AT] = li(0x42B4_0000);
+        if g[V0] != 0 {
+            f[10].set_u32l(g[AT] as u32);
+            f[18].set_fl(f[10].fl() - f[18].fl());
+        }
+    }
+    g[AT] = li(0x800B_0000);
+    f[6].set_u32l(lw(m, g[AT], -0x7818) as u32);
+    g[AT] = li(0x4334_0000);
+    if f[14].fl() < f[6].fl() {
+        f[8].set_u32l(g[AT] as u32);
+        f[18].set_fl(f[8].fl() - f[18].fl());
+    }
+    g[AT] = li(0x800B_0000);
+    f[4].set_u32l(lw(m, g[AT], -0x7814) as u32);
+    if f[12].fl() < f[4].fl() {
+        f[18].set_fl(-f[18].fl());
+    }
+    f[0].set_u32l(f[18].u32l());
 }
 
 /// `func_8001514C(out, a, b)` (vec2_add): `out = b + a`, two floats. Each
