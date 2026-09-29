@@ -252,29 +252,29 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80014F54,func_80014F54,ours,0,,recomp,,,
 0x8001514C,vec2_add,ours,0,math,rust_verified,unit_diff,high,out = b + a (2 floats) (game::math)
 0x80015170,vec2_scale,ours,0,math,rust_verified,unit_diff,high,"out = v * s, s in a1 (game::math)"
-0x80015190,func_80015190,ours,0,,recomp,,,
+0x80015190,func_80015190,ours,0,math,rust_verified,unit_diff,high,vec2 out = q*s + p (s in a2) (game::math)
 0x800151C0,vec2_length,ours,0,math,rust_verified,unit_diff,high,sqrt(y*y + x*x) in f0 (game::math)
 0x800151E0,func_800151E0,ours,1,,recomp,,,
 0x8001523C,vec2_dist_sq,ours,0,math,rust_verified,unit_diff,high,(a-b).(a-b) in f0 (game::math)
-0x80015268,func_80015268,ours,0,,recomp,,,
-0x80015288,func_80015288,ours,0,,recomp,,,
-0x800152A4,func_800152A4,ours,0,,recomp,,,
-0x800152CC,func_800152CC,ours,0,,recomp,,,
-0x80015328,func_80015328,ours,0,,recomp,,,
-0x8001535C,func_8001535C,ours,0,,recomp,,,
-0x80015390,func_80015390,ours,0,,recomp,,,
-0x800153C0,func_800153C0,ours,0,,recomp,,,
-0x800153EC,func_800153EC,ours,0,,recomp,,,
-0x80015428,func_80015428,ours,0,,recomp,,,
-0x80015470,func_80015470,ours,0,,recomp,,,
+0x80015268,func_80015268,ours,0,math,rust_verified,unit_diff,high,vec3 set from a1..a3 (z via spill) (game::math)
+0x80015288,func_80015288,ours,0,math,rust_verified,unit_diff,high,vec3 copy (game::math)
+0x800152A4,func_800152A4,ours,0,math,rust_verified,unit_diff,high,vec3 negate (game::math)
+0x800152CC,func_800152CC,ours,0,math,rust_verified,unit_diff,high,vec3 IEEE equality -> 1/0 (game::math)
+0x80015328,func_80015328,ours,0,math,rust_verified,unit_diff,high,vec3 out = b + a (game::math)
+0x8001535C,func_8001535C,ours,0,math,rust_verified,unit_diff,high,vec3 out = a - b (game::math)
+0x80015390,func_80015390,ours,0,math,rust_verified,unit_diff,high,vec3 dot b.z*a.z + (a.x*b.x + a.y*b.y) (game::math)
+0x800153C0,func_800153C0,ours,0,math,rust_verified,unit_diff,high,vec3 length sqrt(z^2 + (x^2 + y^2)) (game::math)
+0x800153EC,func_800153EC,ours,0,math,rust_verified,unit_diff,high,vec3 squared distance (dx^2+dy^2)+dz^2 (game::math)
+0x80015428,func_80015428,ours,0,math,rust_verified,unit_diff,high,vec2 distance of b - a (spilled) (game::math)
+0x80015470,func_80015470,ours,0,math,rust_verified,unit_diff,high,vec3 distance of b - a (spilled) (game::math)
 0x800154D0,func_800154D0,ours,1,,recomp,,,
-0x80015538,func_80015538,ours,0,,recomp,,,
-0x800155C0,func_800155C0,ours,0,,recomp,,,
-0x800155EC,func_800155EC,ours,0,,recomp,,,
-0x80015630,func_80015630,ours,0,,recomp,,,
-0x80015694,func_80015694,ours,0,,recomp,,,
-0x800156B8,func_800156B8,ours,0,,recomp,,,
-0x800156DC,func_800156DC,ours,0,,recomp,,,
+0x80015538,func_80015538,ours,0,math,rust_verified,unit_diff,high,vec3 cross a x b via frame (game::math)
+0x800155C0,func_800155C0,ours,0,math,rust_verified,unit_diff,high,vec3 out = v*s (s in a1) (game::math)
+0x800155EC,func_800155EC,ours,0,math,rust_verified,unit_diff,high,vec3 out = q*s + p (s in a2) (game::math)
+0x80015630,func_80015630,ours,0,math,rust_verified,unit_diff,high,vec3 out = p*t + q*u (p on stack) (game::math)
+0x80015694,func_80015694,ours,0,math,rust_verified,unit_diff,high,matrix row k (16-byte rows) = v (game::math)
+0x800156B8,func_800156B8,ours,0,math,rust_verified,unit_diff,high,out = matrix row k (game::math)
+0x800156DC,func_800156DC,ours,0,math,rust_verified,unit_diff,high,4x4 matrix copy (game::math)
 0x80015724,func_80015724,ours,0,,recomp,,,
 0x80015C30,func_80015C30,ours,0,,recomp,,,
 0x800160BC,func_800160BC,ours,0,,recomp,,,
