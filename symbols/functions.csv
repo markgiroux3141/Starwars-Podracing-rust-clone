@@ -552,10 +552,10 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80035698,func_80035698,ours,0,,rust_verified,unit_diff,high,[0x800A3D9C] = (v == 1) (game::misc)
 0x800356BC,func_800356BC,ours,0,render,rust_verified,unit_diff,high,"render mode words 0x800A3DA0/A4: ZBZB and AAEN switches, Full sets both (game::render)"
 0x800358A0,func_800358A0,ours,0,,rust_verified,unit_diff,high,"input mask: clear bits 16/17 by settings, clear or swap bits 9/10 (game::misc)"
-0x8003594C,func_8003594C,ours,0,,recomp,,,
+0x8003594C,func_8003594C,ours,0,render,rust_verified,unit_diff,high,material render flags and combiner byte rewrite (1/2/8/9 selectors to 4 or 6) (game::render)
 0x80035BF0,func_80035BF0,ours,1,,recomp,,,
 0x80036094,func_80036094,ours,0,,rust_verified,unit_diff,high,"empty, spills a0 (game::misc)"
-0x8003609C,func_8003609C,ours,0,,recomp,,,
+0x8003609C,func_8003609C,ours,0,render,rust_verified,unit_diff,high,render mode switches: two-bit fields to SetOtherMode_H at [0x80112C90] (game::render)
 0x80036314,func_80036314,ours,1,,recomp,,,
 0x800366DC,func_800366DC,ours,2,,recomp,,,
 0x80036A1C,func_80036A1C,ours,0,render,rust_verified,unit_diff,high,"box culling against the clip matrix at 0x80112E60 (0 culled, 1 visible, 2 all inside) (game::render)"
@@ -620,9 +620,9 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8003B250,func_8003B250,ours,0,spline,rust_verified,unit_diff,high,start spline walker at p (first successors) (game::spline)
 0x8003B300,func_8003B300,ours,0,,rust_verified,unit_diff,high,four words at 0x80114540..4C (game::misc)
 0x8003B324,func_8003B324,ours,0,render,rust_verified,unit_diff,high,"rotated screen quad: 14 F3DEX2 commands, aspect-corrected (game::render)"
-0x8003B860,func_8003B860,ours,0,,recomp,,,
+0x8003B860,func_8003B860,ours,0,render,rust_verified,unit_diff,high,screen quad with one corner moved to a point (game::render)
 0x8003BAB0,func_8003BAB0,ours,1,,recomp,,,
-0x8003D110,func_8003D110,ours,0,,recomp,,,
+0x8003D110,func_8003D110,ours,0,render,rust_verified,unit_diff,high,render state reset commands (game::render)
 0x8003D370,func_8003D370,ours,0,render,rust_verified,unit_diff,high,"DL gSPTexture, combine, othermode; optional two by [0x800A4960] (game::render)"
 0x8003D444,func_8003D444,ours,1,,recomp,,,
 0x8003D488,func_8003D488,ours,0,,rust_verified,unit_diff,high,[0x800A48D4] = v & 0xFFFF (game::misc)

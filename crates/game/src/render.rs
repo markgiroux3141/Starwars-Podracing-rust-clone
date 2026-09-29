@@ -952,6 +952,358 @@ pub unsafe extern "C" fn func_800356BC(rdram: *mut u8, ctx: *mut RecompContext) 
     }
 }
 
+/// [`func_8003594C`]'s rewrite of a combine word pair's bytes 0..6: the
+/// register holding the replacement (`t3` = 6, `t4` = 4) and whether 8 and
+/// 9 match too (else only 1 and 2).
+const COMBINE_SLOTS: [(usize, bool); 7] = [(T3, true), (T4, true), (T4, true), (T3, true), (T3, false), (T3, false), (T4, false)];
+
+/// `func_8003594C(mat, q)` (material render flags, **guess**): adjusts
+/// the words `mat+0x18`/`+0x1C` and two 8-byte blocks at `mat+6` and
+/// `mat+0xE` (combiner selectors, **guess**) for the current settings:
+/// 1. If `[0x800A4740] == 0`: bits 4 then 5 of `+0x18`, then of `+0x1C`,
+///    are cleared (each step stored).
+/// 2. If bit 6 of the settings word `[0x800D697C]` is set and the halfword
+///    `mat+4 == 2` and `+0x18`'s high half is `0xC800`: `+0x18` = its low
+///    half, then `| 0x0C080000` (both stored); the settings are re-read.
+/// 3. Unless bit 4 of the settings is clear and `q` is non-null with `[q +
+///    8] != 0`: in each block, byte k is replaced when it is 1 or 2 (or 8
+///    or 9, for k = 0..3): by 6 for k = 0, 3, 4, 5, 7, by 4 for k = 1, 2,
+///    6. The block pointers go through the frame (`sp - 0x4C`, `- 0x48`)
+///    and are re-read after each store.
+/// 4. If `[0x800A3DA8] != 0`: bit 4 of `+0x18` and `+0x1C` cleared.
+/// 5. If `[0x800A3D9C] != 0`: `+0x18 = [0x800A3DA0]`, `+0x1C =
+///    [0x800A3DA4]`, and if the first is `0xF5504040`: bytes `+0x2A..0x2D` =
+///    0x80, 0, 0xFF, 0x28 and bit 2 of the word `+0` set.
+///
+/// Leaves `a3 = q`, or past step 3 the last byte read; `v1 = -0x11`, `v0 =
+/// 0x800A3DA0` past step 4, and the temporaries of the last steps.
+///
+/// Domain: canonical pointers (`q` may be null), `mat` not overlapping the
+/// globals.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003594C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T6] = li(0x800A_0000);
+    g[T6] = lw(m, g[T6], 0x4740);
+    g[SP] = addu(g[SP], (-0x58i64) as u64);
+    g[A3] = g[A1];
+    g[A2] = li(0x800D_0000);
+    // 1.
+    if g[T6] == 0 {
+        g[T7] = lw(m, g[A0], 0x18);
+        g[V1] = (-0x11i64) as u64;
+        g[V0] = (-0x21i64) as u64;
+        g[T8] = g[T7] & g[V1];
+        g[T7] = lw(m, g[A0], 0x1C);
+        sw(m, g[A0], 0x18, g[T8]);
+        g[T6] = g[T8] & g[V0];
+        g[T8] = g[T7] & g[V1];
+        sw(m, g[A0], 0x18, g[T6]);
+        sw(m, g[A0], 0x1C, g[T8]);
+        g[T6] = g[T8] & g[V0];
+        sw(m, g[A0], 0x1C, g[T6]);
+    }
+    // 2. a2 = the settings; t5 = the frame slots' end.
+    g[A2] = lw(m, g[A2], 0x697C);
+    g[V1] = (-0x11i64) as u64;
+    g[T5] = addu(g[SP], 0x14);
+    g[T7] = g[A2] & 0x40;
+    g[T4] = 4;
+    if g[T7] != 0 {
+        g[T8] = lh(m, g[A0], 4);
+        g[V0] = 2;
+        if g[V0] == g[T8] {
+            g[A1] = lw(m, g[A0], 0x18);
+            g[AT] = li(0xFFFF_0000);
+            g[T9] = g[A1] & g[AT];
+            g[AT] = li(0xC800_0000);
+            g[T6] = g[A1] & 0xFFFF;
+            if g[T9] == g[AT] {
+                g[AT] = li(0xC08_0000);
+                sw(m, g[A0], 0x18, g[T6]);
+                g[T8] = g[T6] | g[AT];
+                sw(m, g[A0], 0x18, g[T8]);
+                g[A2] = li(0x800D_0000);
+                g[A2] = lw(m, g[A2], 0x697C);
+            }
+        }
+    }
+    g[T9] = g[A2] & 0x10;
+    // 3.
+    g[V0] = 2;
+    let skip = g[T9] == 0 && g[A3] != 0 && {
+        g[T6] = lw(m, g[A3], 8);
+        g[T6] != 0
+    };
+    g[T7] = addu(g[A0], 6);
+    if !skip {
+        // a2 walks the frame's two block pointers, a1 = the block, a3 =
+        // the byte; t0, v0, t1, t2 = 1, 2, 8, 9.
+        g[T8] = addu(g[A0], 0xE);
+        sw(m, g[SP], 0xC, g[T7]);
+        sw(m, g[SP], 0x10, g[T8]);
+        g[A2] = addu(g[SP], 0xC);
+        g[T3] = 6;
+        g[T2] = 9;
+        g[T1] = 8;
+        g[T0] = 1;
+        g[A1] = lw(m, g[A2], 0);
+        loop {
+            g[A3] = lbu(m, g[A1], 0);
+            for (k, &(to, wide)) in COMBINE_SLOTS.iter().enumerate() {
+                let v = g[A3];
+                if v == g[T0] || v == g[V0] || (wide && (v == g[T1] || v == g[T2])) {
+                    sb(m, g[A1], k as i32, g[to]);
+                    g[A1] = lw(m, g[A2], 0);
+                }
+                g[A3] = lbu(m, g[A1], k as i32 + 1);
+            }
+            g[A2] = addu(g[A2], 4);
+            if g[A3] == g[T0] || g[A3] == g[V0] {
+                sb(m, g[A1], 7, g[T3]);
+            }
+            if g[A2] == g[T5] {
+                break;
+            }
+            g[A1] = lw(m, g[A2], 0);
+        }
+    }
+    // 4.
+    g[T9] = li(0x800A_0000);
+    g[T9] = lw(m, g[T9], 0x3DA8);
+    g[V0] = li(0x800A_3DA0);
+    if g[T9] != 0 {
+        g[T6] = lw(m, g[A0], 0x18);
+        g[T8] = lw(m, g[A0], 0x1C);
+        g[T7] = g[T6] & g[V1];
+        g[T9] = g[T8] & g[V1];
+        sw(m, g[A0], 0x18, g[T7]);
+        sw(m, g[A0], 0x1C, g[T9]);
+    }
+    // 5.
+    g[T6] = li(0x800A_0000);
+    g[T6] = lw(m, g[T6], 0x3D9C);
+    if g[T6] != 0 {
+        g[T7] = lw(m, g[V0], 0);
+        g[T8] = li(0x800A_0000);
+        g[AT] = li(0xF550_0000);
+        sw(m, g[A0], 0x18, g[T7]);
+        g[T8] = lw(m, g[T8], 0x3DA4);
+        g[AT] = g[AT] | 0x4040;
+        g[T6] = 0x80;
+        sw(m, g[A0], 0x1C, g[T8]);
+        g[T9] = lw(m, g[V0], 0);
+        g[T7] = 0xFF;
+        g[T8] = 0x28;
+        if g[T9] == g[AT] {
+            g[T9] = lw(m, g[A0], 0);
+            sb(m, g[A0], 0x2A, g[T6]);
+            sb(m, g[A0], 0x2B, 0);
+            g[T6] = g[T9] | 4;
+            sb(m, g[A0], 0x2C, g[T7]);
+            sb(m, g[A0], 0x2D, g[T8]);
+            sw(m, g[A0], 0, g[T6]);
+        }
+    }
+    g[SP] = addu(g[SP], 0x58);
+}
+
+/// `func_8003609C(mode, cur)` (render mode switches, **guess**): if `mode`
+/// differs from the word `*cur`, for each two-bit field of `mode` (bits
+/// 0-1, 2-3, 4-5, 6-7, in that order, `*cur` re-read for each) that
+/// differs from `*cur`'s: the field is stored into `*cur` (cleared, stored,
+/// then set, stored), and a `SetOtherMode_H` command appended to the list
+/// at `[0x80112C90]`, by the field's value:
+/// - bits 0-1: 0 `E3001001 0`, 1 `E3001001 8000`, 2 `E3001001 C000`;
+/// - bits 2-3: 0 `E3000D01 0`, 4 `E3000D01 20000`, 8 `E3000D01 40000`;
+/// - bits 4-5: 0 `E3001201 2000`, 0x10 `E3001201 0`, 0x20 `E3001201 3000`;
+/// - bits 6-7: 0 `E3000F00 0`, 0x40 `E3000F00 10000`;
+/// - the other value of each field (all bits set; 0x80 for bits 6-7 too)
+///   appends nothing. Each command's second word is stored first.
+///
+/// Leaves `v1` = the list head's address (past bits 0-1), `a2`/`at` the
+/// last field and mask, `v0`, `t0`..`t9` from the path taken.
+///
+/// Domain: canonical pointers; the list in RDRAM, not overlapping `cur`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003609C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V0] = lw(m, g[A1], 0);
+    g[V1] = g[A0] & 3;
+    g[T6] = g[V0] & 3;
+    if g[A0] != g[V0] {
+        // Bits 0-1.
+        g[AT] = (-4i64) as u64;
+        if g[V1] != g[T6] {
+            g[T7] = g[V0] & g[AT];
+            sw(m, g[A1], 0, g[T7]);
+            g[T9] = g[T7] | g[V1];
+            sw(m, g[A1], 0, g[T9]);
+            if g[V1] != 0 {
+                g[AT] = 1;
+                if g[V1] != g[AT] {
+                    g[AT] = 2;
+                    let c0 = g[V1] == g[AT];
+                    g[V1] = li(0x8011_0000);
+                    if c0 {
+                        g[V1] = addu(g[V1], 0x2C90);
+                        g[V0] = lw(m, g[V1], 0);
+                        g[T6] = li(0xE300_1001);
+                        g[T5] = addu(g[V0], 8);
+                        sw(m, g[V1], 0, g[T5]);
+                        g[T7] = 0xC000;
+                        sw(m, g[V0], 4, g[T7]);
+                        sw(m, g[V0], 0, g[T6]);
+                    }
+                } else {
+                    g[V1] = li(0x8011_2C90);
+                    g[V0] = lw(m, g[V1], 0);
+                    g[T3] = li(0xE300_1001);
+                    g[T2] = addu(g[V0], 8);
+                    sw(m, g[V1], 0, g[T2]);
+                    g[T4] = 0x8000;
+                    sw(m, g[V0], 4, g[T4]);
+                    sw(m, g[V0], 0, g[T3]);
+                }
+            } else {
+                g[V1] = li(0x8011_2C90);
+                g[V0] = lw(m, g[V1], 0);
+                g[T1] = li(0xE300_1001);
+                g[T0] = addu(g[V0], 8);
+                sw(m, g[V1], 0, g[T0]);
+                sw(m, g[V0], 4, 0);
+                sw(m, g[V0], 0, g[T1]);
+            }
+        }
+        // Bits 2-3; v1 = the list head from here on.
+        g[V0] = lw(m, g[A1], 0);
+        g[V1] = li(0x8011_0000);
+        g[A2] = g[A0] & 0xC;
+        g[T8] = g[V0] & 0xC;
+        g[V1] = addu(g[V1], 0x2C90);
+        if g[A2] != g[T8] {
+            g[AT] = (-0xDi64) as u64;
+            g[T9] = g[V0] & g[AT];
+            sw(m, g[A1], 0, g[T9]);
+            g[T1] = g[T9] | g[A2];
+            sw(m, g[A1], 0, g[T1]);
+            if g[A2] != 0 {
+                g[AT] = 4;
+                g[T5] = li(0xE300_0000);
+                if g[A2] != g[AT] {
+                    g[AT] = 8;
+                    g[T8] = li(0xE300_0000);
+                    if g[A2] == g[AT] {
+                        g[V0] = lw(m, g[V1], 0);
+                        g[T8] = g[T8] | 0xD01;
+                        g[T9] = li(0x4_0000);
+                        g[T7] = addu(g[V0], 8);
+                        sw(m, g[V1], 0, g[T7]);
+                        sw(m, g[V0], 4, g[T9]);
+                        sw(m, g[V0], 0, g[T8]);
+                    }
+                } else {
+                    g[V0] = lw(m, g[V1], 0);
+                    g[T5] = g[T5] | 0xD01;
+                    g[T6] = li(0x2_0000);
+                    g[T4] = addu(g[V0], 8);
+                    sw(m, g[V1], 0, g[T4]);
+                    sw(m, g[V0], 4, g[T6]);
+                    sw(m, g[V0], 0, g[T5]);
+                }
+            } else {
+                g[V0] = lw(m, g[V1], 0);
+                g[T3] = li(0xE300_0D01);
+                g[T2] = addu(g[V0], 8);
+                sw(m, g[V1], 0, g[T2]);
+                sw(m, g[V0], 4, 0);
+                sw(m, g[V0], 0, g[T3]);
+            }
+        }
+        // Bits 4-5.
+        g[V0] = lw(m, g[A1], 0);
+        g[A2] = g[A0] & 0x30;
+        g[T0] = g[V0] & 0x30;
+        g[AT] = (-0x31i64) as u64;
+        if g[A2] != g[T0] {
+            g[T1] = g[V0] & g[AT];
+            sw(m, g[A1], 0, g[T1]);
+            g[T3] = g[T1] | g[A2];
+            sw(m, g[A1], 0, g[T3]);
+            if g[A2] != 0 {
+                g[AT] = 0x10;
+                if g[A2] != g[AT] {
+                    g[AT] = 0x20;
+                    g[T0] = li(0xE300_0000);
+                    if g[A2] == g[AT] {
+                        g[V0] = lw(m, g[V1], 0);
+                        g[T0] = g[T0] | 0x1201;
+                        g[T1] = 0x3000;
+                        g[T9] = addu(g[V0], 8);
+                        sw(m, g[V1], 0, g[T9]);
+                        sw(m, g[V0], 4, g[T1]);
+                        sw(m, g[V0], 0, g[T0]);
+                    }
+                } else {
+                    g[V0] = lw(m, g[V1], 0);
+                    g[T8] = li(0xE300_1201);
+                    g[T7] = addu(g[V0], 8);
+                    sw(m, g[V1], 0, g[T7]);
+                    sw(m, g[V0], 4, 0);
+                    sw(m, g[V0], 0, g[T8]);
+                }
+            } else {
+                g[V0] = lw(m, g[V1], 0);
+                g[T5] = li(0xE300_1201);
+                g[T4] = addu(g[V0], 8);
+                sw(m, g[V1], 0, g[T4]);
+                g[T6] = 0x2000;
+                sw(m, g[V0], 4, g[T6]);
+                sw(m, g[V0], 0, g[T5]);
+            }
+        }
+        // Bits 6-7.
+        g[V0] = lw(m, g[A1], 0);
+        g[A2] = g[A0] & 0xC0;
+        g[T2] = g[V0] & 0xC0;
+        g[AT] = (-0xC1i64) as u64;
+        if g[A2] != g[T2] {
+            g[T3] = g[V0] & g[AT];
+            sw(m, g[A1], 0, g[T3]);
+            g[T5] = g[T3] | g[A2];
+            sw(m, g[A1], 0, g[T5]);
+            if g[A2] == 0 {
+                g[V0] = lw(m, g[V1], 0);
+                g[T7] = li(0xE300_0F00);
+                g[T6] = addu(g[V0], 8);
+                sw(m, g[V1], 0, g[T6]);
+                sw(m, g[V0], 4, 0);
+                sw(m, g[V0], 0, g[T7]);
+                return;
+            }
+            g[AT] = 0x40;
+            g[T9] = li(0xE300_0000);
+            if g[A2] == g[AT] {
+                g[V0] = lw(m, g[V1], 0);
+                g[T9] = g[T9] | 0xF00;
+                g[T0] = li(0x1_0000);
+                g[T8] = addu(g[V0], 8);
+                sw(m, g[V1], 0, g[T8]);
+                sw(m, g[V0], 4, g[T0]);
+                sw(m, g[V0], 0, g[T9]);
+            }
+        }
+    }
+}
+
 /// The matrix [`func_80036A1C`] transforms boxes by (4x4, row-major, row
 /// vectors), after the view copy at `0x80112E20`.
 pub const CULL_MATRIX: u32 = 0x8011_2E60;
@@ -1916,6 +2268,360 @@ pub unsafe extern "C" fn func_8003B324(rdram: *mut u8, ctx: *mut RecompContext) 
     f[22].u64 = ld(m, g[SP], 0x10);
     f[20].u64 = ld(m, g[SP], 8);
     g[SP] = addu(g[SP], 0x100);
+}
+
+/// `func_8003B860(dl, x0, x1, y0, y1, px, py, sa, sb, ta, tb)` (a screen
+/// quad with one corner moved, **guess**): like [`func_8003B324`] without
+/// the rotation: appends `gSPVertex(0x800A4920, 4, 0)`, `G_MODIFYVTX` Z = 0
+/// for vertices 0..3, XY for each (`x << 16 | (y & 0xFFFF)`), ST
+/// (`0x02140000 | 2k`: vertex 0 `(sa, ta)`, 1 `(sb, ta)`, 2 `(sb, tb)`, 3
+/// `(sa, tb)`) and `G_TRI2 06000402 00000604`, 14 commands, and advances
+/// `*dl`. The corners are (x0, y0), (x1, y0), (x1, y1), (x0, y1), except
+/// that the one whose quadrant of `(x0, y0)` holds `(px, py)` becomes `(px,
+/// py)`: vertex 0 if `px < x0` and `py < y0`, 1 if not `px < x0` and `py <
+/// y0`, 2 if neither, 3 if `px < x0` and not `py < y0` (signed compares;
+/// the arguments after `y0` are on the stack). `dl` is spilled to its home
+/// slot `sp + 0`.
+///
+/// Leaves `v0` = the new end, `t7 = dl`, `t0` = the TRI2's address, `a3`,
+/// `a0`, `t2` three of the commands before it, `a1 = sa << 16`, `v1 = tb`,
+/// and `t4`..`t9` the last words.
+///
+/// Domain: canonical pointers; the list in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003B860(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    'b_8003B91C: {
+        sw(m, g[SP], 0, g[A0]);
+        g[V0] = lw(m, g[A0], 0);
+        g[T7] = li(0x100_0000);
+        g[T8] = li(0x800A_0000);
+        g[V1] = g[V0];
+        g[V0] = addu(g[V0], 8);
+        g[T8] = addu(g[T8], 0x4920);
+        g[T7] = g[T7] | 0x4008;
+        g[T0] = g[V0];
+        sw(m, g[V1], 0, g[T7]);
+        sw(m, g[V1], 4, g[T8]);
+        g[V0] = addu(g[V0], 8);
+        g[T9] = li(0x21C_0000);
+        g[T1] = g[V0];
+        sw(m, g[T0], 0, g[T9]);
+        sw(m, g[T0], 4, 0);
+        g[V0] = addu(g[V0], 8);
+        g[T4] = li(0x21C_0002);
+        g[T2] = g[V0];
+        sw(m, g[T1], 0, g[T4]);
+        sw(m, g[T1], 4, 0);
+        g[T5] = li(0x21C_0004);
+        g[V0] = addu(g[V0], 8);
+        g[T6] = li(0x21C_0000);
+        sw(m, g[T2], 0, g[T5]);
+        sw(m, g[T2], 4, 0);
+        g[T6] = g[T6] | 6;
+        g[T3] = g[V0];
+        sw(m, g[T3], 0, g[T6]);
+        g[T0] = lw(m, g[SP], 0x14);
+        g[V0] = addu(g[V0], 8);
+        sw(m, g[T3], 4, 0);
+        g[AT] = slt(g[T0], g[A1]);
+        g[T2] = g[V0];
+        if g[AT] == 0 {
+            g[T1] = lw(m, g[SP], 0x18);
+        } else {
+            g[T1] = lw(m, g[SP], 0x18);
+            g[V1] = g[T0];
+            g[AT] = slt(g[T1], g[A3]);
+            if g[AT] != 0 {
+                g[A0] = g[T1];
+                break 'b_8003B91C;
+            }
+            g[T1] = lw(m, g[SP], 0x18);
+        }
+        g[V1] = g[A1];
+        g[A0] = g[A3];
+    }
+    'b_8003B95C: {
+        g[T9] = sll(g[V1], 16);
+        g[T4] = g[A0] & 0xFFFF;
+        g[T5] = g[T9] | g[T4];
+        g[T7] = li(0x218_0000);
+        g[AT] = slt(g[T0], g[A1]);
+        sw(m, g[T2], 0, g[T7]);
+        sw(m, g[T2], 4, g[T5]);
+        g[V0] = addu(g[V0], 8);
+        if g[AT] == 0 {
+            g[AT] = slt(g[T1], g[A3]);
+            g[V1] = g[T0];
+            if g[AT] != 0 {
+                g[A0] = g[T1];
+                break 'b_8003B95C;
+            }
+        }
+        g[V1] = g[A2];
+        g[A0] = g[A3];
+    }
+    'b_8003B9A4: {
+        g[T2] = g[V0];
+        g[T6] = li(0x218_0000);
+        g[T8] = sll(g[V1], 16);
+        g[T9] = g[A0] & 0xFFFF;
+        g[T4] = g[T8] | g[T9];
+        g[T6] = g[T6] | 2;
+        g[AT] = slt(g[T0], g[A1]);
+        sw(m, g[T2], 0, g[T6]);
+        sw(m, g[T2], 4, g[T4]);
+        g[V0] = addu(g[V0], 8);
+        if g[AT] == 0 {
+            g[AT] = slt(g[T1], g[A3]);
+            g[V1] = g[T0];
+            if g[AT] == 0 {
+                g[A0] = g[T1];
+                break 'b_8003B9A4;
+            }
+        }
+        g[V1] = g[A2];
+        g[A0] = lw(m, g[SP], 0x10);
+    }
+    'b_8003B9EC: {
+        g[A2] = g[V0];
+        g[T5] = li(0x218_0000);
+        g[T7] = sll(g[V1], 16);
+        g[T8] = g[A0] & 0xFFFF;
+        g[T9] = g[T7] | g[T8];
+        g[T5] = g[T5] | 4;
+        g[AT] = slt(g[T0], g[A1]);
+        sw(m, g[A2], 0, g[T5]);
+        sw(m, g[A2], 4, g[T9]);
+        g[V0] = addu(g[V0], 8);
+        if g[AT] != 0 {
+            g[AT] = slt(g[T1], g[A3]);
+            g[V1] = g[T0];
+            if g[AT] == 0 {
+                g[A0] = g[T1];
+                break 'b_8003B9EC;
+            }
+        }
+        g[V1] = g[A1];
+        g[A0] = lw(m, g[SP], 0x10);
+    }
+    g[A3] = g[V0];
+    g[T4] = li(0x218_0000);
+    g[T6] = sll(g[V1], 16);
+    g[T7] = g[A0] & 0xFFFF;
+    g[T8] = g[T6] | g[T7];
+    g[T4] = g[T4] | 6;
+    sw(m, g[A3], 0, g[T4]);
+    sw(m, g[A3], 4, g[T8]);
+    g[T9] = li(0x214_0000);
+    sw(m, g[V0], 8, g[T9]);
+    g[T1] = lw(m, g[SP], 0x24);
+    g[T4] = lw(m, g[SP], 0x1C);
+    g[V0] = addu(g[V0], 8);
+    g[T6] = g[T1] & 0xFFFF;
+    g[A1] = sll(g[T4], 16);
+    g[T7] = g[A1] | g[T6];
+    g[T8] = li(0x214_0000);
+    sw(m, g[V0], 4, g[T7]);
+    g[T2] = addu(g[V0], 8);
+    g[T8] = g[T8] | 2;
+    sw(m, g[T2], 0, g[T8]);
+    g[T9] = lw(m, g[SP], 0x20);
+    g[A0] = addu(g[T2], 8);
+    g[A3] = addu(g[A0], 8);
+    g[T4] = sll(g[T9], 16);
+    g[T5] = g[T4] | g[T6];
+    g[T6] = li(0x214_0000);
+    sw(m, g[T2], 4, g[T5]);
+    g[T6] = g[T6] | 4;
+    sw(m, g[A0], 0, g[T6]);
+    g[V1] = lw(m, g[SP], 0x28);
+    g[T9] = li(0x214_0006);
+    g[T7] = g[V1] & 0xFFFF;
+    g[T8] = g[T4] | g[T7];
+    sw(m, g[A0], 4, g[T8]);
+    g[T4] = g[A1] | g[T7];
+    sw(m, g[A3], 4, g[T4]);
+    sw(m, g[A3], 0, g[T9]);
+    g[T0] = addu(g[A3], 8);
+    g[T5] = li(0x600_0402);
+    g[T6] = 0x604;
+    sw(m, g[T0], 4, g[T6]);
+    sw(m, g[T0], 0, g[T5]);
+    g[T7] = lw(m, g[SP], 0);
+    g[V0] = addu(g[T0], 8);
+    sw(m, g[T7], 0, g[V0]);
+}
+
+/// `func_8003D110()` (render state reset, **guess**): zeroes the words
+/// `[0x800A4960]`, `[0x80114548]`, `[0x8011454C]`, sets `[0x80114540] =
+/// 320`, `[0x80114544] = 240`, and appends to the list at [`DL_HEAD`]:
+/// `E7000000 0` (pipe sync), `E3000A01 0`, `D7000002 80008000` (texture,
+/// stored first word first), `E2001E01 0`, `E3000C00 0`, `E3001201 0`,
+/// `E3001402 00000C00`, `E3000D01 0`, `E3000F00 0`, `E3001001 0`,
+/// `E200001C 0F0A7008`, `DC38000E 800A3C80` (a `G_MOVEMEM` from
+/// `0x800A3C80`), `DB0C0000 00010000`; then `E3001801 000000C0` if bit 11
+/// of the settings word `[0x800D697C]` is set, else `E3001801` with the
+/// sign-extended halfword `[0x8011447C]`; then `E3001A01 00000030`; and
+/// finally `[0x800A48D0] = 0`. Each command's second word is stored first
+/// unless noted.
+///
+/// Leaves `at = 0x800A0000`, `v1` = [`DL_HEAD`]'s address, `v0` = the last
+/// command's address, `t6`..`t9` its words and the flag test.
+///
+/// Domain: the list in RDRAM, not overlapping the globals.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003D110(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[AT] = li(0x800A_0000);
+    sw(m, g[AT], 0x4960, 0);
+    g[AT] = li(0x8011_0000);
+    sw(m, g[AT], 0x4548, 0);
+    g[AT] = li(0x8011_0000);
+    sw(m, g[AT], 0x454C, 0);
+    g[AT] = li(0x8011_0000);
+    g[T6] = 0x140;
+    sw(m, g[AT], 0x4540, g[T6]);
+    g[V1] = li(0x8012_0000);
+    g[AT] = li(0x8011_0000);
+    g[T7] = 0xF0;
+    g[V1] = addu(g[V1], 0x17B0);
+    sw(m, g[AT], 0x4544, g[T7]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T9] = li(0xE700_0000);
+    g[T7] = li(0xE300_0000);
+    g[T8] = addu(g[V0], 8);
+    sw(m, g[V1], 0, g[T8]);
+    sw(m, g[V0], 4, 0);
+    sw(m, g[V0], 0, g[T9]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T7] = g[T7] | 0xA01;
+    g[T9] = li(0xD700_0000);
+    g[T6] = addu(g[V0], 8);
+    sw(m, g[V1], 0, g[T6]);
+    sw(m, g[V0], 4, 0);
+    sw(m, g[V0], 0, g[T7]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T6] = li(0x8000_8000);
+    g[T8] = addu(g[V0], 8);
+    sw(m, g[V1], 0, g[T8]);
+    g[T9] = g[T9] | 2;
+    sw(m, g[V0], 0, g[T9]);
+    sw(m, g[V0], 4, g[T6]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T8] = li(0xE200_1E01);
+    g[T7] = addu(g[V0], 8);
+    sw(m, g[V1], 0, g[T7]);
+    sw(m, g[V0], 4, 0);
+    sw(m, g[V0], 0, g[T8]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T6] = li(0xE300_0C00);
+    g[T9] = addu(g[V0], 8);
+    sw(m, g[V1], 0, g[T9]);
+    sw(m, g[V0], 4, 0);
+    sw(m, g[V0], 0, g[T6]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T8] = li(0xE300_1201);
+    g[T7] = addu(g[V0], 8);
+    sw(m, g[V1], 0, g[T7]);
+    sw(m, g[V0], 4, 0);
+    sw(m, g[V0], 0, g[T8]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T6] = li(0xE300_1402);
+    g[T9] = addu(g[V0], 8);
+    sw(m, g[V1], 0, g[T9]);
+    g[T7] = 0xC00;
+    sw(m, g[V0], 4, g[T7]);
+    sw(m, g[V0], 0, g[T6]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T9] = li(0xE300_0D01);
+    g[T8] = addu(g[V0], 8);
+    sw(m, g[V1], 0, g[T8]);
+    sw(m, g[V0], 4, 0);
+    sw(m, g[V0], 0, g[T9]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T7] = li(0xE300_0F00);
+    g[T6] = addu(g[V0], 8);
+    sw(m, g[V1], 0, g[T6]);
+    sw(m, g[V0], 4, 0);
+    sw(m, g[V0], 0, g[T7]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T9] = li(0xE300_1001);
+    g[T8] = addu(g[V0], 8);
+    sw(m, g[V1], 0, g[T8]);
+    sw(m, g[V0], 4, 0);
+    sw(m, g[V0], 0, g[T9]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T8] = li(0xF0A_0000);
+    g[T7] = li(0xE200_0000);
+    g[T6] = addu(g[V0], 8);
+    sw(m, g[V1], 0, g[T6]);
+    g[T7] = g[T7] | 0x1C;
+    g[T8] = g[T8] | 0x7008;
+    sw(m, g[V0], 4, g[T8]);
+    sw(m, g[V0], 0, g[T7]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T7] = li(0x800A_0000);
+    g[T6] = li(0xDC38_0000);
+    g[T9] = addu(g[V0], 8);
+    sw(m, g[V1], 0, g[T9]);
+    g[T6] = g[T6] | 0xE;
+    g[T7] = addu(g[T7], 0x3C80);
+    sw(m, g[V0], 4, g[T7]);
+    sw(m, g[V0], 0, g[T6]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T6] = li(0x1_0000);
+    g[T9] = li(0xDB0C_0000);
+    g[T8] = addu(g[V0], 8);
+    sw(m, g[V1], 0, g[T8]);
+    g[T7] = li(0x800D_0000);
+    sw(m, g[V0], 4, g[T6]);
+    sw(m, g[V0], 0, g[T9]);
+    g[T7] = lw(m, g[T7], 0x697C);
+    g[T6] = li(0xE300_0000);
+    g[T9] = 0xC0;
+    g[T8] = g[T7] & 0x800;
+    g[AT] = li(0x800A_0000);
+    if g[T8] != 0 {
+        g[V0] = lw(m, g[V1], 0);
+        g[T8] = li(0xE300_1801);
+        g[T7] = addu(g[V0], 8);
+        sw(m, g[V1], 0, g[T7]);
+        sw(m, g[V0], 4, g[T9]);
+        sw(m, g[V0], 0, g[T8]);
+        g[V0] = lw(m, g[V1], 0);
+        g[T7] = li(0xE300_1A01);
+        g[T6] = addu(g[V0], 8);
+        sw(m, g[V1], 0, g[T6]);
+        g[T8] = 0x30;
+        sw(m, g[V0], 4, g[T8]);
+        sw(m, g[V0], 0, g[T7]);
+    } else {
+        g[V0] = lw(m, g[V1], 0);
+        g[T6] = g[T6] | 0x1801;
+        g[T7] = li(0x8011_0000);
+        g[T9] = addu(g[V0], 8);
+        sw(m, g[V1], 0, g[T9]);
+        sw(m, g[V0], 0, g[T6]);
+        g[T7] = lh(m, g[T7], 0x447C);
+        g[T9] = li(0xE300_1A01);
+        sw(m, g[V0], 4, g[T7]);
+        g[V0] = lw(m, g[V1], 0);
+        g[T6] = 0x30;
+        g[T8] = addu(g[V0], 8);
+        sw(m, g[V1], 0, g[T8]);
+        sw(m, g[V0], 4, g[T6]);
+        sw(m, g[V0], 0, g[T9]);
+    }
+    sw(m, g[AT], 0x48D0, 0);
 }
 
 /// Append a command to the display list whose pointer is at `[a1]`: load it
