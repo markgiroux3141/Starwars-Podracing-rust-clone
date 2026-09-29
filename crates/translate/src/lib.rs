@@ -177,6 +177,47 @@ L_8000100C:
         );
     }
 
+    /// Two loops sharing a header (inner latch `bne`, outer latch `bnel`
+    /// with a delay slot): the outer latch's path must stay inside the loop.
+    /// A trailing `continue` there is implicit, so hoisting that path out of
+    /// the loop as its "exit" would make it fall off the end (session 8:
+    /// func_80034650's draft ran one row).
+    #[test]
+    fn shared_loop_header_keeps_the_outer_latch_inside() {
+        let b = body(
+            "L_80001000:
+    // 0x80001000: addiu $a0, $a0, 0x1
+    ctx->r4 = ADD32(ctx->r4, 0X1);
+    // 0x80001004: bne $a0, $a1, L_80001000
+    if (ctx->r4 != ctx->r5) {
+        // 0x80001008: nop
+
+            goto L_80001000;
+    }
+    // 0x80001008: nop
+
+    // 0x8000100C: addiu $a2, $a2, 0x1
+    ctx->r6 = ADD32(ctx->r6, 0X1);
+    // 0x80001010: bnel $a2, $a3, L_80001000
+    if (ctx->r6 != ctx->r7) {
+        // 0x80001014: or $a0, $zero, $zero
+        ctx->r4 = 0 | 0;
+            goto L_80001000;
+    }
+    goto skip_0;
+    // 0x80001014: or $a0, $zero, $zero
+    ctx->r4 = 0 | 0;
+    skip_0:
+    // 0x80001018: jr $ra
+    // 0x8000101C: nop
+
+    return;",
+        );
+        // After the outer increment: return, or reset a0 and go round again.
+        let tail = &b[b.find("g[A2] = addu(g[A2], 1);").expect(&b)..];
+        assert!(tail.contains("g[A0] = 0;\n}\n}"), "the outer latch left the loop:\n{b}");
+    }
+
     #[test]
     fn jal_delay_slot_runs_before_the_call_and_g_is_reborrowed() {
         let d = translate(&wrap(

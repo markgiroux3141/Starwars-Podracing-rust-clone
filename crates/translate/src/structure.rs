@@ -365,11 +365,14 @@ fn hoist_loop_exits(code: &mut Vec<S>) {
                     k += 1;
                     continue;
                 }
+                // The exit branch must not fall through: inside the loop,
+                // falling off it goes round again (a trailing `continue` may
+                // already have been stripped), after the loop it would leave.
                 let mut found = None;
                 if let Some(S::If(c, t, e)) = body.last() {
-                    if is_cont(t) && !e.is_empty() && !mentions(e, &l) {
+                    if is_cont(t) && !e.is_empty() && !mentions(e, &l) && !falls_through(e) {
                         found = Some((body.len() - 1, c.negate(), e.clone()));
-                    } else if is_cont(e) && !t.is_empty() && !mentions(t, &l) {
+                    } else if is_cont(e) && !t.is_empty() && !mentions(t, &l) && !falls_through(t) {
                         found = Some((body.len() - 1, c.clone(), t.clone()));
                     }
                 }
