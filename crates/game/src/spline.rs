@@ -7,7 +7,7 @@
 #![allow(non_snake_case)]
 
 use crate::imports;
-use crate::recomp::{addu, div, enter, lh, li, lw, multu, reg::*, sll, slt, sra, srav, sw, RecompContext};
+use crate::recomp::{addu, div, enter, fpu, lh, li, lw, multu, reg::*, sll, slt, sra, srav, sw, RecompContext};
 
 /// `func_8003A4A0(spline, i, out)`: the position (the float triple `+0x10`)
 /// of point `i` (`84 * i`, 32-bit, unbounded) of the spline's points
@@ -412,5 +412,182 @@ pub unsafe extern "C" fn func_8003B250(rdram: *mut u8, ctx: *mut RecompContext) 
     if g[T2] != 0 {
         g[T3] = lh(m, g[A1], 4);
         sw(m, g[A0], 0x1C, g[T3]);
+    }
+}
+
+/// `func_8007EE98(w, v)` (walker placement, **guess** at the name): puts
+/// the spline walker `w` (NOTES.md, "Depth-0 leaves ported in session 7")
+/// at segment `v / 10` (signed `div`), with the remainder as the fraction
+/// `w+8 = (f32(v) - f32(v / 10) * 10) / 10`. With `s = [w]`, `n = [s + 4]`
+/// the point count, `pts = [s + 0xC]` (0x54 bytes each) and `F = (s16)
+/// [s + 0]`:
+/// - a segment `k = v / 10 < n` is a point: `w+0x10 = k`, `w+0x14 = pts[k]
+///   .next[0]` (the halfword `+4`), and if `F != 1`, `w+0x18 = pts[w+0x14]
+///   .next[0]`, `w+0x1C = pts[w+0x18].next[0]`; `w+0x2C = 0`, then the
+///   fraction;
+/// - otherwise it looks for `k` among the points' extra segment ids (the
+///   halfwords `+0x42 + 2j`, j = 0..7, point by point): at the first match
+///   (point `a`, slot `j`), `w+0x2C = j`, `w+0x10 = a`, the fraction, then
+///   the path through the forks: `w+0x14 = pts[a].next[j & 1]`, and if `F
+///   != 1`, `w+0x18 = pts[w+0x14].next[(j >> 1) & 1]`, `w+0x1C =
+///   pts[w+0x18].next[(j >> 2) & 1]`. Nothing is written without a match.
+///
+/// The search stops by setting both indices to 99999; QUIRK: with `n`
+/// above 100000 it would carry on from point 100000. Indices are signed
+/// halfwords used as they are (not bounded).
+///
+/// Leaves `v0 = k`, `v1 = s`, `a1 = v`, and (the paths differ) the loop
+/// registers `a2`, `a3`, `t0`..`t9`, `f0 = 10.0` and the conversions in
+/// `f4`..`f18`.
+///
+/// Domain: canonical pointers; the points and the ones they name in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8007EE98(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    g[AT] = 0xA;
+    let (lo, _) = div(g[A1], g[AT]);
+    g[V1] = lw(m, g[A0], 0);
+    g[V0] = lo;
+    g[A2] = lw(m, g[V1], 4);
+    g[AT] = slt(g[V0], g[A2]);
+    if g[AT] != 0 {
+        // A point: its successors, 0x54-byte points (a2).
+        g[A2] = 0x54;
+        let (lo, _) = multu(g[V0], g[A2]);
+        sw(m, g[A0], 0x10, g[V0]);
+        g[T4] = lw(m, g[V1], 0xC);
+        g[T0] = 1;
+        g[T8] = lo;
+        g[T6] = addu(g[T4], g[T8]);
+        g[T2] = lh(m, g[T6], 4);
+        sw(m, g[A0], 0x14, g[T2]);
+        g[T9] = lh(m, g[V1], 0);
+        if g[T0] != g[T9] {
+            let (lo, _) = multu(g[T2], g[A2]);
+            g[T3] = lw(m, g[V1], 0xC);
+            g[T7] = lo;
+            g[T4] = addu(g[T3], g[T7]);
+            g[T8] = lh(m, g[T4], 4);
+            let (lo, _) = multu(g[T8], g[A2]);
+            sw(m, g[A0], 0x18, g[T8]);
+            g[T6] = lw(m, g[V1], 0xC);
+            g[T9] = lo;
+            g[T5] = addu(g[T6], g[T9]);
+            g[T3] = lh(m, g[T5], 4);
+            sw(m, g[A0], 0x1C, g[T3]);
+        }
+        f[6].set_u32l(g[V0] as u32);
+        g[AT] = li(0x4120_0000); // 10.0
+        f[0].set_u32l(g[AT] as u32);
+        f[16].set_fl(fpu::cvt_s_w(f[6].u32l(), fpu::NEAREST));
+        f[8].set_u32l(g[A1] as u32);
+        sw(m, g[A0], 0x2C, 0);
+        f[10].set_fl(fpu::cvt_s_w(f[8].u32l(), fpu::NEAREST));
+        f[18].set_fl(f[16].fl() * f[0].fl());
+        f[4].set_fl(f[10].fl() - f[18].fl());
+        f[8].set_fl(f[4].fl() / f[0].fl());
+        sw(m, g[A0], 8, u64::from(f[8].u32l()));
+        return;
+    }
+    // A fork's segment: a3 = the point, a2 = the slot, t1 = 99999.
+    g[A3] = 0;
+    if (g[A2] as i64) <= 0 {
+        return;
+    }
+    g[AT] = li(0x4120_0000);
+    g[T1] = li(0x1_0000);
+    f[0].set_u32l(g[AT] as u32);
+    g[T1] = g[T1] | 0x869F;
+    g[T0] = 1;
+    g[A2] = 0;
+    loop {
+        loop {
+            // t2 = &pts[a3] + 2 a2 (a3 * 0x54 as ((a3*5)*4 + a3)*4).
+            g[T7] = sll(g[A3], 2);
+            g[T7] = addu(g[T7], g[A3]);
+            g[T6] = lw(m, g[V1], 0xC);
+            g[T7] = sll(g[T7], 2);
+            g[T7] = addu(g[T7], g[A3]);
+            g[T7] = sll(g[T7], 2);
+            g[T9] = sll(g[A2], 1);
+            g[T8] = addu(g[T6], g[T7]);
+            g[T2] = addu(g[T8], g[T9]);
+            g[T3] = lh(m, g[T2], 0x42);
+            if g[V0] != g[T3] {
+                g[A2] = addu(g[A2], 1);
+            } else {
+                f[8].set_u32l(g[V0] as u32);
+                f[4].set_u32l(g[A1] as u32);
+                g[T5] = sll(g[A3], 2);
+                f[10].set_fl(fpu::cvt_s_w(f[8].u32l(), fpu::NEAREST));
+                sw(m, g[A0], 0x2C, g[A2]);
+                sw(m, g[A0], 0x10, g[A3]);
+                g[T5] = addu(g[T5], g[A3]);
+                g[T5] = sll(g[T5], 2);
+                f[6].set_fl(fpu::cvt_s_w(f[4].u32l(), fpu::NEAREST));
+                f[16].set_fl(f[10].fl() * f[0].fl());
+                g[T5] = addu(g[T5], g[A3]);
+                g[T5] = sll(g[T5], 2);
+                g[T7] = g[A2] & 1;
+                g[T8] = sll(g[T7], 1);
+                g[A3] = g[T1];
+                f[18].set_fl(f[6].fl() - f[16].fl());
+                f[4].set_fl(f[18].fl() / f[0].fl());
+                sw(m, g[A0], 8, u64::from(f[4].u32l()));
+                g[T4] = lw(m, g[V1], 0xC);
+                g[T6] = addu(g[T4], g[T5]);
+                g[T9] = addu(g[T6], g[T8]);
+                g[T2] = lh(m, g[T9], 4);
+                g[T8] = sra(g[A2], 1);
+                g[T9] = g[T8] & 1;
+                sw(m, g[A0], 0x14, g[T2]);
+                g[T3] = lh(m, g[V1], 0);
+                g[T7] = sll(g[T2], 2);
+                g[T7] = addu(g[T7], g[T2]);
+                g[T7] = sll(g[T7], 2);
+                if g[T0] != g[T3] {
+                    g[T4] = lw(m, g[V1], 0xC);
+                    g[T7] = addu(g[T7], g[T2]);
+                    g[T7] = sll(g[T7], 2);
+                    g[T2] = sll(g[T9], 1);
+                    g[T6] = addu(g[T4], g[T7]);
+                    g[T3] = addu(g[T6], g[T2]);
+                    g[T5] = lh(m, g[T3], 4);
+                    g[T6] = sra(g[A2], 2);
+                    g[T2] = g[T6] & 1;
+                    g[T8] = sll(g[T5], 2);
+                    sw(m, g[A0], 0x18, g[T5]);
+                    g[T8] = addu(g[T8], g[T5]);
+                    g[T4] = lw(m, g[V1], 0xC);
+                    g[T8] = sll(g[T8], 2);
+                    g[T8] = addu(g[T8], g[T5]);
+                    g[T8] = sll(g[T8], 2);
+                    g[T3] = sll(g[T2], 1);
+                    g[T9] = addu(g[T4], g[T8]);
+                    g[T5] = addu(g[T9], g[T3]);
+                    g[T7] = lh(m, g[T5], 4);
+                    sw(m, g[A0], 0x1C, g[T7]);
+                }
+                // Stop both loops.
+                g[A2] = g[T1];
+                g[A2] = addu(g[A2], 1);
+            }
+            g[AT] = slt(g[A2], 8);
+            if g[AT] == 0 {
+                break;
+            }
+        }
+        g[A2] = lw(m, g[V1], 4);
+        g[A3] = addu(g[A3], 1);
+        g[AT] = slt(g[A3], g[A2]);
+        if g[AT] == 0 {
+            return;
+        }
+        g[A2] = 0;
     }
 }

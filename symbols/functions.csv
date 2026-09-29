@@ -192,7 +192,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8000EBE8,func_8000EBE8,ours,1,,recomp,,,
 0x8000EEE0,func_8000EEE0,ours,2,,recomp,,,
 0x8000F0DC,func_8000F0DC,ours,3,,recomp,,,
-0x8000F5A0,func_8000F5A0,ours,0,,recomp,,,
+0x8000F5A0,func_8000F5A0,ours,0,render,rust_verified,unit_diff,high,depth-buffer probes: 8x8 window counts and point samples; QUIRK: unbounded sample reads (game::render)
 0x8000FA2C,func_8000FA2C,ours,4,,recomp,,,
 0x8000FCA4,func_8000FCA4,ours,0,,rust_verified,unit_diff,high,byte 3 of word k at 0x8009B824; QUIRK unbounded (game::misc)
 0x8000FCBC,func_8000FCBC,ours,0,,rust_verified,unit_diff,high,"0 <= i < 2 (64-bit): [0x8009B814+4i] = a1, triple 0x800D57D0+12i, -1000 at 0x800D57B0/A0/90+4i, float 0x8009B81C+4i, 4 stack-arg bytes at 0x8009B824+4i (game::misc)"
@@ -236,7 +236,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80011EE8,func_80011EE8,ours,0,,rust_verified,unit_diff,high,"*x, *y = halfword pair (game::misc)"
 0x80011F04,func_80011F04,ours,0,,rust_verified,unit_diff,high,four bytes at 0x800A1CCC; [0x800D6938] = 0 (game::misc)
 0x80011F38,func_80011F38,ours,0,,recomp,,,
-0x800125E4,func_800125E4,ours,0,,recomp,,,
+0x800125E4,func_800125E4,ours,0,render,rust_verified,unit_diff,high,texture load commands by format (game::render)
 0x800129B8,func_800129B8,ours,1,,recomp,,,
 0x800129E4,func_800129E4,ours,0,,rust_verified,unit_diff,high,"text width: sum of glyph advances (+2 of 16-byte glyphs) up to NUL or ~n; ~~ literal, ~X skipped; lowercase folded if font lacks it; chars >= 0x97 remapped via 0x800A1C86/0x800A1CD8 to an extended table; QUIRKs: first==0 overrides extended glyphs, ~ before NUL runs past the string (game::misc)"
 0x80012B5C,func_80012B5C,ours,0,,rust_verified,unit_diff,high,lookup c in 16-byte records [o+0x5C] for c in [o+0x5A]..[o+0x5B]; QUIRK a miss copies uninitialised stack words (game::misc)
@@ -278,8 +278,8 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80015724,func_80015724,ours,0,math,rust_verified,unit_diff,high,4x4 out = a * b from frame copies (aliasing safe) (game::math)
 0x80015C30,func_80015C30,ours,0,math,rust_verified,unit_diff,high,4x4 m = n * m in place (n read in place) (game::math)
 0x800160BC,func_800160BC,ours,0,math,rust_verified,unit_diff,high,"inverse of scaled rotation + translation: transpose / squared row lengths, t' = -(t . columns) (game::math)"
-0x80016260,func_80016260,ours,0,,recomp,,,
-0x800167E4,func_800167E4,ours,0,,recomp,,,
+0x80016260,func_80016260,ours,0,math,rust_verified,unit_diff,high,"ludcmp shape (Crout LU, implicit pivoting, n = 3); QUIRKs: stale vv for a zero row, stale imax at column 0 (game::math)"
+0x800167E4,func_800167E4,ours,0,math,rust_verified,unit_diff,high,"lubksb shape (LU back-substitution, n = 3) (game::math)"
 0x80016A20,func_80016A20,ours,1,,recomp,,,
 0x80016BF4,func_80016BF4,ours,0,math,rust_verified,unit_diff,high,"out = v x 3x3 part (row vector), via frame (game::math)"
 0x80016CAC,func_80016CAC,ours,0,math,rust_verified,unit_diff,high,"out = v x 4x4 with translation, via frame (game::math)"
@@ -389,7 +389,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8002932C,func_8002932C,ours,23,,recomp,,,
 0x80029494,func_80029494,ours,2,,recomp,,,
 0x8002963C,func_8002963C,ours,21,,recomp,,,
-0x80029A3C,func_80029A3C,ours,0,,recomp,,,
+0x80029A3C,func_80029A3C,ours,0,save,rust_verified,unit_diff,high,"profile record reset, working (0x80113E60) or saved (0x80113694) copy (game::save)"
 0x80029C24,func_80029C24,ours,0,,rust_verified,unit_diff,high,"A = trunc(f32(byte*word)*[0x800A9E08])+1 -> [0x800D6CC8], B likewise -> [0x800D6CCC], halfword [0x800D6CC4] = [0x80113E78]+A < B (game::misc)"
 0x80029D38,func_80029D38,ours,9,,recomp,,,
 0x8002A7D4,func_8002A7D4,ours,9,,recomp,,,
@@ -430,7 +430,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8002E82C,func_8002E82C,ours,10,,recomp,,,
 0x8002E8D4,func_8002E8D4,ours,0,,rust_verified,unit_diff,high,[0x800D7498 + 4i] (game::misc)
 0x8002E8E8,func_8002E8E8,ours,11,,recomp,,,
-0x8002EA28,func_8002EA28,ours,0,,recomp,,,
+0x8002EA28,func_8002EA28,ours,0,input,rust_verified,unit_diff,high,pads update: four OSContPads to 0x18-byte records at 0x800D74D8; QUIRK: one shared buttons halfword (game::input)
 0x8002ECA0,func_8002ECA0,ours,1,,recomp,,,
 0x8002F000,func_8002F000,ours,0,,rust_verified,unit_diff,high,"[0x800A26F4] = 0, [0x800A26F8] = 1, float [0x800D7740] = 0 (game::misc)"
 0x8002F024,func_8002F024,ours,6,,recomp,,,
@@ -533,7 +533,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80033E08,func_80033E08,ours,0,,rust_verified,unit_diff,high,next of 3072 x 64-byte ring at 0x800E2C50 (index 0x800A3CC4) (game::misc)
 0x80033E40,func_80033E40,ours,0,,rust_verified,unit_diff,high,copy vec3 to 0x800A3FDC and 4x4 to 0x80112E20 (game::misc)
 0x80033EEC,func_80033EEC,ours,0,,rust_verified,unit_diff,high,"3x4 stack push at 0x80112EA0 (depth [0x800A3FF0] < 32), flag [0x800A3FF4] = 1 (game::misc)"
-0x80033F94,func_80033F94,ours,0,,recomp,,,
+0x80033F94,func_80033F94,ours,0,,rust_verified,unit_diff,high,3x4 stack push of m * top (0x80112EA0) (game::misc)
 0x8003423C,func_8003423C,ours,0,,rust_verified,unit_diff,high,copy 3x4 stack top; depth re-read per word (QUIRK) (game::misc)
 0x80034374,func_80034374,ours,0,,rust_verified,unit_diff,high,"3x4 stack top as 4x4 (column 3 = 0,0,0,1) (game::misc)"
 0x800344C8,func_800344C8,ours,0,,rust_verified,unit_diff,high,[0x800A3FF4] = 1; decrement [0x800A3FF0] if positive (game::misc)
@@ -558,7 +558,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8003609C,func_8003609C,ours,0,,recomp,,,
 0x80036314,func_80036314,ours,1,,recomp,,,
 0x800366DC,func_800366DC,ours,2,,recomp,,,
-0x80036A1C,func_80036A1C,ours,0,,recomp,,,
+0x80036A1C,func_80036A1C,ours,0,render,rust_verified,unit_diff,high,"box culling against the clip matrix at 0x80112E60 (0 culled, 1 visible, 2 all inside) (game::render)"
 0x80036F7C,func_80036F7C,ours,0,,rust_verified,unit_diff,high,"[0x800A3D30] = 0x800DB930, [0x800A3D38] = 0 (game::misc)"
 0x80036F98,func_80036F98,ours,3,,recomp,,,
 0x800374C4,func_800374C4,ours,4,,recomp,,,
@@ -619,7 +619,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8003B1F0,func_8003B1F0,ours,4,,recomp,,,
 0x8003B250,func_8003B250,ours,0,spline,rust_verified,unit_diff,high,start spline walker at p (first successors) (game::spline)
 0x8003B300,func_8003B300,ours,0,,rust_verified,unit_diff,high,four words at 0x80114540..4C (game::misc)
-0x8003B324,func_8003B324,ours,0,,recomp,,,
+0x8003B324,func_8003B324,ours,0,render,rust_verified,unit_diff,high,"rotated screen quad: 14 F3DEX2 commands, aspect-corrected (game::render)"
 0x8003B860,func_8003B860,ours,0,,recomp,,,
 0x8003BAB0,func_8003BAB0,ours,1,,recomp,,,
 0x8003D110,func_8003D110,ours,0,,recomp,,,
@@ -670,7 +670,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8003FBD4,func_8003FBD4,ours,1,,recomp,,,
 0x8003FC94,func_8003FC94,ours,1,,recomp,,,
 0x8003FD7C,func_8003FD7C,ours,1,,recomp,,,
-0x8003FDCC,func_8003FDCC,ours,0,,recomp,,,
+0x8003FDCC,func_8003FDCC,ours,0,pools,rust_verified,unit_diff,high,"nearest pool elements, sorted by squared distance (capped) (game::pools)"
 0x80040050,func_80040050,ours,3,,recomp,,,
 0x800401FC,func_800401FC,ours,3,,recomp,,,
 0x800408D0,func_800408D0,ours,2,,recomp,,,
@@ -784,7 +784,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80051FF4,func_80051FF4,ours,0,,rust_verified,unit_diff,high,"index of the first zero of the four words at 0x8011B1BC, or 4 (game::misc)"
 0x80052060,func_80052060,ours,2,,recomp,,,
 0x800520C8,func_800520C8,ours,0,,rust_verified,unit_diff,high,"index of x among the four words at 0x8011B1BC, or -1 (game::misc)"
-0x80052134,func_80052134,ours,0,,recomp,,,
+0x80052134,func_80052134,ours,0,,rust_verified,unit_diff,high,wrapped progress figure (game::misc)
 0x800521C0,func_800521C0,ours,1,,recomp,,,
 0x80052208,func_80052208,ours,2,,recomp,,,
 0x80052A08,func_80052A08,ours,5,,recomp,,,
@@ -835,7 +835,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8005FA38,func_8005FA38,ours,5,,recomp,,,
 0x80060030,func_80060030,ours,2,,recomp,,,
 0x800600A0,func_800600A0,ours,20,,recomp,,,
-0x80060668,func_80060668,ours,0,,recomp,,,
+0x80060668,func_80060668,ours,0,,rust_verified,unit_diff,high,table-driven settings pick; QUIRK: unbounded table index (game::misc)
 0x80060880,func_80060880,ours,23,,recomp,,,
 0x80060C6C,func_80060C6C,ours,2,,recomp,,,
 0x80060D70,func_80060D70,ours,20,,recomp,,,
@@ -852,14 +852,14 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80063AA0,func_80063AA0,ours,22,,recomp,,,
 0x80063AE0,func_80063AE0,ours,3,,recomp,,,
 0x80063B60,func_80063B60,ours,2,,recomp,,,
-0x80063D0C,func_80063D0C,ours,0,,recomp,,,
+0x80063D0C,func_80063D0C,ours,0,,rust_verified,unit_diff,high,point lookup in 16 entries at 0x800A5100 (game::misc)
 0x80063E08,func_80063E08,ours,1,,recomp,,,
 0x80063E4C,func_80063E4C,ours,22,,recomp,,,
 0x80063EF4,func_80063EF4,ours,1,,recomp,,,
 0x80064034,func_80064034,ours,5,,recomp,,,
 0x80064A48,func_80064A48,ours,1,,recomp,,,
-0x80064A88,func_80064A88,ours,0,,recomp,,,
-0x80064AF4,func_80064AF4,ours,0,,recomp,,,
+0x80064A88,func_80064A88,ours,0,,rust_verified,unit_diff,high,"[0x8011A240] += x * dt, clamped to 0..1 (game::misc)"
+0x80064AF4,func_80064AF4,ours,0,,rust_verified,unit_diff,high,[0x8011A278] counted down by dt (game::misc)
 0x80064B44,func_80064B44,ours,4,,recomp,,,
 0x80064E90,func_80064E90,ours,2,,recomp,,,
 0x80064F1C,func_80064F1C,ours,3,,recomp,,,
@@ -870,10 +870,10 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80065810,func_80065810,ours,2,,recomp,,,
 0x80065C50,func_80065C50,ours,1,,recomp,,,
 0x80065C74,func_80065C74,ours,1,,recomp,,,
-0x80065C98,func_80065C98,ours,0,,recomp,,,
+0x80065C98,func_80065C98,ours,0,,rust_verified,unit_diff,high,[p + 0x68] = x unless p is null (game::misc)
 0x80065CB0,func_80065CB0,ours,0,,rust_verified,unit_diff,high,if p: [p+0xF0] = v (game::misc)
 0x80065CD0,func_80065CD0,ours,2,,recomp,,,
-0x80065E18,func_80065E18,ours,0,,recomp,,,
+0x80065E18,func_80065E18,ours,0,,rust_verified,unit_diff,high,[p + 0x190] = [0x800A3080] / 4 and a vec3 copy (game::misc)
 0x80065E54,func_80065E54,ours,3,,recomp,,,
 0x80066144,func_80066144,ours,1,,recomp,,,
 0x800665A4,func_800665A4,ours,22,,recomp,,,
@@ -897,7 +897,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8006A9D4,func_8006A9D4,ours,7,,recomp,,,
 0x8006ABD0,func_8006ABD0,ours,3,,recomp,,,
 0x8006AF48,func_8006AF48,ours,5,,recomp,,,
-0x8006B304,func_8006B304,ours,0,,recomp,,,
+0x8006B304,func_8006B304,ours,0,,rust_verified,unit_diff,high,grid-cell mask from thresholds at 0x8011C858 (game::misc)
 0x8006B568,func_8006B568,ours,7,,recomp,,,
 0x8006B9C8,func_8006B9C8,ours,1,,recomp,,,
 0x8006BB50,func_8006BB50,ours,21,,recomp,,,
@@ -905,18 +905,18 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8006C0D4,func_8006C0D4,ours,24,,recomp,,,
 0x8006C6D0,func_8006C6D0,ours,0,,rust_verified,unit_diff,high,set bit 12 of [p+0x60] if bit 13 of [0x800D76F0+4i] (game::misc)
 0x8006C708,func_8006C708,ours,0,,rust_verified,unit_diff,high,bit 0/1 if any of w0..2 / w3..5 at p+0x2A0 has bit 2 or 4 (game::misc)
-0x8006C828,func_8006C828,ours,0,,recomp,,,
+0x8006C828,func_8006C828,ours,0,,rust_verified,unit_diff,high,balance of six flags above a threshold (game::misc)
 0x8006C950,func_8006C950,ours,3,,recomp,,,
 0x8006CA2C,func_8006CA2C,ours,21,,recomp,,,
-0x8006D0C0,func_8006D0C0,ours,0,,recomp,,,
+0x8006D0C0,func_8006D0C0,ours,0,,rust_verified,unit_diff,high,threshold flag at [p + 0x2FC] (game::misc)
 0x8006D150,func_8006D150,ours,5,,recomp,,,
 0x8006D7F0,func_8006D7F0,ours,1,,recomp,,,
-0x8006D9DC,func_8006D9DC,ours,0,,recomp,,,
+0x8006D9DC,func_8006D9DC,ours,0,,rust_verified,unit_diff,high,value eased toward a target by rate * dt (game::misc)
 0x8006DB1C,func_8006DB1C,ours,3,,recomp,,,
 0x8006E008,func_8006E008,ours,0,,rust_verified,unit_diff,high,QUIRK uninitialised frame word [sp-8] == 2 (game::misc)
 0x8006E034,func_8006E034,ours,5,,recomp,,,
 0x8006E1CC,func_8006E1CC,ours,6,,recomp,,,
-0x8006E2FC,func_8006E2FC,ours,0,,recomp,,,
+0x8006E2FC,func_8006E2FC,ours,0,,rust_verified,unit_diff,high,gauge colours and fill by mode (game::misc)
 0x8006E42C,func_8006E42C,ours,5,,recomp,,,
 0x8006E6F8,func_8006E6F8,ours,22,,recomp,,,
 0x8006FA08,func_8006FA08,ours,4,,recomp,,,
@@ -931,19 +931,19 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80070BBC,func_80070BBC,ours,5,,recomp,,,
 0x80070E98,func_80070E98,ours,6,,recomp,,,
 0x8007134C,func_8007134C,ours,20,,recomp,,,
-0x80071820,func_80071820,ours,0,,recomp,,,
+0x80071820,func_80071820,ours,0,,rust_verified,unit_diff,high,meter charge with a maximum (game::misc)
 0x800718DC,func_800718DC,ours,20,,recomp,,,
 0x80072AD0,func_80072AD0,ours,18,,recomp,,,
 0x80073470,func_80073470,ours,2,,recomp,,,
 0x800735B4,func_800735B4,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
 0x800735BC,func_800735BC,ours,2,,recomp,,,
 0x80073640,func_80073640,ours,2,,recomp,,,
-0x800736AC,func_800736AC,ours,0,,recomp,,,
+0x800736AC,func_800736AC,ours,0,anim,rust_verified,unit_diff,high,1 if any object in a list is not running or has reached its end (game::anim)
 0x80073708,func_80073708,ours,0,,rust_verified,unit_diff,high,"spills a0, returns 0 (game::misc)"
 0x80073714,func_80073714,ours,2,,recomp,,,
-0x80073834,func_80073834,ours,0,,recomp,,,
+0x80073834,func_80073834,ours,0,,rust_verified,unit_diff,high,bump up to five slots (game::misc)
 0x800738D4,func_800738D4,ours,2,,recomp,,,
-0x80073C58,func_80073C58,ours,0,,recomp,,,
+0x80073C58,func_80073C58,ours,0,,rust_verified,unit_diff,high,double clamp (game::misc)
 0x80073CD0,func_80073CD0,ours,5,,recomp,,,
 0x80074474,func_80074474,ours,6,,recomp,,,
 0x800745AC,func_800745AC,ours,4,,recomp,,,
@@ -976,7 +976,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8007B544,func_8007B544,ours,1,,recomp,,,
 0x8007B6CC,func_8007B6CC,ours,2,,recomp,,,
 0x8007B744,func_8007B744,ours,2,,recomp,,,
-0x8007B7BC,func_8007B7BC,ours,0,,recomp,,,
+0x8007B7BC,func_8007B7BC,ours,0,anim,rust_verified,unit_diff,high,800736AC over list [0x8011C8F0 + 4i] (game::anim)
 0x8007B828,func_8007B828,ours,3,,recomp,,,
 0x8007B9E4,func_8007B9E4,ours,4,,recomp,,,
 0x8007BA9C,func_8007BA9C,ours,0,,rust_verified,unit_diff,high,record 0x58*i at 0x8011CB20 for x in 50-entry list; QUIRK one past (game::misc)
@@ -994,16 +994,16 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8007CD50,func_8007CD50,ours,21,,recomp,,,
 0x8007D310,func_8007D310,ours,2,,recomp,,,
 0x8007D3CC,func_8007D3CC,ours,3,,recomp,,,
-0x8007DA20,func_8007DA20,ours,0,,recomp,,,
+0x8007DA20,func_8007DA20,ours,0,,rust_verified,unit_diff,high,grid setup for 8006B304; QUIRK: stale frame words for other modes (game::misc)
 0x8007DBA4,func_8007DBA4,ours,2,,recomp,,,
 0x8007DED8,func_8007DED8,ours,4,,recomp,,,
 0x8007E0AC,func_8007E0AC,ours,1,,recomp,,,
 0x8007E0EC,func_8007E0EC,ours,20,,recomp,,,
 0x8007E988,func_8007E988,ours,5,,recomp,,,
 0x8007EB7C,func_8007EB7C,ours,5,,recomp,,,
-0x8007EE40,func_8007EE40,ours,0,,recomp,,,
+0x8007EE40,func_8007EE40,ours,0,,rust_verified,unit_diff,high,getter [0x800A6700] (game::misc)
 0x8007EE4C,func_8007EE4C,ours,1,,recomp,,,
-0x8007EE98,func_8007EE98,ours,0,,recomp,,,
+0x8007EE98,func_8007EE98,ours,0,spline,rust_verified,unit_diff,high,"walker placement by segment (v / 10, fork ids); QUIRK: 99999 stop (game::spline)"
 0x8007F098,func_8007F098,ours,5,,recomp,,,
 0x8007F22C,func_8007F22C,ours,0,,rust_verified,unit_diff,high,"*out = 0, returns 0 (game::misc)"
 0x8007F23C,func_8007F23C,ours,0,,rust_verified,unit_diff,high,"*out = 0, returns 0 (game::misc)"
@@ -1013,9 +1013,9 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8007F914,func_8007F914,ours,5,,recomp,,,
 0x8007FD98,func_8007FD98,ours,6,,recomp,,,
 0x8007FDC0,func_8007FDC0,ours,15,,recomp,,,
-0x80080148,func_80080148,ours,0,,recomp,,,
+0x80080148,func_80080148,ours,0,,rust_verified,unit_diff,high,zero ten words and two floats (game::misc)
 0x800801B8,func_800801B8,ours,16,,recomp,,,
-0x80080350,func_80080350,ours,0,,recomp,,,
+0x80080350,func_80080350,ours,0,,rust_verified,unit_diff,high,0.0 and an a0 spill (game::misc)
 0x8008035C,func_8008035C,ours,1,,recomp,,,
 0x80080408,func_80080408,ours,1,,recomp,,,
 0x80080498,func_80080498,ours,4,,recomp,,,
@@ -1023,9 +1023,9 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800808E0,func_800808E0,ours,4,,recomp,,,
 0x80080A1C,func_80080A1C,ours,2,,recomp,,,
 0x80080BEC,func_80080BEC,ours,6,,recomp,,,
-0x80080D08,func_80080D08,ours,0,,recomp,,,
+0x80080D08,func_80080D08,ours,0,,rust_verified,unit_diff,high,copy 16 words from 0x8011DCB8 if [0x800A6704] >= 0 (game::misc)
 0x80080DB4,func_80080DB4,ours,4,,recomp,,,
-0x800811C0,func_800811C0,ours,0,,recomp,,,
+0x800811C0,func_800811C0,ours,0,math,rust_verified,unit_diff,high,store the f12/f13 double at 0x800A6750 (game::math)
 0x800811CC,func_800811CC,ours,0,,rust_verified,unit_diff,high,[0x800A6758] = 1 (game::misc)
 0x800811DC,func_800811DC,ours,1,,recomp,,,
 0x80081260,func_80081260,ours,0,,rust_verified,unit_diff,high,[0x800A675C] = 0 (game::misc)
@@ -1034,22 +1034,22 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80081360,func_80081360,ours,3,,recomp,,,
 0x80081530,func_80081530,ours,0,,rust_verified,unit_diff,high,"1 if the first n bytes are equal (n <= 0 too), else 0 (game::misc)"
 0x800815FC,strcmp,ours,0,,rust_verified,unit_diff,high,byte strcmp returning -1/0/1 (game::misc)
-0x80081680,func_80081680,ours,0,,recomp,,,
-0x80081700,func_80081700,ours,0,,recomp,,,
-0x80081730,func_80081730,ours,0,,recomp,,,
+0x80081680,func_80081680,ours,0,math,rust_verified,unit_diff,high,"sign(x) * min(|x|^n * scale, max) (game::math)"
+0x80081700,func_80081700,ours,0,math,rust_verified,unit_diff,high,"1 - r / (r + a), r = b / [0x800ADCB0] (game::math)"
+0x80081730,func_80081730,ours,0,math,rust_verified,unit_diff,high,"point times 4x4 (w = 1), four outputs, v re-read (game::math)"
 0x80081814,func_80081814,ours,1,,recomp,,,
 0x80081948,func_80081948,ours,1,,recomp,,,
-0x800819A4,func_800819A4,ours,0,,recomp,,,
-0x80081A2C,func_80081A2C,ours,0,,recomp,,,
+0x800819A4,func_800819A4,ours,0,math,rust_verified,unit_diff,high,"projection onto a plane (out = n t, then += p) (game::math)"
+0x80081A2C,func_80081A2C,ours,0,math,rust_verified,unit_diff,high,closest point on a segment (game::math)
 0x80081BE8,func_80081BE8,ours,1,,recomp,,,
 0x80081FB0,func_80081FB0,ours,3,,recomp,,,
-0x800823A4,func_800823A4,ours,0,,recomp,,,
-0x800823DC,func_800823DC,ours,0,,recomp,,,
-0x8008241C,func_8008241C,ours,0,,recomp,,,
+0x800823A4,func_800823A4,ours,0,math,rust_verified,unit_diff,high,plane value d - n.p (game::math)
+0x800823DC,func_800823DC,ours,0,math,rust_verified,unit_diff,high,plane height over a point (game::math)
+0x8008241C,func_8008241C,ours,0,math,rust_verified,unit_diff,high,2D cross product (game::math)
 0x80082440,func_80082440,ours,2,,recomp,,,
 0x80082624,func_80082624,ours,4,,recomp,,,
 0x800827C0,model_error,ours,0,,recomp,,low,called by model_load on an unknown tag; not understood (test double returns)
-0x800827C8,func_800827C8,ours,0,,recomp,,,
+0x800827C8,func_800827C8,ours,0,,rust_verified,unit_diff,high,deliberate crash: unaligned store to address 1 (game::misc)
 0x800827E0,func_800827E0,ours,2,,recomp,,,
 0x800829F4,func_800829F4,ours,2,,recomp,,,
 0x80082B38,func_80082B38,ours,2,,recomp,,,
@@ -1075,19 +1075,19 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80084EB8,func_80084EB8,ours,2,,recomp,,,
 0x8008528C,func_8008528C,ours,2,,recomp,,,
 0x800857B0,func_800857B0,ours,2,,recomp,,,
-0x80085AB4,func_80085AB4,ours,0,,recomp,,,
+0x80085AB4,func_80085AB4,ours,0,render,rust_verified,unit_diff,high,"framebuffer red/blue histograms, weighted red sum (bins 2..15) (game::render)"
 0x80085D44,func_80085D44,ours,16,,recomp,,,
 0x80085E20,func_80085E20,ours,15,,recomp,,,
 0x80085EB0,func_80085EB0,ours,1,,recomp,,,
-0x80085F78,func_80085F78,ours,0,,recomp,,,
+0x80085F78,func_80085F78,ours,0,,rust_verified,unit_diff,high,[p + 0x154] scale (game::misc)
 0x80085FB0,func_80085FB0,ours,3,,recomp,,,
-0x80086178,func_80086178,ours,0,,recomp,,,
+0x80086178,func_80086178,ours,0,render,rust_verified,unit_diff,high,"viewport from a rectangle, full-screen override (game::render)"
 0x800862D8,func_800862D8,ours,4,,recomp,,,
 0x8008635C,func_8008635C,ours,0,,rust_verified,unit_diff,high,"record i at 0x80120DF0 (0x170 bytes): bit 0 by v >= 0, +4 = v (game::misc)"
 0x800863C8,func_800863C8,ours,4,,recomp,,,
 0x800865E8,func_800865E8,ours,5,,recomp,,,
 0x80086730,func_80086730,ours,1,,recomp,,,
-0x8008681C,func_8008681C,ours,0,,recomp,,,
+0x8008681C,func_8008681C,ours,0,math,rust_verified,unit_diff,high,rigid transform inverse with y and z swapped (game::math)
 0x80086930,func_80086930,ours,4,,recomp,,,
 0x80086A20,func_80086A20,ours,1,,recomp,,,
 0x80086B8C,func_80086B8C,ours,1,,recomp,,,
@@ -1100,9 +1100,9 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80087198,func_80087198,ours,11,,recomp,,,
 0x80087754,func_80087754,ours,1,,recomp,,,
 0x800877AC,func_800877AC,ours,1,,recomp,,,
-0x80087814,func_80087814,ours,0,,recomp,,,
-0x800879B8,func_800879B8,ours,0,,recomp,,,
-0x80087CB0,func_80087CB0,ours,0,,recomp,,,
+0x80087814,func_80087814,ours,0,render,rust_verified,unit_diff,high,"queue a clamped, scaled screen rectangle (up to 31) (game::render)"
+0x800879B8,func_800879B8,ours,0,render,rust_verified,unit_diff,high,G_FILLRECTs for the queue plus a four-rectangle border (game::render)
+0x80087CB0,sqrtf,libultra,0,os,rust_verified,unit_diff,high,libultra sqrtf (sqrt.s) (game::libultra)
 0x80087CC0,func_80087CC0,ours,0,,recomp,,,privileged instrs; runtime-provided
 0x80087D70,osPiStartDma,libultra,5,os,recomp,,high,
 0x80087E80,osRecvMesg,libultra,4,,recomp,,high,blocking wait via __osEnqueueAndYield

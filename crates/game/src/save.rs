@@ -8,7 +8,7 @@
 #![allow(non_snake_case)]
 
 use n64mem::Mem;
-use crate::recomp::{addu, enter, lb, lbu, li, lw, multu, reg::*, sb, sll, sllv, slt, subu, sw, RecompContext};
+use crate::recomp::{addu, enter, lb, lbu, li, lw, multu, reg::*, sb, sh, sll, sllv, slt, subu, sw, RecompContext};
 
 /// `func_8001F464()`: 1 if bit 1 of `[0x80113688]` is set, else 0. Leaves
 /// `t6` = the word, `t7` = the bit.
@@ -213,6 +213,176 @@ pub unsafe extern "C" fn func_800281F0(rdram: *mut u8, ctx: *mut RecompContext) 
     }
     g[AT] = li(0x8012_0000);
     sw(m, g[AT], -0x5D94, g[V0]);
+}
+
+/// `func_80029A3C(which, i)` (profile reset, **guess**): resets the
+/// 0x2C-byte profile record `i`, the working copy at `0x80113E60 + 44i`
+/// for `which == 0` or the saved one at `0x80113694 + 44i` (in the save
+/// block at `0x80113680`) for `which == 1`; any other `which` does
+/// nothing. The record gets: bytes `+3`, `+4`, `+6` = 0; `+5` = 0xFF (for
+/// the saved one: the low byte of `i`); the word `+0x18` = 400; byte `+0x1C`
+/// = 1; the word `+0x14` = 0x22E01 (the six always-unlocked racers,
+/// NOTES.md "Racers and tracks"); `+7` = 0xFF; the halfwords `+0xC..+0x12`
+/// = 0; bytes `+8..+0xA` = 1, `+0xB` = 0; `+0x1D..+0x23` = 0 and
+/// `+0x24..+0x2A` = 0xFF (in pairs); `+0..+2` = 0; and for the saved one
+/// also `+0x2B` = 0. Stores in the C's order; `i` is 32-bit (`44i` as
+/// shifts and subtractions).
+///
+/// Leaves `a3 = 1`, `v0` = the record base as the C addresses it (`- 0x14`
+/// for the saved one), `v1` = the last loop's count, `a0 = 3`, `a1`, `a2`
+/// past the loops, and `t0`..`t9` the constants and addresses.
+///
+/// Domain: `i` with the record in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80029A3C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[A3] = 1;
+    if g[A0] == 0 {
+        // The working copy: v0 = a0 = 0x80113E60 + 44i.
+        g[T6] = sll(g[A1], 2);
+        g[T6] = subu(g[T6], g[A1]);
+        g[T6] = sll(g[T6], 2);
+        g[T6] = subu(g[T6], g[A1]);
+        g[T7] = li(0x8011_3E60);
+        g[T6] = sll(g[T6], 2);
+        g[V0] = addu(g[T6], g[T7]);
+        g[T2] = sll(g[A1], 2);
+        g[T2] = subu(g[T2], g[A1]);
+        g[T2] = sll(g[T2], 2);
+        g[T2] = subu(g[T2], g[A1]);
+        g[T3] = li(0x8011_0000);
+        g[T9] = li(0x2_0000);
+        g[T3] = addu(g[T3], 0x3E60);
+        g[T2] = sll(g[T2], 2);
+        g[T0] = 0xFF;
+        g[T8] = 0x190;
+        g[T9] = g[T9] | 0x2E01;
+        g[T1] = u64::MAX;
+        g[A0] = addu(g[T2], g[T3]);
+        sb(m, g[V0], 3, 0);
+        sb(m, g[V0], 4, 0);
+        sb(m, g[V0], 5, g[T0]);
+        sw(m, g[V0], 0x18, g[T8]);
+        sb(m, g[V0], 0x1C, g[A3]);
+        sb(m, g[V0], 6, 0);
+        sw(m, g[V0], 0x14, g[T9]);
+        sb(m, g[V0], 7, g[T1]);
+        g[A2] = g[A0];
+        g[V1] = 0;
+        loop {
+            g[V1] = addu(g[V1], 1);
+            g[AT] = slt(g[V1], 4);
+            sh(m, g[A2], 0xC, 0);
+            g[A2] = addu(g[A2], 2);
+            if g[AT] == 0 {
+                break;
+            }
+        }
+        sb(m, g[V0], 8, g[A3]);
+        sb(m, g[V0], 9, g[A3]);
+        sb(m, g[V0], 0xA, g[A3]);
+        sb(m, g[V0], 0xB, 0);
+        g[V1] = 0;
+        g[A1] = g[A0];
+        loop {
+            g[V1] = addu(g[V1], 1);
+            g[AT] = slt(g[V1], 7);
+            g[A1] = addu(g[A1], 1);
+            sb(m, g[A1], 0x1C, 0);
+            sb(m, g[A1], 0x23, g[T0]);
+            if g[AT] == 0 {
+                break;
+            }
+        }
+        g[A1] = g[A0];
+        g[A0] = 3;
+        g[V1] = 0;
+        loop {
+            g[V1] = addu(g[V1], 1);
+            sb(m, g[A1], 0, 0);
+            g[A1] = addu(g[A1], 1);
+            if g[V1] == g[A0] {
+                break;
+            }
+        }
+    } else {
+        g[AT] = 1;
+        g[A3] = 1;
+        if g[A0] == g[AT] {
+            // The saved copy: v0 = a0 = 0x80113680 + 44i, offsets + 0x14.
+            g[T4] = sll(g[A1], 2);
+            g[T4] = subu(g[T4], g[A1]);
+            g[T4] = sll(g[T4], 2);
+            g[T4] = subu(g[T4], g[A1]);
+            g[T5] = li(0x8011_3680);
+            g[T4] = sll(g[T4], 2);
+            g[V0] = addu(g[T4], g[T5]);
+            g[T9] = sll(g[A1], 2);
+            g[T9] = subu(g[T9], g[A1]);
+            g[T9] = sll(g[T9], 2);
+            g[T9] = subu(g[T9], g[A1]);
+            g[T1] = li(0x8011_0000);
+            g[T7] = li(0x2_0000);
+            g[T1] = addu(g[T1], 0x3680);
+            g[T9] = sll(g[T9], 2);
+            g[T6] = 0x190;
+            g[T7] = g[T7] | 0x2E01;
+            g[T8] = u64::MAX;
+            g[A0] = addu(g[T9], g[T1]);
+            sb(m, g[V0], 0x17, 0);
+            sb(m, g[V0], 0x18, 0);
+            sb(m, g[V0], 0x19, g[A1]);
+            sw(m, g[V0], 0x2C, g[T6]);
+            sb(m, g[V0], 0x30, g[A3]);
+            sb(m, g[V0], 0x1A, 0);
+            sw(m, g[V0], 0x28, g[T7]);
+            sb(m, g[V0], 0x1B, g[T8]);
+            g[A2] = g[A0];
+            g[V1] = 0;
+            loop {
+                g[V1] = addu(g[V1], 1);
+                g[AT] = slt(g[V1], 4);
+                sh(m, g[A2], 0x20, 0);
+                g[A2] = addu(g[A2], 2);
+                if g[AT] == 0 {
+                    break;
+                }
+            }
+            sb(m, g[V0], 0x1C, g[A3]);
+            sb(m, g[V0], 0x1D, g[A3]);
+            sb(m, g[V0], 0x1E, g[A3]);
+            sb(m, g[V0], 0x1F, 0);
+            g[V1] = 0;
+            g[A1] = g[A0];
+            g[T0] = 0xFF;
+            loop {
+                g[V1] = addu(g[V1], 1);
+                g[AT] = slt(g[V1], 7);
+                g[A1] = addu(g[A1], 1);
+                sb(m, g[A1], 0x30, 0);
+                sb(m, g[A1], 0x37, g[T0]);
+                if g[AT] == 0 {
+                    break;
+                }
+            }
+            g[A1] = g[A0];
+            g[A0] = 3;
+            g[V1] = 0;
+            loop {
+                g[V1] = addu(g[V1], 1);
+                sb(m, g[A1], 0x14, 0);
+                g[A1] = addu(g[A1], 1);
+                if g[V1] == g[A0] {
+                    break;
+                }
+            }
+            sb(m, g[V0], 0x3F, 0);
+        }
+    }
 }
 
 /// `func_800390C0()` = `crc32_table_init`: fill the 256 words at

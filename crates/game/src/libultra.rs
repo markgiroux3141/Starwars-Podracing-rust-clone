@@ -11,6 +11,17 @@ use crate::imports;
 use crate::recomp::{addu, ddiv, ddivu, dmultu, enter, fpu, ld, lh, li, lw, reg::*, s32, sd, slt, sra, sw, RecompContext};
 use n64mem::Mem;
 
+/// `func_80087CB0(x)`: `sqrtf`: `f0 = sqrt(f12)`, the single-precision
+/// square root (`sqrt.s`; the host's is the same correctly rounded
+/// operation). Domain: `x` not NaN (guarded).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80087CB0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (_mem, ctx) = enter(rdram, ctx);
+    ctx.fpr[0].set_fl(ctx.fpr[12].fl().sqrt());
+}
+
 /// `func_8008A8C0(x)` = `sinf`: for `xpt = (bits(x) >> 22) & 0x1FF`:
 /// - `xpt < 230` (tiny): `x` itself.
 /// - `xpt < 255`: `dx + (dx * xsq) * poly(xsq)` in double, `xsq = dx * dx`.

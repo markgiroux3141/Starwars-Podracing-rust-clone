@@ -8,7 +8,8 @@
 #![allow(non_snake_case)]
 
 use crate::imports;
-use crate::recomp::{addu, enter, lhu, li, lw, reg::*, sh, sll, sw, RecompContext};
+use crate::recomp::{addu, enter, lhu, li, lw, reg::*, sh, sll, sw, Fpr, RecompContext};
+use n64mem::Mem;
 
 /// Object table searched by [`func_80006D5C`] (300 words, cleared by
 /// [`func_80005B80`]); `[0x8009A2A0]` is the number of entries in use.
@@ -332,4 +333,78 @@ pub unsafe extern "C" fn func_80006F28(rdram: *mut u8, ctx: *mut RecompContext) 
     let (mut mem, ctx) = enter(rdram, ctx);
     ctx.fpr[12].set_u32l(ctx.gpr[A1] as u32);
     sw(&mut mem, ctx.gpr[A0], 0xDC, u64::from(ctx.fpr[12].u32l()));
+}
+
+/// `func_800736AC(list)`: 1 if any object in the 0-terminated pointer list
+/// is not running (bit 28 of `[o + 0x100]` clear) or has reached its end
+/// (`[o + 0x108] <= [o + 0x114]`, floats: the end against the time,
+/// **guess**), else 0 (an empty list included). The first object found
+/// stops the walk.
+///
+/// Leaves `v1 = 0x10000000`, `a0` = the slot of the object that stopped
+/// it (or of the terminator), `t6`/`t7` its flags and bit, and `f4`/`f6`
+/// its floats if they were compared.
+///
+/// Domain: canonical pointers; any float values (only compared).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800736AC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let m = &mem;
+    let g = &mut ctx.gpr;
+    g[V0] = lw(m, g[A0], 0);
+    g[V1] = li(0x1000_0000);
+    g[V0] = any_done(m, g, &mut ctx.fpr, A0, V0, V1, (T6, T7));
+}
+
+/// The walk of [`func_800736AC`] and [`func_8007B7BC`]: `slot` holds the
+/// list slot, `obj` the first object, `mask` bit 28; the flags go through
+/// `t`. Returns the result (the C leaves `obj` as is on a 1).
+fn any_done(m: &Mem, g: &mut [u64; 32], f: &mut [Fpr; 32], slot: usize, obj: usize, mask: usize, t: (usize, usize)) -> u64 {
+    if g[obj] == 0 {
+        return 0;
+    }
+    g[t.0] = lw(m, g[obj], 0x100);
+    loop {
+        g[t.1] = g[t.0] & g[mask];
+        if g[t.1] == 0 {
+            return 1;
+        }
+        f[4].set_u32l(lw(m, g[obj], 0x114) as u32);
+        f[6].set_u32l(lw(m, g[obj], 0x108) as u32);
+        if f[6].fl() <= f[4].fl() {
+            return 1;
+        }
+        g[obj] = lw(m, g[slot], 4);
+        g[slot] = addu(g[slot], 4);
+        if g[obj] == 0 {
+            return 0;
+        }
+        g[t.0] = lw(m, g[obj], 0x100);
+    }
+}
+
+/// `func_8007B7BC(i)`: [`func_800736AC`] over the list `[0x8011C8F0 + 4i]`
+/// (the index 32-bit).
+///
+/// Leaves `t6 = 4i`, `a0 = 0x10000000`, `v0` = the slot that stopped the
+/// walk, `v1` = that object (0 at the end), `t7`/`t8` its flags and bit,
+/// `f4`/`f6` its floats if compared.
+///
+/// Domain: `[0x8011C8F0 + 4i]` in RDRAM and a canonical list pointer.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8007B7BC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let m = &mem;
+    let g = &mut ctx.gpr;
+    g[T6] = sll(g[A0], 2);
+    g[V0] = li(0x8012_0000);
+    g[V0] = addu(g[V0], g[T6]);
+    g[V0] = lw(m, g[V0], -0x3710);
+    g[A0] = li(0x1000_0000);
+    g[V1] = lw(m, g[V0], 0);
+    g[V0] = any_done(m, g, &mut ctx.fpr, V0, V1, A0, (T7, T8));
 }
