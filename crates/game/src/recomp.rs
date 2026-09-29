@@ -519,6 +519,71 @@ pub mod fpu {
     pub fn cvt_s_d(x: f64, mode: u32) -> f32 {
         to_f32(x, mode)
     }
+
+    /// IDO's float → unsigned word idiom (NOTES.md, "FPU control register")
+    /// as N64Recomp's C runs it, on registers `save`, `tmp` and FPRs `dst`,
+    /// `src`:
+    ///
+    /// ```text
+    ///     cfc1    save, $31
+    ///     ctc1    tmp, $31          ; tmp holds 1 (round toward zero)
+    ///     cvt.w.s dst, src
+    ///     cfc1    tmp, $31
+    ///     andi    tmp, tmp, 0x78    ; V/Z/O/U flags
+    ///     beq     tmp, zero, ok
+    ///     lui     at, 0x4F00        ; (delay slot, both paths)
+    ///     ...                       ; dst = src - 2^31, convert again
+    ///     b       done              ; tmp = -1 if flagged again,
+    ///                               ; else dst | 0x80000000
+    /// ok: mfc1    tmp, dst
+    ///     bltz    tmp, -1 path
+    /// done:
+    ///     ctc1    save, $31
+    /// ```
+    ///
+    /// The result is left in `g[tmp]`. The C's `get_cop1_cs` returns only
+    /// the rounding bits, so the flag test always sees 0: the second path
+    /// is dead under the oracle but kept as the C has it. If it ever ran,
+    /// its `sub.s` would be in round toward zero in the C, which Rust
+    /// arithmetic can't do; the `debug_assert` there marks that.
+    ///
+    /// The restoring `ctc1` is done here, at the end. That is the same as
+    /// the C only if no conversion or arithmetic sits between the idiom's
+    /// last `cfc1` and its `ctc1 save` in the caller (the caller checks),
+    /// and `g[save]` is not rewritten in between. It asserts that the mode
+    /// restored is round to nearest, the only one the game computes in.
+    pub fn to_unsigned_s(g: &mut [u64; 32], f: &mut [super::Fpr; 32], fcr31: &mut u32, save: usize, tmp: usize, dst: usize, src: usize) {
+        use super::reg::AT;
+        use super::{li, s32};
+        g[save] = u64::from(*fcr31);
+        *fcr31 = (g[tmp] as u32) & 3;
+        f[dst].set_u32l(cvt_w_s(f[src].fl(), *fcr31));
+        g[tmp] = u64::from(*fcr31) & 0x78;
+        g[AT] = li(0x4F00_0000);
+        if g[tmp] == 0 {
+            g[tmp] = s32(f[dst].u32l());
+            if (g[tmp] as i64) < 0 {
+                g[tmp] = u64::MAX;
+            }
+        } else {
+            f[dst].set_u32l(g[AT] as u32);
+            g[tmp] = 1;
+            debug_assert_eq!(*fcr31, NEAREST, "the idiom's sub.s runs in round toward zero in the C");
+            f[dst].set_fl(f[src].fl() - f[dst].fl());
+            *fcr31 = (g[tmp] as u32) & 3;
+            f[dst].set_u32l(cvt_w_s(f[dst].fl(), *fcr31));
+            g[tmp] = u64::from(*fcr31) & 0x78;
+            if g[tmp] == 0 {
+                g[tmp] = s32(f[dst].u32l());
+                g[AT] = li(0x8000_0000);
+                g[tmp] |= g[AT];
+            } else {
+                g[tmp] = u64::MAX;
+            }
+        }
+        *fcr31 = (g[save] as u32) & 3;
+        debug_assert_eq!(*fcr31, NEAREST);
+    }
 }
 
 /// Named register indices (o32 ABI names), for readability in ports.

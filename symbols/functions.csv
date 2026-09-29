@@ -235,7 +235,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80011ECC,func_80011ECC,ours,0,,rust_verified,unit_diff,high,"halfword pair 0x800A1CD0 = (x, y) (game::misc)"
 0x80011EE8,func_80011EE8,ours,0,,rust_verified,unit_diff,high,"*x, *y = halfword pair (game::misc)"
 0x80011F04,func_80011F04,ours,0,,rust_verified,unit_diff,high,four bytes at 0x800A1CCC; [0x800D6938] = 0 (game::misc)
-0x80011F38,func_80011F38,ours,0,,recomp,,,
+0x80011F38,func_80011F38,ours,0,,rust_verified,unit_diff,high,"glyph rectangle: gSPTextureRectangle scaled to the screen, grows the text box 0x800D6914; FCR31 idiom via fpu::to_unsigned_s, flag path dead (game::render)"
 0x800125E4,func_800125E4,ours,0,render,rust_verified,unit_diff,high,texture load commands by format (game::render)
 0x800129B8,func_800129B8,ours,1,,recomp,,,
 0x800129E4,func_800129E4,ours,0,,rust_verified,unit_diff,high,"text width: sum of glyph advances (+2 of 16-byte glyphs) up to NUL or ~n; ~~ literal, ~X skipped; lowercase folded if font lacks it; chars >= 0x97 remapped via 0x800A1C86/0x800A1CD8 to an extended table; QUIRKs: first==0 overrides extended glyphs, ~ before NUL runs past the string (game::misc)"

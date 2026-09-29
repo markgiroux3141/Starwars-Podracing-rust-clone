@@ -466,6 +466,295 @@ pub unsafe extern "C" fn func_8000F5A0(rdram: *mut u8, ctx: *mut RecompContext) 
     g[SP] = addu(g[SP], 0x68);
 }
 
+/// The box `func_80011F38` grows: s16 `ymin`, `ymax`, `xmin`, `xmax` from
+/// here (`func_80013DC0` resets it before drawing text and queues it as a
+/// screen rectangle after).
+pub const TEXT_BOX: u32 = 0x800D_6914;
+
+/// `func_80011F38(x, y, ox, oy, w, h, s, t, tile)` (glyph rectangle,
+/// **guess**: `func_80013DC0`'s text drawing reaches it): every argument
+/// is taken as s16, the last five being stack words read with `lh` from
+/// their low halves. With `X = s16(x - ox)`, `Y = s16(y - oy)`, `X2 = s16(X
+/// + w)`, `Y2 = s16(Y + h)` and the screen scales `ws = f32(W / 320.0)`,
+/// `hs = f32(H / 240.0)` (`W`, `H` the s16 at `0x80114470`/`72`, divided in
+/// double), each set to 1.0 if below it:
+/// - the box at [`TEXT_BOX`]: if `xmax < xmin` (signed: empty), `xmin =
+///   trunc(f32(X) * ws)`, `ymin = trunc(f32(Y) * hs)`, `xmax = trunc(f32(X2)
+///   * ws)`, `ymax = trunc(f32(Y2) * hs)`. Otherwise each edge moves out to
+///   the same product if it lies beyond (f32 compares: `xmin` if the
+///   product is below `f32(xmin)`, `ymin` likewise, `xmax` and `ymax` if
+///   above). `trunc` is the C cast; the stores keep the low halfword.
+/// - appends `gSPTextureRectangle`'s three commands at [`DL_HEAD`], each
+///   by reading the head, storing it advanced by 8, then the two words at
+///   the old head: `E4000000 | XH << 12 | YH` and `(tile & 7) << 24 | XL
+///   << 12 | YL`; `E1000000` and `s << 21 | ((t << 5) & 0xFFFF)`;
+///   `F1000000` and `u(1024 / ws) << 16 | (u(1024 / hs) & 0xFFFF)`. Here
+///   `XH = u(f32(s16(4 * X2)) * ws) & 0xFFF`, `YH` the same with `Y2` and
+///   `hs`, `XL` and `YL` with `X` and `Y`, and `u` is IDO's float →
+///   unsigned idiom ([`fpu::to_unsigned_s`]): truncation toward zero, with
+///   negative results `0xFFFFFFFF`.
+///
+/// QUIRK: `4 * X2` etc. wrap at 16 bits (`sll 18`, `sra 16`), and a
+/// negative scaled coordinate becomes `0xFFF` rather than 0. The idiom's
+/// second path (for values from 2^31, which the products can't reach) is
+/// dead under the oracle and kept as the C has it.
+///
+/// Spills `a0`..`a3` to their home slots `sp + 0..0xC`. Leaves `a0 = X`,
+/// `a1 = Y`, `v0 = X2`, `v1 = Y2`, `a2`, `a3`, `t1` the three commands'
+/// addresses (`t3` the head after the second), `t0 = 0x800D6918`, `t2` =
+/// [`DL_HEAD`], `t9 = u(1024 / ws)`, `t7 = t9 << 16`, `t4 = u(1024 / hs)`,
+/// `t5 = t4 & 0xFFFF`, `t6` the last word, `t8 = 0` (the saved FCR31), `at
+/// = 0x4F000000`, `f0 = ws`, `f2 = hs`, `f12 = 1024.0` (with `f13` 1.0's
+/// high word), and `f4`..`f18` from the path taken.
+///
+/// Domain: canonical pointers; the list in RDRAM, not overlapping the
+/// head, the box, the screen size or the stack arguments. No operand can
+/// be NaN: `ws`, `hs` lie in [1, 137) and the rest are s16 values.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80011F38(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    let mut fcr31 = fpu::NEAREST;
+    // f10 = W / 320.0 and f6 = H / 240.0 in double (f8 = 320.0, f4 = 240.0
+    // and f12 = 1.0 as word pairs), then f0 = ws and f2 = hs; the
+    // arguments spilled, and a0 = X, a1 = y, a2 = ox, a3 = oy as s16.
+    g[V0] = li(0x8011_4470);
+    g[T7] = lh(m, g[V0], 0);
+    g[AT] = li(0x3FF0_0000);
+    f[12].set_u32h(g[AT] as u32); // f13
+    f[4].set_u32l(g[T7] as u32);
+    g[AT] = li(0x4074_0000);
+    f[8].set_u32h(g[AT] as u32); // f9
+    f[6].set_d(f64::from(f[4].u32l() as i32));
+    f[8].set_u32l(0);
+    sw(m, g[SP], 4, g[A1]);
+    g[T8] = sll(g[A1], 16);
+    g[A1] = sra(g[T8], 16);
+    f[10].set_d(f[6].d() / f[8].d());
+    g[T8] = lh(m, g[V0], 2);
+    g[AT] = li(0x406E_0000);
+    f[4].set_u32h(g[AT] as u32); // f5
+    f[16].set_u32l(g[T8] as u32);
+    f[4].set_u32l(0);
+    f[12].set_u32l(0);
+    f[18].set_d(f64::from(f[16].u32l() as i32));
+    sw(m, g[SP], 0, g[A0]);
+    g[T6] = sll(g[A0], 16);
+    sw(m, g[SP], 8, g[A2]);
+    g[T3] = sll(g[A2], 16);
+    g[A2] = sra(g[T3], 16);
+    g[A0] = sra(g[T6], 16);
+    g[A0] = subu(g[A0], g[A2]);
+    sw(m, g[SP], 0xC, g[A3]);
+    g[T5] = sll(g[A3], 16);
+    g[T9] = sll(g[A0], 16);
+    g[A3] = sra(g[T5], 16);
+    g[AT] = li(0x3F80_0000);
+    g[T0] = li(0x800D_6918);
+    g[A0] = sra(g[T9], 16);
+    g[V1] = li(0x800D_0000);
+    f[6].set_d(f[18].d() / f[4].d());
+    f[0].set_fl(fpu::cvt_s_d(f[10].d(), fcr31));
+    f[8].set_d(f64::from(f[0].fl()));
+    let below = f[8].d() < f[12].d();
+    f[2].set_fl(fpu::cvt_s_d(f[6].d(), fcr31));
+    if below {
+        f[0].set_u32l(g[AT] as u32);
+    }
+    f[10].set_d(f64::from(f[2].fl()));
+    g[AT] = li(0x3F80_0000);
+    if f[10].d() < f[12].d() {
+        f[2].set_u32l(g[AT] as u32);
+    }
+    // v1 = xmax, v0 = xmin, a1 = Y.
+    g[V1] = lh(m, g[V1], 0x691A);
+    g[V0] = lh(m, g[T0], 0);
+    g[A1] = subu(g[A1], g[A3]);
+    g[T4] = sll(g[A1], 16);
+    g[AT] = slt(g[V1], g[V0]);
+    g[A1] = sra(g[T4], 16);
+    if g[AT] == 0 {
+        // Grow: xmin, ymin (a2 = TEXT_BOX), then v0 = X2 for xmax, v1 = Y2
+        // for ymax, each stored only if it moves out.
+        f[8].set_u32l(g[A0] as u32);
+        f[16].set_u32l(g[V0] as u32);
+        f[10].set_fl(fpu::cvt_s_w(f[8].u32l(), fcr31));
+        f[18].set_fl(fpu::cvt_s_w(f[16].u32l(), fcr31));
+        f[12].set_fl(f[10].fl() * f[0].fl());
+        if f[12].fl() < f[18].fl() {
+            f[4].set_u32l(fpu::trunc_w_s(f[12].fl()));
+            g[T7] = s32(f[4].u32l());
+            sh(m, g[T0], 0, g[T7]);
+        }
+        f[6].set_u32l(g[A1] as u32);
+        g[A2] = li(TEXT_BOX);
+        g[T8] = lh(m, g[A2], 0);
+        f[8].set_fl(fpu::cvt_s_w(f[6].u32l(), fcr31));
+        f[10].set_u32l(g[T8] as u32);
+        f[16].set_fl(fpu::cvt_s_w(f[10].u32l(), fcr31));
+        f[12].set_fl(f[8].fl() * f[2].fl());
+        f[8].set_u32l(g[V1] as u32);
+        if f[12].fl() < f[16].fl() {
+            f[18].set_u32l(fpu::trunc_w_s(f[12].fl()));
+            g[T3] = s32(f[18].u32l());
+            sh(m, g[A2], 0, g[T3]);
+        }
+        g[T4] = lh(m, g[SP], 0x12);
+        f[10].set_fl(fpu::cvt_s_w(f[8].u32l(), fcr31));
+        g[V0] = addu(g[A0], g[T4]);
+        g[T5] = sll(g[V0], 16);
+        g[V0] = sra(g[T5], 16);
+        f[4].set_u32l(g[V0] as u32);
+        f[6].set_fl(fpu::cvt_s_w(f[4].u32l(), fcr31));
+        f[12].set_fl(f[6].fl() * f[0].fl());
+        if f[10].fl() < f[12].fl() {
+            f[16].set_u32l(fpu::trunc_w_s(f[12].fl()));
+            g[AT] = li(0x800D_0000);
+            g[T8] = s32(f[16].u32l());
+            sh(m, g[AT], 0x691A, g[T8]);
+        }
+        g[T9] = lh(m, g[SP], 0x16);
+        g[T5] = li(0x800D_0000);
+        g[T5] = lh(m, g[T5], 0x6916);
+        g[V1] = addu(g[A1], g[T9]);
+        g[T3] = sll(g[V1], 16);
+        g[V1] = sra(g[T3], 16);
+        f[18].set_u32l(g[V1] as u32);
+        f[6].set_u32l(g[T5] as u32);
+        f[4].set_fl(fpu::cvt_s_w(f[18].u32l(), fcr31));
+        f[8].set_fl(fpu::cvt_s_w(f[6].u32l(), fcr31));
+        f[12].set_fl(f[4].fl() * f[2].fl());
+        if f[8].fl() < f[12].fl() {
+            f[10].set_u32l(fpu::trunc_w_s(f[12].fl()));
+            g[AT] = li(0x800D_0000);
+            g[T7] = s32(f[10].u32l());
+            sh(m, g[AT], 0x6916, g[T7]);
+        }
+    } else {
+        // Empty: all four edges set (v0 = X2, v1 = Y2).
+        f[16].set_u32l(g[A0] as u32);
+        f[8].set_u32l(g[A1] as u32);
+        g[T3] = lh(m, g[SP], 0x12);
+        f[18].set_fl(fpu::cvt_s_w(f[16].u32l(), fcr31));
+        g[T8] = lh(m, g[SP], 0x16);
+        g[V0] = addu(g[A0], g[T3]);
+        g[T4] = sll(g[V0], 16);
+        f[10].set_fl(fpu::cvt_s_w(f[8].u32l(), fcr31));
+        f[4].set_fl(f[18].fl() * f[0].fl());
+        g[V0] = sra(g[T4], 16);
+        g[A2] = li(TEXT_BOX);
+        g[V1] = addu(g[A1], g[T8]);
+        g[AT] = li(0x800D_0000);
+        f[16].set_fl(f[10].fl() * f[2].fl());
+        f[6].set_u32l(fpu::trunc_w_s(f[4].fl()));
+        f[4].set_u32l(g[V0] as u32);
+        f[18].set_u32l(fpu::trunc_w_s(f[16].fl()));
+        g[T7] = s32(f[6].u32l());
+        f[6].set_fl(fpu::cvt_s_w(f[4].u32l(), fcr31));
+        g[T9] = s32(f[18].u32l());
+        sh(m, g[T0], 0, g[T7]);
+        sh(m, g[A2], 0, g[T9]);
+        g[T9] = sll(g[V1], 16);
+        g[V1] = sra(g[T9], 16);
+        f[16].set_u32l(g[V1] as u32);
+        f[8].set_fl(f[6].fl() * f[0].fl());
+        f[18].set_fl(fpu::cvt_s_w(f[16].u32l(), fcr31));
+        f[10].set_u32l(fpu::trunc_w_s(f[8].fl()));
+        f[4].set_fl(f[18].fl() * f[2].fl());
+        g[T7] = s32(f[10].u32l());
+        sh(m, g[AT], 0x691A, g[T7]);
+        f[6].set_u32l(fpu::trunc_w_s(f[4].fl()));
+        g[AT] = li(0x800D_0000);
+        g[T5] = s32(f[6].u32l());
+        sh(m, g[AT], 0x6916, g[T5]);
+    }
+    // G_TEXRECT: t6 = XH, t7 = YH, then t4 = XL and t6 = YL (a2 = the
+    // command, t2 = DL_HEAD). No conversion sits between an idiom and its
+    // restoring ctc1, so to_unsigned_s restores in place.
+    g[T3] = sll(g[V0], 18);
+    g[T4] = sra(g[T3], 16);
+    f[16].set_u32l(g[T4] as u32);
+    g[T6] = 1;
+    f[18].set_fl(fpu::cvt_s_w(f[16].u32l(), fcr31));
+    g[T2] = li(DL_HEAD);
+    g[A2] = lw(m, g[T2], 0);
+    g[AT] = li(0x4480_0000);
+    f[12].set_u32l(g[AT] as u32);
+    g[T8] = addu(g[A2], 8);
+    f[4].set_fl(f[18].fl() * f[0].fl());
+    sw(m, g[T2], 0, g[T8]);
+    g[T4] = sll(g[V1], 18);
+    fpu::to_unsigned_s(g, f, &mut fcr31, T5, T6, 6, 4);
+    g[T5] = sra(g[T4], 16);
+    f[8].set_u32l(g[T5] as u32);
+    g[T7] = g[T6] & 0xFFF;
+    g[T8] = sll(g[T7], 12);
+    f[10].set_fl(fpu::cvt_s_w(f[8].u32l(), fcr31));
+    g[T7] = 1;
+    g[AT] = li(0xE400_0000);
+    g[T9] = g[T8] | g[AT];
+    f[16].set_fl(f[10].fl() * f[2].fl());
+    fpu::to_unsigned_s(g, f, &mut fcr31, T6, T7, 18, 16);
+    g[T8] = g[T7] & 0xFFF;
+    g[T3] = g[T9] | g[T8];
+    g[T9] = sll(g[A0], 18);
+    g[T8] = sra(g[T9], 16);
+    f[4].set_u32l(g[T8] as u32);
+    sw(m, g[A2], 0, g[T3]);
+    g[T4] = lh(m, g[SP], 0x22);
+    f[6].set_fl(fpu::cvt_s_w(f[4].u32l(), fcr31));
+    g[T5] = g[T4] & 7;
+    g[T4] = 1;
+    g[T6] = sll(g[T5], 24);
+    f[8].set_fl(f[6].fl() * f[0].fl());
+    fpu::to_unsigned_s(g, f, &mut fcr31, T3, T4, 10, 8);
+    g[T3] = sll(g[A1], 18);
+    g[T5] = g[T4] & 0xFFF;
+    g[T4] = sra(g[T3], 16);
+    f[16].set_u32l(g[T4] as u32);
+    g[T7] = sll(g[T5], 12);
+    g[T9] = g[T6] | g[T7];
+    f[18].set_fl(fpu::cvt_s_w(f[16].u32l(), fcr31));
+    g[T6] = 1;
+    f[4].set_fl(f[18].fl() * f[2].fl());
+    fpu::to_unsigned_s(g, f, &mut fcr31, T5, T6, 6, 4);
+    g[T7] = g[T6] & 0xFFF;
+    g[T8] = g[T9] | g[T7];
+    // f8 = 1024 / ws; G_RDPHALF_1 (a3) with s and t, then G_RDPHALF_2 (t1).
+    f[8].set_fl(f[12].fl() / f[0].fl());
+    sw(m, g[A2], 4, g[T8]);
+    g[A3] = lw(m, g[T2], 0);
+    g[T4] = li(0xE100_0000);
+    g[T5] = li(0xF100_0000);
+    g[T3] = addu(g[A3], 8);
+    sw(m, g[T2], 0, g[T3]);
+    sw(m, g[A3], 0, g[T4]);
+    g[T4] = lh(m, g[SP], 0x1E);
+    g[T8] = lh(m, g[SP], 0x1A);
+    g[T9] = sll(g[T4], 5);
+    g[T7] = g[T9] & 0xFFFF;
+    g[T9] = 1;
+    g[T3] = sll(g[T8], 21);
+    g[T8] = g[T3] | g[T7];
+    sw(m, g[A3], 4, g[T8]);
+    g[T1] = lw(m, g[T2], 0);
+    g[T4] = addu(g[T1], 8);
+    sw(m, g[T2], 0, g[T4]);
+    sw(m, g[T1], 0, g[T5]);
+    fpu::to_unsigned_s(g, f, &mut fcr31, T6, T9, 10, 8);
+    g[T4] = 1;
+    g[T7] = sll(g[T9], 16);
+    f[16].set_fl(f[12].fl() / f[2].fl());
+    fpu::to_unsigned_s(g, f, &mut fcr31, T8, T4, 18, 16);
+    g[T5] = g[T4] & 0xFFFF;
+    g[T6] = g[T7] | g[T5];
+    sw(m, g[T1], 4, g[T6]);
+}
+
 /// `func_800125E4(tex, i)` (texture load, **guess** at the purpose): if
 /// `i < [tex + 4]` (signed; `i` is spilled to its home slot `sp + 4` and
 /// read back), appends to the display list at [`DL_HEAD`] the commands
