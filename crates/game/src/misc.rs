@@ -2969,6 +2969,143 @@ pub unsafe extern "C" fn func_80011F04(rdram: *mut u8, ctx: *mut RecompContext) 
     sw(m, g[AT], 0x6938, 0);
 }
 
+/// `func_800129E4(s, font)` (text width, **guess**: of one line): the sum
+/// of the glyph advances (the signed halfword `+2` of 16-byte glyph
+/// records, 32-bit wrapping) of the characters of `s`, up to a NUL or
+/// `"~n"` (both end it without a glyph). `"~~"` is a literal `~`; any
+/// other `"~X"` adds nothing. The font: `+0x5A` first and `+0x5B` last
+/// character (bytes), `+0x5C` the glyph table (or 0), `+0x60` an extended
+/// table (or 0).
+///
+/// Per character `c` (unsigned): a lowercase `c` becomes uppercase if the
+/// font's last character is below `'a'`. If `c >= 0x97` and the extended
+/// table is set, the byte `k = [0x800A1C86 + c]` (unless 0xFF) selects the
+/// pair at `0x800A1CD8 + 2k`: if its second byte is 0xFF, the glyph is
+/// extended glyph `pair[0]` and `c` becomes 0; otherwise `c` becomes that
+/// byte. Then, if the glyph table is set and `first <= c <= last`, the glyph
+/// is `table[c - first]` instead. QUIRK: so with `first == 0` an extended
+/// glyph is replaced by glyph 0. QUIRK: a `~` just before the NUL takes the
+/// NUL as its escape, so the scan runs on past the string (unbounded, like
+/// the string itself).
+///
+/// Saves and restores `s0`..`s3` (sign-extended) in a 0x18-byte frame.
+/// Leaves `v0 = a3` = the width, `v1 = 1`, `a0 = '~'`, `t0 = 'n'`, `a2 =
+/// 0xFF`, `t1 = 0x800A1D1C`, `t2 = 0x800A1CD8`, and `t3`..`t9`, `at` as the
+/// last character left them.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800129E4(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    g[V0] = g[A0];
+    sw(m, g[SP], 0x14, g[S3]);
+    sw(m, g[SP], 0x10, g[S2]);
+    sw(m, g[SP], 0xC, g[S1]);
+    sw(m, g[SP], 8, g[S0]);
+    g[A3] = 0;
+    g[V1] = 0;
+    g[T1] = li(0x800A_1D1C);
+    g[T2] = li(0x800A_1CD8);
+    g[A0] = 0x7E;
+    g[T0] = 0x6E;
+    g[A2] = 0xFF;
+    loop {
+        // t3 = the character to look up, t5 = nonzero if it has a glyph.
+        g[T3] = lbu(m, g[V0], 0);
+        g[T5] = g[T3];
+        if g[T3] == 0 {
+            g[V1] = 1;
+        }
+        if g[A0] == g[T5] {
+            g[S2] = lbu(m, g[V0], 1);
+            g[V0] = addu(g[V0], 1);
+            if g[T0] == g[S2] {
+                g[V1] = 1;
+            } else {
+                g[T3] = 0;
+                if g[A0] == g[S2] {
+                    g[T3] = 0x7E;
+                    g[T5] = 0x7E;
+                } else {
+                    g[T5] = 0;
+                }
+            }
+        }
+        if g[T5] != 0 {
+            g[S0] = 0;
+            if g[V1] == 0 {
+                g[AT] = slt(g[T5], 0x61);
+                g[S3] = lw(m, g[A1], 0x5C);
+                g[T4] = g[T3] & 0xFF;
+                if g[AT] == 0 {
+                    g[AT] = slt(g[T5], 0x7B);
+                    if g[AT] != 0 {
+                        g[T6] = lbu(m, g[A1], 0x5B);
+                        g[AT] = slt(g[T6], 0x61);
+                        if g[AT] != 0 {
+                            // No lowercase in the font: fold to uppercase.
+                            g[T4] = addu(g[T5], (-0x20i64) as u64);
+                            g[T7] = g[T4] & 0xFF;
+                            g[T4] = g[T7];
+                        }
+                    }
+                }
+                g[AT] = slt(g[T4], 0x97);
+                g[T3] = g[T4];
+                if g[AT] == 0 {
+                    // High characters: remapped through the two tables.
+                    g[T5] = lw(m, g[A1], 0x60);
+                    g[T8] = addu(g[T1], g[T3]);
+                    if g[T5] != 0 {
+                        g[S1] = lbu(m, g[T8], -0x96);
+                        g[T9] = sll(g[S1], 1);
+                        if g[A2] != g[S1] {
+                            g[S2] = addu(g[T2], g[T9]);
+                            g[T4] = lbu(m, g[S2], 1);
+                            g[T3] = lbu(m, g[S2], 0);
+                            g[T6] = sll(g[T3], 4);
+                            if g[A2] == g[T4] {
+                                g[S0] = addu(g[T5], g[T6]);
+                                g[T4] = 0;
+                            }
+                        }
+                    }
+                }
+                if g[S3] != 0 {
+                    g[T5] = lbu(m, g[A1], 0x5A);
+                    g[AT] = slt(g[T4], g[T5]);
+                    if g[AT] == 0 {
+                        g[T7] = lbu(m, g[A1], 0x5B);
+                        g[T8] = subu(g[T4], g[T5]);
+                        g[T9] = sll(g[T8], 4);
+                        g[AT] = slt(g[T7], g[T4]);
+                        if g[AT] == 0 {
+                            g[S0] = addu(g[S3], g[T9]);
+                        }
+                    }
+                }
+                if g[S0] != 0 {
+                    g[T6] = lh(m, g[S0], 2);
+                    g[A3] = addu(g[A3], g[T6]);
+                }
+            }
+        }
+        g[V0] = addu(g[V0], 1);
+        if g[V1] != 0 {
+            break;
+        }
+    }
+    g[S0] = lw(m, g[SP], 8);
+    g[S1] = lw(m, g[SP], 0xC);
+    g[S2] = lw(m, g[SP], 0x10);
+    g[S3] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x18);
+    g[V0] = g[A3];
+}
+
 /// `func_80012B5C(c, o, &a, &b)`: look up `c` (the low byte of `a0`) in
 /// `o`'s table of 16-byte records at `[o + 0x5C]`, which covers `c` from the
 /// byte `[o + 0x5A]` up to the byte `[o + 0x5B]`. `*a` and `*b` (each only
