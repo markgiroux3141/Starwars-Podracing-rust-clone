@@ -34,11 +34,18 @@ recomp_imports! {
     func_80011CDC, // rom_read
     func_80011D60, // rom_read_small
     func_80011E54, // select pointer k
+    func_800125E4, // texture load
     func_800129E4, // text width
+    func_80014D4C, // asin in degrees
+    func_800151C0, // vec2 length
+    func_800153C0, // vec3 length
     func_80015538, // vec3 cross
     func_800155EC, // vec3 multiply-add
     func_800156DC, // 4x4 copy
+    func_80015724, // 4x4 product
     func_800160BC, // matrix inverse
+    func_80016260, // ludcmp (n = 3)
+    func_800167E4, // lubksb (n = 3)
     func_80016BF4, // vec3 x 3x3
     func_80016CAC, // point x 4x4
     func_80017874, // 4x4 identity
@@ -46,12 +53,16 @@ recomp_imports! {
     func_80017C98, // node transform to 4x4 (same code)
     func_80017DA4, // node type word
     func_80017DAC, // [o + 0x14]
+    func_80017DB4, // child k
     func_80017E70, // node +8 setter
     func_80017EE4, // [o + 4]
     func_80017EEC, // [o + 4] = v
     func_80017EF4, // [o]
     func_80017F20, // returns 4
     func_80017F28, // RECORDS_170 + 0x170 k
+    func_800181BC, // node flags walk (self)
+    func_80029A3C, // profile record reset
+    func_8002DAD0, // unlock bit
     func_8002FAC4, // heap_set_cursor
     func_8002FAFC, // heap_cursor
     func_8002FC58, // heap_free
@@ -70,6 +81,8 @@ recomp_imports! {
     func_80081730, // point x 4x4 (w = 1)
     func_80081A2C, // closest point on a segment
     func_800827C0, // model_load's error path (not yet understood)
+    func_8008A750, // cosf
+    func_8008A8C0, // sinf
 }
 
 /// Hooks into the runtime that N64Recomp's generated code calls (recomp.h),

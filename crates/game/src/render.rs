@@ -7,7 +7,8 @@
 #![allow(non_snake_case)]
 
 use n64mem::Mem;
-use crate::recomp::{addu, enter, fpu, lbu, ld, lh, lhu, li, lw, multu, reg::*, s32, sb, sd, sh, sll, slt, sltu, sra, subu, sw, Fpr, RecompContext};
+use crate::imports;
+use crate::recomp::{addu, call, enter, fpu, lbu, ld, lh, lhu, li, lw, multu, reg::*, s32, sb, sd, sh, sll, slt, sltu, sra, subu, sw, Fpr, RecompContext};
 
 /// The display list pointer [`func_80014C98`] appends to.
 pub const DL_HEAD: u32 = 0x8012_17B0;
@@ -1024,6 +1025,273 @@ pub unsafe extern "C" fn func_800125E4(rdram: *mut u8, ctx: *mut RecompContext) 
         g[S0] = lw(m, g[SP], 4);
     }
     g[SP] = addu(g[SP], 8);
+}
+
+/// `func_800141EC(c)` (set up glyph `c` for drawing, **guess**): appends
+/// at [`DL_HEAD`] `FA000000` with the colour word from the bytes at
+/// `0x800A1CCC` (`b0 << 24 | b1 << 16 | b2 << 8 | b3`), sets `[0x800D6938]
+/// = 1`, appends the combine `FCFF97FF FF2DFEFF`; then, for the current
+/// font `f = [0x800A1D8C]` by its format `[f]`: 0, the load prologue
+/// `E3001001 0000C000`, `FD100000 800A1DD0`, `E8000000 0`, `F5000100
+/// 07000000`, `E6000000 0`, `F0000000 073FC000`, `E7000000 0`; 2 (the
+/// format re-read), `E3001001 00008000`, `FD100000 [f + 0x48]`, `E8000000
+/// 0`, `F5000100 07000000`, `E6000000 0`, `F0000000 0703C000`, `E7000000
+/// 0`, `E6000000 0`, the words stored in the C's order. Then the
+/// character (the low byte of `c`, spilled to its home slot `sp + 0` and
+/// read back as a byte at `sp + 3`) is uppercased (in that slot) if it is
+/// lowercase and the font's last character `[f + 0x5B]` is below `'a'`;
+/// with the glyph table `[f + 0x5C]`, first/last characters `[f + 0x5A]`,
+/// `[f + 0x5B]` and `G` = the 16-byte glyph `c - first`: if the table is
+/// set, `first <= c <= last` and `G`'s halfword `+8` isn't -1, the words
+/// `0x800D691C..0x800D6930` = `G`'s signed halfwords `+6, +4, +0xC, +0xE,
+/// +8, +0xA`, `[0x800D6934]` = `G`'s byte `+1` if the format is 0 (else 0),
+/// and [`func_800125E4`]`(f, G's byte +0)` loads its texture.
+///
+/// Frame (`sp - 0x20`): `ra`, `s0` at `+0x1C`, `+0x18`, restored (`s0 =
+/// f`). Leaves `v0`, `v1`, `a0`..`a3`, `t*` from the path and the callee's
+/// registers.
+///
+/// Domain: the list, the font and its table in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800141EC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V1] = li(0x8012_17B0);
+    g[V0] = lw(m, g[V1], 0);
+    g[SP] = addu(g[SP], (-0x20i64) as u64);
+    sw(m, g[SP], 0x1C, g[RA]);
+    g[T6] = addu(g[V0], 8);
+    sw(m, g[SP], 0x18, g[S0]);
+    sw(m, g[SP], 0x20, g[A0]);
+    g[A3] = li(0x800A_0000);
+    sw(m, g[V1], 0, g[T6]);
+    g[T7] = li(0xFA00_0000);
+    g[A3] = addu(g[A3], 0x1CCC);
+    sw(m, g[V0], 0, g[T7]);
+    g[T7] = lbu(m, g[A3], 0);
+    g[T9] = lbu(m, g[A3], 3);
+    g[AT] = li(0x800D_0000);
+    g[T8] = sll(g[T7], 24);
+    g[T6] = g[T9] | g[T8];
+    g[T9] = lbu(m, g[A3], 1);
+    g[T4] = li(0x800A_1D8C);
+    g[T8] = sll(g[T9], 16);
+    g[T7] = g[T6] | g[T8];
+    g[T6] = lbu(m, g[A3], 2);
+    g[T8] = sll(g[T6], 8);
+    g[T9] = g[T7] | g[T8];
+    g[T6] = 1;
+    sw(m, g[V0], 4, g[T9]);
+    sw(m, g[AT], 0x6938, g[T6]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T9] = li(0xFF2D_0000);
+    g[T8] = li(0xFCFF_0000);
+    g[T7] = addu(g[V0], 8);
+    sw(m, g[V1], 0, g[T7]);
+    g[T8] = g[T8] | 0x97FF;
+    g[T9] = g[T9] | 0xFEFF;
+    sw(m, g[V0], 4, g[T9]);
+    sw(m, g[V0], 0, g[T8]);
+    g[S0] = lw(m, g[T4], 0);
+    g[T7] = li(0xE300_0000);
+    g[AT] = 2;
+    g[T3] = lw(m, g[S0], 0);
+    if g[T3] == 0 {
+        g[V0] = lw(m, g[V1], 0);
+        g[T7] = g[T7] | 0x1001;
+        g[T8] = 0xC000;
+        g[T6] = addu(g[V0], 8);
+        sw(m, g[V1], 0, g[T6]);
+        sw(m, g[V0], 4, g[T8]);
+        sw(m, g[V0], 0, g[T7]);
+        g[V0] = lw(m, g[V1], 0);
+        g[T7] = li(0x800A_1DD0);
+        g[T9] = addu(g[V0], 8);
+        sw(m, g[V1], 0, g[T9]);
+        g[T6] = li(0xFD10_0000);
+        sw(m, g[V0], 0, g[T6]);
+        sw(m, g[V0], 4, g[T7]);
+        g[V0] = lw(m, g[V1], 0);
+        g[T9] = li(0xE800_0000);
+        g[T7] = li(0xF500_0000);
+        g[T8] = addu(g[V0], 8);
+        sw(m, g[V1], 0, g[T8]);
+        sw(m, g[V0], 4, 0);
+        sw(m, g[V0], 0, g[T9]);
+        g[V0] = lw(m, g[V1], 0);
+        g[T8] = li(0x700_0000);
+        g[T7] = g[T7] | 0x100;
+        g[T6] = addu(g[V0], 8);
+        sw(m, g[V1], 0, g[T6]);
+        sw(m, g[V0], 4, g[T8]);
+        sw(m, g[V0], 0, g[T7]);
+        g[V0] = lw(m, g[V1], 0);
+        g[T5] = li(0xE600_0000);
+        g[T8] = li(0x73F_0000);
+        g[T9] = addu(g[V0], 8);
+        sw(m, g[V1], 0, g[T9]);
+        sw(m, g[V0], 4, 0);
+        sw(m, g[V0], 0, g[T5]);
+        g[V0] = lw(m, g[V1], 0);
+        g[T8] = g[T8] | 0xC000;
+        g[T7] = li(0xF000_0000);
+        g[T6] = addu(g[V0], 8);
+        sw(m, g[V1], 0, g[T6]);
+        sw(m, g[V0], 4, g[T8]);
+        sw(m, g[V0], 0, g[T7]);
+        g[V0] = lw(m, g[V1], 0);
+        g[T6] = li(0xE700_0000);
+        g[T9] = addu(g[V0], 8);
+        sw(m, g[V1], 0, g[T9]);
+        sw(m, g[V0], 4, 0);
+        sw(m, g[V0], 0, g[T6]);
+        g[S0] = lw(m, g[T4], 0);
+        g[T3] = lw(m, g[S0], 0);
+    }
+    g[T5] = li(0xE600_0000);
+    if g[T3] == g[AT] {
+        g[V0] = lw(m, g[V1], 0);
+        g[T8] = li(0xE300_1001);
+        g[T7] = addu(g[V0], 8);
+        sw(m, g[V1], 0, g[T7]);
+        g[T9] = 0x8000;
+        sw(m, g[V0], 4, g[T9]);
+        sw(m, g[V0], 0, g[T8]);
+        g[V0] = lw(m, g[V1], 0);
+        g[T7] = li(0xFD10_0000);
+        g[T6] = addu(g[V0], 8);
+        sw(m, g[V1], 0, g[T6]);
+        sw(m, g[V0], 0, g[T7]);
+        g[T8] = lw(m, g[T4], 0);
+        g[T7] = li(0xE800_0000);
+        g[T9] = lw(m, g[T8], 0x48);
+        sw(m, g[V0], 4, g[T9]);
+        g[V0] = lw(m, g[V1], 0);
+        g[T9] = li(0xF500_0100);
+        g[T6] = addu(g[V0], 8);
+        sw(m, g[V1], 0, g[T6]);
+        sw(m, g[V0], 4, 0);
+        sw(m, g[V0], 0, g[T7]);
+        g[V0] = lw(m, g[V1], 0);
+        g[T6] = li(0x700_0000);
+        g[T8] = addu(g[V0], 8);
+        sw(m, g[V1], 0, g[T8]);
+        sw(m, g[V0], 4, g[T6]);
+        sw(m, g[V0], 0, g[T9]);
+        g[V0] = lw(m, g[V1], 0);
+        g[T6] = li(0x703_C000);
+        g[T7] = addu(g[V0], 8);
+        sw(m, g[V1], 0, g[T7]);
+        sw(m, g[V0], 4, 0);
+        sw(m, g[V0], 0, g[T5]);
+        g[V0] = lw(m, g[V1], 0);
+        g[T9] = li(0xF000_0000);
+        g[T8] = addu(g[V0], 8);
+        sw(m, g[V1], 0, g[T8]);
+        sw(m, g[V0], 4, g[T6]);
+        sw(m, g[V0], 0, g[T9]);
+        g[V0] = lw(m, g[V1], 0);
+        g[T8] = li(0xE700_0000);
+        g[T7] = addu(g[V0], 8);
+        sw(m, g[V1], 0, g[T7]);
+        sw(m, g[V0], 4, 0);
+        sw(m, g[V0], 0, g[T8]);
+        g[V0] = lw(m, g[V1], 0);
+        g[T9] = addu(g[V0], 8);
+        sw(m, g[V1], 0, g[T9]);
+        sw(m, g[V0], 4, 0);
+        sw(m, g[V0], 0, g[T5]);
+        g[S0] = lw(m, g[T4], 0);
+    }
+    'b_80014480: {
+        g[V1] = lbu(m, g[SP], 0x23);
+        g[AT] = slt(g[V1], 0x61);
+        let c0 = g[AT] == 0;
+        g[AT] = slt(g[V1], 0x7B);
+        if c0 {
+            if g[AT] == 0 {
+                g[A1] = lw(m, g[S0], 0x5C);
+                break 'b_80014480;
+            }
+            g[T6] = lbu(m, g[S0], 0x5B);
+            g[T7] = addu(g[V1], (-0x20i64) as u64);
+            g[AT] = slt(g[T6], 0x61);
+            if g[AT] == 0 {
+                g[A1] = lw(m, g[S0], 0x5C);
+                break 'b_80014480;
+            }
+            sb(m, g[SP], 0x23, g[T7]);
+        }
+        g[A1] = lw(m, g[S0], 0x5C);
+    }
+    g[V1] = lbu(m, g[SP], 0x23);
+    if g[A1] == 0 {
+        g[A1] = (-2i64) as u64;
+    } else {
+        g[A2] = lbu(m, g[S0], 0x5A);
+        g[AT] = slt(g[V1], g[A2]);
+        if g[AT] != 0 {
+            g[A1] = (-2i64) as u64;
+        } else {
+            g[T8] = lbu(m, g[S0], 0x5B);
+            g[A0] = subu(g[V1], g[A2]);
+            g[T9] = sll(g[A0], 4);
+            g[AT] = slt(g[T8], g[V1]);
+            g[V0] = addu(g[A1], g[T9]);
+            if g[AT] != 0 {
+                g[A1] = (-2i64) as u64;
+            } else {
+                g[T6] = lh(m, g[V0], 8);
+                g[AT] = u64::MAX;
+                if g[T6] != g[AT] {
+                    g[T7] = lh(m, g[V0], 6);
+                    g[A1] = lbu(m, g[V0], 0);
+                    g[AT] = li(0x800D_0000);
+                    sw(m, g[AT], 0x691C, g[T7]);
+                    g[T8] = lh(m, g[V0], 4);
+                    g[AT] = li(0x800D_0000);
+                    sw(m, g[AT], 0x6920, g[T8]);
+                    g[T9] = lh(m, g[V0], 0xC);
+                    g[AT] = li(0x800D_0000);
+                    sw(m, g[AT], 0x6924, g[T9]);
+                    g[T6] = lh(m, g[V0], 0xE);
+                    g[AT] = li(0x800D_0000);
+                    sw(m, g[AT], 0x6928, g[T6]);
+                    g[T7] = lh(m, g[V0], 8);
+                    g[AT] = li(0x800D_0000);
+                    sw(m, g[AT], 0x692C, g[T7]);
+                    g[T8] = lh(m, g[V0], 0xA);
+                    g[AT] = li(0x800D_0000);
+                    sw(m, g[AT], 0x6930, g[T8]);
+                    g[T9] = lw(m, g[S0], 0);
+                    g[AT] = li(0x800D_0000);
+                    if g[T9] != 0 {
+                        sw(m, g[AT], 0x6934, 0);
+                    } else {
+                        g[T6] = lbu(m, g[V0], 1);
+                        g[AT] = li(0x800D_0000);
+                        sw(m, g[AT], 0x6934, g[T6]);
+                    }
+                } else {
+                    g[A1] = (-2i64) as u64;
+                }
+            }
+        }
+    }
+    if (g[A1] as i64) < 0 {
+        g[RA] = lw(m, g[SP], 0x1C);
+    } else {
+        g[A0] = g[S0];
+        call(imports::func_800125E4, m, ctx);
+        let g = &mut ctx.gpr;
+        g[RA] = lw(m, g[SP], 0x1C);
+    }
+    let g = &mut ctx.gpr;
+    g[S0] = lw(m, g[SP], 0x18);
+    g[SP] = addu(g[SP], 0x20);
 }
 
 /// `func_80014C98()`: append `gDPPipeSync` (`0xE7000000`, `0`) at the

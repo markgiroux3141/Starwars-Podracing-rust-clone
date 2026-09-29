@@ -8,7 +8,8 @@
 #![allow(non_snake_case)]
 
 use n64mem::Mem;
-use crate::recomp::{addu, enter, lb, lbu, li, lw, multu, reg::*, sb, sh, sll, sllv, slt, subu, sw, RecompContext};
+use crate::imports;
+use crate::recomp::{addu, call, enter, lb, lbu, li, lw, multu, reg::*, sb, sh, sll, sllv, slt, subu, sw, RecompContext};
 
 /// `func_8001F464()`: 1 if bit 1 of `[0x80113688]` is set, else 0. Leaves
 /// `t6` = the word, `t7` = the bit.
@@ -109,6 +110,154 @@ pub unsafe extern "C" fn func_80024704(rdram: *mut u8, ctx: *mut RecompContext) 
     if g[AT] != 0 {
         sw(m, g[A2], 0x24, g[T2]);
     }
+}
+
+/// `func_80024874(r)` (count the unlocked tracks before the current one,
+/// **guess**): `[0x8011A270] = 0`, then for `i` from 0 while `i < N[c]`
+/// (`c` = the signed byte `r + 0x5E`, re-read each step, `N` the bytes at
+/// `0x800A21B4`): stop if the signed byte `r + 0x5D` equals the word
+/// `T[c][i]` (`T` = 28-byte rows at `0x800A22E8`); else if
+/// [`func_8002DAD0`]`(r, c, i & 0xFF)` (the unlock bit), `[0x8011A270] +=
+/// 1`.
+///
+/// Frame (`sp - 0x30`): `ra`, `s5`..`s0` at `+0x2C..+0x14`, restored (`s3 =
+/// 0x8011A240`, `s5 = 0x800A21B4`, `s4 = 0x800A22E8`, `s1 = r`, `s0 = i`,
+/// `s2 = 4i`). Leaves `a1 = c`, `t*`, `at` and the callee's registers.
+///
+/// Domain: the tables' entries used in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80024874(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    'b_80024934: {
+        'b_80024930: {
+            g[SP] = addu(g[SP], (-0x30i64) as u64);
+            sw(m, g[SP], 0x20, g[S3]);
+            g[S3] = li(0x8011_A240);
+            sw(m, g[SP], 0x2C, g[RA]);
+            sw(m, g[SP], 0x28, g[S5]);
+            sw(m, g[SP], 0x24, g[S4]);
+            sw(m, g[SP], 0x1C, g[S2]);
+            sw(m, g[SP], 0x18, g[S1]);
+            sw(m, g[SP], 0x14, g[S0]);
+            sw(m, g[S3], 0x30, 0);
+            g[A1] = lb(m, g[A0], 0x5E);
+            g[S5] = li(0x800A_21B4);
+            g[T6] = addu(g[S5], g[A1]);
+            g[T7] = lbu(m, g[T6], 0);
+            g[S1] = g[A0];
+            g[S0] = 0;
+            g[S2] = 0;
+            if (g[T7] as i64) > 0 {
+                g[S4] = li(0x800A_22E8);
+                g[T9] = sll(g[A1], 3);
+                loop {
+                    let g = &mut ctx.gpr;
+                    g[T9] = subu(g[T9], g[A1]);
+                    g[T9] = sll(g[T9], 2);
+                    g[T0] = addu(g[S4], g[T9]);
+                    g[T1] = addu(g[T0], g[S2]);
+                    g[T2] = lw(m, g[T1], 0);
+                    g[T8] = lb(m, g[S1], 0x5D);
+                    g[A0] = g[S1];
+                    if g[T8] == g[T2] {
+                        break;
+                    }
+                    g[A2] = g[S0] & 0xFF;
+                    call(imports::func_8002DAD0, m, ctx);
+                    let g = &mut ctx.gpr;
+                    if g[V0] == 0 {
+                        g[A1] = lb(m, g[S1], 0x5E);
+                    } else {
+                        g[T3] = lw(m, g[S3], 0x30);
+                        g[T4] = addu(g[T3], 1);
+                        sw(m, g[S3], 0x30, g[T4]);
+                        g[A1] = lb(m, g[S1], 0x5E);
+                    }
+                    g[S0] = addu(g[S0], 1);
+                    g[S2] = addu(g[S2], 4);
+                    g[T5] = addu(g[S5], g[A1]);
+                    g[T6] = lbu(m, g[T5], 0);
+                    g[AT] = slt(g[S0], g[T6]);
+                    if g[AT] == 0 {
+                        break 'b_80024930;
+                    }
+                    g[T9] = sll(g[A1], 3);
+                }
+                let g = &mut ctx.gpr;
+                g[RA] = lw(m, g[SP], 0x2C);
+                break 'b_80024934;
+            }
+        }
+        let g = &mut ctx.gpr;
+        g[RA] = lw(m, g[SP], 0x2C);
+    }
+    let g = &mut ctx.gpr;
+    g[S0] = lw(m, g[SP], 0x14);
+    g[S1] = lw(m, g[SP], 0x18);
+    g[S2] = lw(m, g[SP], 0x1C);
+    g[S3] = lw(m, g[SP], 0x20);
+    g[S4] = lw(m, g[SP], 0x24);
+    g[S5] = lw(m, g[SP], 0x28);
+    g[SP] = addu(g[SP], 0x30);
+}
+
+/// `func_80028070()` (reset every profile record, **guess**):
+/// [`func_80029A3C`]`(0, i)` for `i` in `0..12` (the working copies), then
+/// `(1, i)` for `i` in `0..4` (the saved ones).
+///
+/// Frame (`sp - 0x20`): `ra`, `s1`, `s0` at `+0x1C`, `+0x18`, `+0x14`,
+/// restored; `a0` spilled to its home slot `sp + 0`. Leaves the callee's
+/// registers.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80028070(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x20i64) as u64);
+    sw(m, g[SP], 0x14, g[S0]);
+    sw(m, g[SP], 0x1C, g[RA]);
+    sw(m, g[SP], 0x18, g[S1]);
+    sw(m, g[SP], 0x20, g[A0]);
+    g[S0] = 0;
+    g[A0] = 0;
+    loop {
+        let g = &mut ctx.gpr;
+        g[A1] = g[S0];
+        call(imports::func_80029A3C, m, ctx);
+        let g = &mut ctx.gpr;
+        g[S0] = addu(g[S0], 1);
+        g[AT] = slt(g[S0], 0xC);
+        if g[AT] == 0 {
+            break;
+        }
+        g[A0] = 0;
+    }
+    let g = &mut ctx.gpr;
+    g[S0] = 0;
+    g[S1] = 4;
+    g[A0] = 1;
+    loop {
+        let g = &mut ctx.gpr;
+        g[A1] = g[S0];
+        call(imports::func_80029A3C, m, ctx);
+        let g = &mut ctx.gpr;
+        g[S0] = addu(g[S0], 1);
+        if g[S0] == g[S1] {
+            break;
+        }
+        g[A0] = 1;
+    }
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x1C);
+    g[S0] = lw(m, g[SP], 0x14);
+    g[S1] = lw(m, g[SP], 0x18);
+    g[SP] = addu(g[SP], 0x20);
 }
 
 /// `func_800281F0(p)`: build the list of available racers (**guess**; 23

@@ -242,19 +242,19 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80012B5C,func_80012B5C,ours,0,,rust_verified,unit_diff,high,lookup c in 16-byte records [o+0x5C] for c in [o+0x5A]..[o+0x5B]; QUIRK a miss copies uninitialised stack words (game::misc)
 0x80012BF0,func_80012BF0,ours,1,,recomp,,,
 0x80013DC0,func_80013DC0,ours,2,,recomp,,,
-0x800141EC,func_800141EC,ours,1,,recomp,,,
+0x800141EC,func_800141EC,ours,1,,rust_verified,unit_diff,high,"set up a glyph: colour, combine, texture prologue by font format, metrics, texture load (game::render)"
 0x80014568,func_80014568,ours,1,,recomp,,,
 0x80014C98,func_80014C98,ours,0,render,rust_verified,unit_diff,high,"gDPPipeSync (0xE7000000, 0) onto the display list at [0x801217B0] (game::render)"
-0x80014CC0,func_80014CC0,ours,1,,recomp,,,
+0x80014CC0,func_80014CC0,ours,1,,rust_verified,unit_diff,high,"sine and cosine in degrees (r = f32(deg*pi/180), cosf then sinf) (game::math)"
 0x80014D20,func_80014D20,ours,2,,recomp,,,
 0x80014D4C,func_80014D4C,ours,0,math,rust_verified,unit_diff,high,"asin(x) in degrees by the game's series (constants 0x800A8790..): +-90 beyond +-0.999999, reduction via sqrt(1-x^2) outside +-0.7071, r*180/pi in double (game::math)"
-0x80014F2C,func_80014F2C,ours,1,,recomp,,,
+0x80014F2C,func_80014F2C,ours,1,,rust_verified,unit_diff,high,acos in degrees: 90 - asin_deg (game::math)
 0x80014F54,func_80014F54,ours,0,math,rust_verified,unit_diff,high,"atan2(y=f12, x=f14) in degrees by the game's series (constants 0x800A87C0..): octant swap, t < 1e-4 -> 0, quadrant fixups at -1e-4 (game::math)"
 0x8001514C,vec2_add,ours,0,math,rust_verified,unit_diff,high,out = b + a (2 floats) (game::math)
 0x80015170,vec2_scale,ours,0,math,rust_verified,unit_diff,high,"out = v * s, s in a1 (game::math)"
 0x80015190,func_80015190,ours,0,math,rust_verified,unit_diff,high,vec2 out = q*s + p (s in a2) (game::math)
 0x800151C0,vec2_length,ours,0,math,rust_verified,unit_diff,high,sqrt(y*y + x*x) in f0 (game::math)
-0x800151E0,func_800151E0,ours,1,,recomp,,,
+0x800151E0,func_800151E0,ours,1,,rust_verified,unit_diff,high,vec2 normalise if K <= length; returns the length (game::math)
 0x8001523C,vec2_dist_sq,ours,0,math,rust_verified,unit_diff,high,(a-b).(a-b) in f0 (game::math)
 0x80015268,func_80015268,ours,0,math,rust_verified,unit_diff,high,vec3 set from a1..a3 (z via spill) (game::math)
 0x80015288,func_80015288,ours,0,math,rust_verified,unit_diff,high,vec3 copy (game::math)
@@ -267,7 +267,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800153EC,func_800153EC,ours,0,math,rust_verified,unit_diff,high,vec3 squared distance (dx^2+dy^2)+dz^2 (game::math)
 0x80015428,func_80015428,ours,0,math,rust_verified,unit_diff,high,vec2 distance of b - a (spilled) (game::math)
 0x80015470,func_80015470,ours,0,math,rust_verified,unit_diff,high,vec3 distance of b - a (spilled) (game::math)
-0x800154D0,func_800154D0,ours,1,,recomp,,,
+0x800154D0,func_800154D0,ours,1,,rust_verified,unit_diff,high,vec3 normalise if K <= length; returns the length (game::math)
 0x80015538,func_80015538,ours,0,math,rust_verified,unit_diff,high,vec3 cross a x b via frame (game::math)
 0x800155C0,func_800155C0,ours,0,math,rust_verified,unit_diff,high,vec3 out = v*s (s in a1) (game::math)
 0x800155EC,func_800155EC,ours,0,math,rust_verified,unit_diff,high,vec3 out = q*s + p (s in a2) (game::math)
@@ -280,7 +280,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800160BC,func_800160BC,ours,0,math,rust_verified,unit_diff,high,"inverse of scaled rotation + translation: transpose / squared row lengths, t' = -(t . columns) (game::math)"
 0x80016260,func_80016260,ours,0,math,rust_verified,unit_diff,high,"ludcmp shape (Crout LU, implicit pivoting, n = 3); QUIRKs: stale vv for a zero row, stale imax at column 0 (game::math)"
 0x800167E4,func_800167E4,ours,0,math,rust_verified,unit_diff,high,"lubksb shape (LU back-substitution, n = 3) (game::math)"
-0x80016A20,func_80016A20,ours,1,,recomp,,,
+0x80016A20,func_80016A20,ours,1,,rust_verified,unit_diff,high,"inverse of a 4x4 through the LU pair, translation from m's row 3 (game::math)"
 0x80016BF4,func_80016BF4,ours,0,math,rust_verified,unit_diff,high,"out = v x 3x3 part (row vector), via frame (game::math)"
 0x80016CAC,func_80016CAC,ours,0,math,rust_verified,unit_diff,high,"out = v x 4x4 with translation, via frame (game::math)"
 0x80016D78,func_80016D78,ours,0,math,rust_verified,unit_diff,high,"vec4 set (z spill, w stack) (game::math)"
@@ -331,13 +331,13 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80017F20,func_80017F20,ours,0,,rust_verified,unit_diff,high,returns 4 (game::misc)
 0x80017F28,func_80017F28,ours,0,,rust_verified,unit_diff,high,"0x80120DF0 + 0x170k for 0 <= k < 4, else 0 (game::misc)"
 0x80017F64,func_80017F64,ours,3,,recomp,,,
-0x80017FD0,func_80017FD0,ours,1,,recomp,,,
+0x80017FD0,func_80017FD0,ours,1,,rust_verified,unit_diff,high,"node world matrix: copy m to o+0xB0, o+0x70 = (o+0x30) * m (game::misc)"
 0x80018084,func_80018084,ours,0,,rust_verified,unit_diff,high,float a2 to +0x148/+0x14C/+0x150 for k = 2/3/5 (64-bit) (game::misc)
 0x800180C8,func_800180C8,ours,0,,rust_verified,unit_diff,high,"float +0x148/+0x14C/+0x150 for k = 2/3/5, else -1.0 (game::misc)"
 0x80018114,func_80018114,ours,0,,rust_verified,unit_diff,high,[o+0x168] = v (game::misc)
 0x8001811C,func_8001811C,ours,0,,rust_verified,unit_diff,high,set field by selector 4/3/6/5 -> +0x15C/+0x164/+0x158/+0x160 (game::misc)
 0x80018164,func_80018164,ours,0,,rust_verified,unit_diff,high,"get field by selector, else -1 (game::misc)"
-0x800181BC,func_800181BC,ours,1,,recomp,,,
+0x800181BC,func_800181BC,ours,1,,rust_verified,unit_diff,high,"node flag word walk by op; QUIRK children get flags & 0x10 only, v0 not preserved (game::misc)"
 0x800182FC,func_800182FC,ours,0,,rust_verified,unit_diff,high,"k 0 -> [o+8], 2 -> [o+4], else 0 (game::misc)"
 0x80018324,func_80018324,ours,0,,rust_verified,unit_diff,high,"init node header (type, -1 links); type & 0x4000 clears +0x14/+0x18; 0xD065 gets identity transform (game::misc)"
 0x800183A8,func_800183A8,ours,0,,rust_verified,unit_diff,high,[o+4] (game::misc)
@@ -369,7 +369,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800228C0,func_800228C0,ours,25,,recomp,,,
 0x80024070,func_80024070,ours,26,,recomp,,,
 0x80024704,func_80024704,ours,0,save,rust_verified,unit_diff,high,"track selection state at 0x8011A240 (circuits, unlocked tracks, clamp, left/right) (game::save)"
-0x80024874,func_80024874,ours,1,,recomp,,,
+0x80024874,func_80024874,ours,1,,rust_verified,unit_diff,high,count the unlocked tracks before the current one into 0x8011A270 (game::save)
 0x80024954,func_80024954,ours,25,,recomp,,,
 0x80025148,func_80025148,ours,25,,recomp,,,
 0x80026644,func_80026644,ours,25,,recomp,,,
@@ -377,7 +377,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80027150,func_80027150,ours,20,,recomp,,,
 0x80027A0C,func_80027A0C,ours,6,,recomp,,,
 0x80027D24,func_80027D24,ours,22,,recomp,,,
-0x80028070,func_80028070,ours,1,,recomp,,,
+0x80028070,func_80028070,ours,1,,rust_verified,unit_diff,high,"reset every profile record (12 working, 4 saved) (game::save)"
 0x800280D8,func_800280D8,ours,22,,recomp,,,
 0x800281F0,func_800281F0,ours,0,save,rust_verified,unit_diff,high,racer list at 0x800D6CD8 from the profile's unlock mask | 0x22E01; count to 0x8011A26C (game::save)
 0x80028320,func_80028320,ours,25,,recomp,,,
