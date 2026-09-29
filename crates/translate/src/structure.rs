@@ -156,11 +156,25 @@ fn intersect(idom: &[usize], rpo: &[usize], mut a: usize, mut b: usize) -> usize
 }
 
 fn block_label(cfg: &Cfg, b: usize) -> String {
-    format!("b_{:08X}", cfg.blocks[b].addr)
+    format!("b_{}", label_addr(cfg, b))
 }
 
 fn loop_label(cfg: &Cfg, b: usize) -> String {
-    format!("l_{:08X}", cfg.blocks[b].addr)
+    format!("l_{}", label_addr(cfg, b))
+}
+
+/// Labels are named after the block's address. Two reachable blocks must
+/// not share a name, or a `break` meant for the outer one binds to the
+/// inner one (and then looks like a fall-through and is dropped): that
+/// happened when a block starting at its branch kept the previous
+/// instruction's address. So a shared address also gets the block number.
+fn label_addr(cfg: &Cfg, b: usize) -> String {
+    let a = cfg.blocks[b].addr;
+    if cfg.reachable().into_iter().any(|c| c != b && cfg.blocks[c].addr == a) {
+        format!("{a:08X}_{b}")
+    } else {
+        format!("{a:08X}")
+    }
 }
 
 impl Graph<'_> {

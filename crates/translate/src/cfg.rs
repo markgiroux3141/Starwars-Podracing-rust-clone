@@ -153,6 +153,12 @@ pub fn build(src: &str) -> Result<Cfg, Refusal> {
                 if in_if.is_some() {
                     return Err(Refusal::new("parse", "nested if"));
                 }
+                // A block that starts with its branch (a label right before
+                // it) starts at the branch; its ops stay empty.
+                let b = &mut blocks[cur];
+                if b.ops.is_empty() && b.term.is_none() {
+                    b.addr = addr;
+                }
                 in_if = Some((ir::cond(&e)?, Vec::new(), None, addr));
             }
             Line::Close => {

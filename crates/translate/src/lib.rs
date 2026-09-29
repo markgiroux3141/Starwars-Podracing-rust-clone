@@ -218,6 +218,60 @@ L_8000100C:
         assert!(tail.contains("g[A0] = 0;\n}\n}"), "the outer latch left the loop:\n{b}");
     }
 
+    /// A label right before a branch (L_8000101C): its block starts at the
+    /// branch. It used to keep the previous instruction's address, so its
+    /// label collided with L_80001018's, and the `bnel` path's jump to it
+    /// bound to L_80001018 and ran the `+ 0x10` (session 9: 18 drafts had
+    /// such a collision, func_8003FDCC's harmlessly).
+    #[test]
+    fn label_before_a_branch_gets_its_own_name() {
+        let b = body(
+            "    // 0x80001000: blez $t1, L_80001018
+    if (SIGNED(ctx->r9) <= 0) {
+        // 0x80001004: or $a1, $zero, $zero
+        ctx->r5 = 0 | 0;
+            goto L_80001018;
+    }
+    // 0x80001004: or $a1, $zero, $zero
+    ctx->r5 = 0 | 0;
+    // 0x80001008: bnel $t2, $zero, L_8000101C
+    if (ctx->r10 != 0) {
+        // 0x8000100C: addiu $a2, $a2, 0x1
+        ctx->r6 = ADD32(ctx->r6, 0X1);
+            goto L_8000101C;
+    }
+    goto skip_0;
+    // 0x8000100C: addiu $a2, $a2, 0x1
+    ctx->r6 = ADD32(ctx->r6, 0X1);
+    skip_0:
+    // 0x80001010: addiu $a1, $a1, 0x1
+    ctx->r5 = ADD32(ctx->r5, 0X1);
+L_80001018:
+    // 0x80001018: addiu $a2, $a2, 0x10
+    ctx->r6 = ADD32(ctx->r6, 0X10);
+L_8000101C:
+    // 0x8000101C: bne $a2, $zero, L_80001028
+    if (ctx->r6 != 0) {
+        // 0x80001020: nop
+
+            goto L_80001028;
+    }
+    // 0x80001020: nop
+
+    // 0x80001024: or $v0, $a1, $zero
+    ctx->r2 = ctx->r5 | 0;
+L_80001028:
+    // 0x80001028: jr $ra
+    // 0x8000102C: nop
+
+    return;",
+        );
+        assert!(b.contains("'b_8000101C: {"), "{b}");
+        assert!(!b.contains("'b_80001018: {\n'b_80001018: {"), "{b}");
+        // The bnel path: a2 += 1, then straight to L_8000101C.
+        assert!(b.contains("g[A2] = addu(g[A2], 1);\nbreak 'b_8000101C;"), "{b}");
+    }
+
     #[test]
     fn jal_delay_slot_runs_before_the_call_and_g_is_reborrowed() {
         let d = translate(&wrap(
