@@ -183,13 +183,13 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8000D9A8,func_8000D9A8,ours,1,,rust_verified,unit_diff,high,reset the id stack (Jdge pool element 0's bit 12 picks id 0 or 2) (game::misc)
 0x8000DA6C,func_8000DA6C,ours,0,,rust_verified,unit_diff,high,returns [0x8009B7E4] (game::misc)
 0x8000DA78,func_8000DA78,ours,8,,recomp,,,
-0x8000E680,func_8000E680,ours,1,,recomp,,,
-0x8000E738,func_8000E738,ours,1,,recomp,,,
+0x8000E680,func_8000E680,ours,1,,rust_verified,unit_diff,high,record +0/+2 from screen pixels (scaled to 320x240) (game::misc)
+0x8000E738,func_8000E738,ours,1,,rust_verified,unit_diff,high,record +4/+6 from screen pixels (game::misc)
 0x8000E7F0,func_8000E7F0,ours,8,,recomp,,,
-0x8000E8C4,func_8000E8C4,ours,1,,recomp,,,
+0x8000E8C4,func_8000E8C4,ours,1,,rust_verified,unit_diff,high,node tree: first nonzero child word (recursive through the C) (game::misc)
 0x8000E9BC,func_8000E9BC,ours,0,,rust_verified,unit_diff,high,"six optional bytes at [p+0xC]+0x20, negative = skip (game::misc)"
-0x8000EA4C,func_8000EA4C,ours,1,,recomp,,,
-0x8000EBE8,func_8000EBE8,ours,1,,recomp,,,
+0x8000EA4C,func_8000EA4C,ours,1,,rust_verified,unit_diff,high,node tree: six bytes via func_8000E9BC (recursive through the C) (game::misc)
+0x8000EBE8,func_8000EBE8,ours,1,,rust_verified,unit_diff,high,project a point to the screen through 0x80112E20 and a viewport; margins of 8 (game::misc)
 0x8000EEE0,func_8000EEE0,ours,2,,recomp,,,
 0x8000F0DC,func_8000F0DC,ours,3,,recomp,,,
 0x8000F5A0,func_8000F5A0,ours,0,render,rust_verified,unit_diff,high,depth-buffer probes: 8x8 window counts and point samples; QUIRK: unbounded sample reads (game::render)
@@ -211,7 +211,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800105DC,func_800105DC,ours,2,,recomp,,,
 0x80010B34,func_80010B34,ours,2,,recomp,,,
 0x80010EA0,func_80010EA0,ours,3,,recomp,,,
-0x800116E8,func_800116E8,ours,1,,recomp,,,
+0x800116E8,func_800116E8,ours,1,,rust_verified,unit_diff,high,"turn off the 80 listed records, clear their bytes (game::misc)"
 0x80011764,func_80011764,ours,0,,rust_verified,unit_diff,high,"[0x8009B878] = f12, [0x8009B87C] = f14 (game::misc)"
 0x80011778,func_80011778,ours,0,,rust_verified,unit_diff,high,four bytes at 0x8009B874 from a0-a3 (game::misc)
 0x800117A4,func_800117A4,ours,2,,recomp,,,
@@ -221,7 +221,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80011824,func_80011824,ours,0,,rust_verified,unit_diff,high,[0x800D6140 + 4k] = v; QUIRK unbounded (game::misc)
 0x80011838,func_80011838,ours,0,,rust_verified,unit_diff,high,"0x800D6140 words = -1, 0x800D68C0 bytes = 0 (game::misc)"
 0x80011888,func_80011888,ours,10,,recomp,,,
-0x800118F8,func_800118F8,ours,1,,recomp,,,
+0x800118F8,func_800118F8,ours,1,,rust_verified,unit_diff,high,func_8000F5A0 thunk (game::misc)
 0x80011918,func_80011918,ours,0,,rust_verified,unit_diff,high,[0x8009B810] = 1 (game::misc)
 0x80011928,func_80011928,ours,0,,rust_verified,unit_diff,high,[0x8009B810] = 0 (game::misc)
 0x80011940,comp_decompress,ours,0,asset,rust_verified,unit_diff,high,"Comp/Wolf LZSS (NOTES); QUIRK: window = src-0x1000, uninitialised"
@@ -231,13 +231,13 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80011D60,rom_read_small,ours,16,asset,recomp,,med,as rom_read via func_80011BDC; headers/tables
 0x80011DF0,func_80011DF0,ours,0,,rust_verified,unit_diff,high,pointer table 0x800D6940 = 7 fixed pointers (game::misc)
 0x80011E54,func_80011E54,ours,0,,rust_verified,unit_diff,high,select pointer k clamped to 0..count (game::misc)
-0x80011EA4,func_80011EA4,ours,1,,recomp,,,
+0x80011EA4,func_80011EA4,ours,1,,rust_verified,unit_diff,high,func_80011E54 thunk (s16 k) (game::misc)
 0x80011ECC,func_80011ECC,ours,0,,rust_verified,unit_diff,high,"halfword pair 0x800A1CD0 = (x, y) (game::misc)"
 0x80011EE8,func_80011EE8,ours,0,,rust_verified,unit_diff,high,"*x, *y = halfword pair (game::misc)"
 0x80011F04,func_80011F04,ours,0,,rust_verified,unit_diff,high,four bytes at 0x800A1CCC; [0x800D6938] = 0 (game::misc)
 0x80011F38,func_80011F38,ours,0,,rust_verified,unit_diff,high,"glyph rectangle: gSPTextureRectangle scaled to the screen, grows the text box 0x800D6914; FCR31 idiom via fpu::to_unsigned_s, flag path dead (game::render)"
 0x800125E4,func_800125E4,ours,0,render,rust_verified,unit_diff,high,texture load commands by format (game::render)
-0x800129B8,func_800129B8,ours,1,,recomp,,,
+0x800129B8,func_800129B8,ours,1,,rust_verified,unit_diff,high,text width in font k (game::misc)
 0x800129E4,func_800129E4,ours,0,,rust_verified,unit_diff,high,"text width: sum of glyph advances (+2 of 16-byte glyphs) up to NUL or ~n; ~~ literal, ~X skipped; lowercase folded if font lacks it; chars >= 0x97 remapped via 0x800A1C86/0x800A1CD8 to an extended table; QUIRKs: first==0 overrides extended glyphs, ~ before NUL runs past the string (game::misc)"
 0x80012B5C,func_80012B5C,ours,0,,rust_verified,unit_diff,high,lookup c in 16-byte records [o+0x5C] for c in [o+0x5A]..[o+0x5B]; QUIRK a miss copies uninitialised stack words (game::misc)
 0x80012BF0,func_80012BF0,ours,1,,recomp,,,

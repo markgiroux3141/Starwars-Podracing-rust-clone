@@ -19,13 +19,22 @@ recomp_imports! {
     func_80007CE4, // handle lookup
     func_80008718, // special sound id
     func_8000A44C, // record init
+    func_8000A920, // record or global on/off
+    func_8000AA04, // record +0/+2 halfwords
+    func_8000AA78, // record +4/+6 halfwords
     func_8000AED4, // entry flags |=
     func_8000C5F0, // push current id
     func_8000C6C8, // float clamp-add
     func_8000C724, // int clamp-add
+    func_8000E8C4, // node tree first word (self)
+    func_8000E9BC, // six optional bytes
+    func_8000EA4C, // node tree bytes (self)
+    func_8000F5A0, // depth probes
     func_80011940, // comp_decompress
     func_80011CDC, // rom_read
     func_80011D60, // rom_read_small
+    func_80011E54, // select pointer k
+    func_800129E4, // text width
     func_80015538, // vec3 cross
     func_800155EC, // vec3 multiply-add
     func_800156DC, // 4x4 copy
@@ -36,6 +45,7 @@ recomp_imports! {
     func_80017C18, // node transform to 4x4
     func_80017C98, // node transform to 4x4 (same code)
     func_80017DA4, // node type word
+    func_80017DAC, // [o + 0x14]
     func_80017E70, // node +8 setter
     func_80017EE4, // [o + 4]
     func_80017EEC, // [o + 4] = v
@@ -57,6 +67,7 @@ recomp_imports! {
     func_8003F7B8, // pool count by id
     func_8003F800, // pool iteration begin
     func_80051FF4, // first zero of four words
+    func_80081730, // point x 4x4 (w = 1)
     func_80081A2C, // closest point on a segment
     func_800827C0, // model_load's error path (not yet understood)
 }
