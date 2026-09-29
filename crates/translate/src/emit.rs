@@ -1,7 +1,7 @@
 //! Rust source from structured code, in the style of the hand-written ports:
 //! `g[REG]` for `ctx.gpr`, `m` for RDRAM, `game::recomp` helpers.
 
-use crate::ir::{Alu, Cmp, Cond, Cvt, FArith, FUn, Load, MulDiv, Op, Prec, Shift, Store, Val};
+use crate::ir::{Alu, Cmp, Cond, Cvt, FArith, FUn, Load, MulDiv, Op, Prec, Shift, Store, Unaligned, Val};
 use crate::structure::S;
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
@@ -128,6 +128,20 @@ fn op_uses(o: &Op, u: &mut Uses) {
             u.gprs = true;
             val_uses(*v, u);
             u.helpers.insert(store_name(*w));
+        }
+        Op::LoadU(k, _, init, base, _) => {
+            u.loads = true;
+            u.gprs = true;
+            val_uses(*init, u);
+            val_uses(*base, u);
+            u.helpers.insert(if *k == Unaligned::L { "lwl" } else { "lwr" });
+        }
+        Op::StoreU(k, base, _, v) => {
+            u.stores = true;
+            u.gprs = true;
+            val_uses(*base, u);
+            val_uses(*v, u);
+            u.helpers.insert(if *k == Unaligned::L { "swl" } else { "swr" });
         }
         Op::Li(..) => {
             u.gprs = true;
@@ -505,6 +519,14 @@ fn op(o: &Op, fcr31: bool) -> String {
         Op::Ctc1(v) => format!("fcr31 = ({} as u32) & 3;", val(*v)),
         Op::Load(w, d, base, o) => format!("{} = {}(m, {}, {});", r(*d), load_name(*w), r(*base), off(*o)),
         Op::Store(w, base, o, v) => format!("{}(m, {}, {}, {});", store_name(*w), r(*base), off(*o), val(*v)),
+        Op::LoadU(k, d, init, base, o) => {
+            let name = if *k == Unaligned::L { "lwl" } else { "lwr" };
+            format!("{} = {name}(m, {}, {}, {});", r(*d), val(*init), val(*base), off(*o))
+        }
+        Op::StoreU(k, base, o, v) => {
+            let name = if *k == Unaligned::L { "swl" } else { "swr" };
+            format!("{name}(m, {}, {}, {});", val(*base), off(*o), val(*v))
+        }
         Op::DShift(s, d, x, sa) => match s {
             Shift::Sll => format!("{} = {} << {sa};", r(*d), val(*x)),
             Shift::Srl => format!("{} = {} >> {sa};", r(*d), val(*x)),

@@ -188,6 +188,54 @@ pub fn lb(mem: &Mem, base: u64, offset: i32) -> u64 {
     mem.read_u8((base as u32).wrapping_add(offset as u32)) as i8 as i64 as u64
 }
 
+/// recomp.h's `do_lwl`: `lwl rt, off(base)` with `initial` the old `rt`.
+/// The aligned word around `base + off` shifted left by the misalignment
+/// (bytes), merged into `initial`'s low word below it, sign-extended.
+/// (The address is formed in 64 bits in the C, as for [`lw`]; `base` must
+/// be canonical.)
+#[inline]
+pub fn lwl(mem: &Mem, initial: u64, base: u64, offset: i32) -> u64 {
+    let a = (base as u32).wrapping_add(offset as u32);
+    let loaded = mem.read_u32(a & !3);
+    let sh = (a & 3) * 8;
+    let masked = initial & u64::from(!(0xFFFF_FFFFu32 << sh));
+    s32((masked | u64::from(loaded << sh)) as u32)
+}
+
+/// recomp.h's `do_lwr`: `lwr rt, off(base)`: the aligned word shifted
+/// right by `24 - 8 * misalignment`, merged into `initial` above it,
+/// sign-extended.
+#[inline]
+pub fn lwr(mem: &Mem, initial: u64, base: u64, offset: i32) -> u64 {
+    let a = (base as u32).wrapping_add(offset as u32);
+    let loaded = mem.read_u32(a & !3);
+    let sh = 24 - (a & 3) * 8;
+    let masked = initial & u64::from(!(0xFFFF_FFFFu32 >> sh));
+    s32((masked | u64::from(loaded >> sh)) as u32)
+}
+
+/// recomp.h's `do_swl`: `swl rt, off(base)`: `value`'s low word shifted
+/// right by the misalignment into the aligned word, above the bytes kept.
+#[inline]
+pub fn swl(mem: &mut Mem, base: u64, offset: i32, value: u64) {
+    let a = (base as u32).wrapping_add(offset as u32);
+    let w = a & !3;
+    let sh = (a & 3) * 8;
+    let kept = mem.read_u32(w) & !(0xFFFF_FFFFu32 >> sh);
+    mem.write_u32(w, kept | (value as u32) >> sh);
+}
+
+/// recomp.h's `do_swr`: `swr rt, off(base)`: `value`'s low word shifted
+/// left by `24 - 8 * misalignment` into the aligned word.
+#[inline]
+pub fn swr(mem: &mut Mem, base: u64, offset: i32, value: u64) {
+    let a = (base as u32).wrapping_add(offset as u32);
+    let w = a & !3;
+    let sh = 24 - (a & 3) * 8;
+    let kept = mem.read_u32(w) & !(0xFFFF_FFFFu32 << sh);
+    mem.write_u32(w, kept | (value as u32) << sh);
+}
+
 /// `sw`: store the low word of `value` at `base + offset`.
 #[inline]
 pub fn sw(mem: &mut Mem, base: u64, offset: i32, value: u64) {

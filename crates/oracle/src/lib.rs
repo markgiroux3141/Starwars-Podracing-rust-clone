@@ -64,6 +64,17 @@ pub mod fpu_probe {
     }
 }
 
+/// recomp.h's unaligned word accesses on a caller's RDRAM buffer
+/// (`c/unaligned_probe.c`), to check `game::recomp`'s `lwl`/`lwr`/`swl`/`swr`.
+pub mod unaligned_probe {
+    extern "C" {
+        pub fn unaligned_probe_lwl(rdram: *mut u8, initial: u64, base: u64, offset: u64) -> u64;
+        pub fn unaligned_probe_lwr(rdram: *mut u8, initial: u64, base: u64, offset: u64) -> u64;
+        pub fn unaligned_probe_swl(rdram: *mut u8, base: u64, offset: u64, value: u64);
+        pub fn unaligned_probe_swr(rdram: *mut u8, base: u64, offset: u64, value: u64);
+    }
+}
+
 pub mod runtime {
     use std::ffi::c_char;
 

@@ -47,6 +47,14 @@ pub enum Load {
     Bu,
 }
 
+/// The unaligned word accesses: `lwl`/`swl` (the left, high-order part)
+/// and `lwr`/`swr` (the right part), as recomp.h's `do_lwl` and friends.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Unaligned {
+    L,
+    R,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Store {
     W,
@@ -94,6 +102,11 @@ pub enum Op {
     Load(Load, u8, u8, i32),
     /// `mem[base + off] = val`.
     Store(Store, u8, i32, Val),
+    /// `rt = do_lwl(rdram, initial, base, off)` (or `do_lwr`): the merge of
+    /// `initial` with the aligned word around `base + off`.
+    LoadU(Unaligned, u8, Val, Val, i32),
+    /// `do_swl(rdram, off, base, val)` (or `do_swr`).
+    StoreU(Unaligned, Val, i32, Val),
     /// A 32-bit constant, sign-extended (`lui`, or `lui` + `addiu`/`ori`).
     Li(u8, u32),
     /// A small constant (`addiu rd, zero, n`, `or rd, zero, zero`).
@@ -211,6 +224,7 @@ impl Op {
     pub fn writes(&self) -> Option<u8> {
         match *self {
             Op::Load(_, d, ..)
+            | Op::LoadU(_, d, ..)
             | Op::Li(d, _)
             | Op::Const(d, _)
             | Op::Move(d, _)
@@ -369,7 +383,7 @@ fn refusal_for_name(name: &str, e: &E) -> Refusal {
         | "TRUNC_W_S" | "TRUNC_W_D" | "CVT_W_S" | "CVT_W_D" | "sqrtf" => float(e),
         "get_cop1_cs" | "set_cop1_cs" => Refusal::new("FCR31", format!("`{e}`")),
         "do_break" => Refusal::new("break", format!("`{e}`")),
-        "do_lwl" | "do_lwr" | "do_swl" | "do_swr" => Refusal::new("unaligned access", format!("`{e}`")),
+        "do_lwl" | "do_lwr" | "do_swl" | "do_swr" => Refusal::new("unaligned access", format!("unsupported shape `{e}`")),
         "LD" | "SD" => Refusal::new("64-bit", format!("`{e}`")),
         "switch_error" => Refusal::new("jump table", format!("`{e}`")),
         n if n.starts_with("(LOOKUP_FUNC") => Refusal::new("indirect call", format!("`{e}`")),
@@ -751,11 +765,56 @@ fn dword_stmt(st: &crate::c::Stmt) -> Option<Op> {
 }
 
 /// Statements of one C line, as ops. `mult`/`div` span several statements.
+/// An unaligned access: `rt = do_lwl(rdram, initial, a, b)` (`a + b` the
+/// address, one of them a register or 0, the other a constant) or
+/// `do_swl(rdram, off, base, val)`, and the `lwr`/`swr` forms.
+fn unaligned_stmt(st: &crate::c::Stmt) -> Option<Op> {
+    use crate::c::Stmt;
+    let kind = |n: &str, l, r| match n {
+        _ if n == l => Some(Unaligned::L),
+        _ if n == r => Some(Unaligned::R),
+        _ => None,
+    };
+    let addr = |a: &E, b: &E| -> Option<(Val, i32)> {
+        match (a, b) {
+            (E::Reg(r), E::Num(o)) | (E::Num(o), E::Reg(r)) => Some((Val::R(*r), i32::try_from(*o).ok()?)),
+            (E::Num(0), E::Num(o)) | (E::Num(o), E::Num(0)) => Some((Val::I(0), i32::try_from(*o).ok()?)),
+            _ => None,
+        }
+    };
+    match st {
+        Stmt::Assign(E::Reg(d), E::Call(n, args)) => {
+            let k = kind(n, "do_lwl", "do_lwr")?;
+            let [E::Ident(r), init, a, b] = args.as_slice() else { return None };
+            if r != "rdram" {
+                return None;
+            }
+            let (base, off) = addr(a, b)?;
+            Some(Op::LoadU(k, *d, val(init)?, base, off))
+        }
+        Stmt::Expr(E::Call(n, args)) => {
+            let k = kind(n, "do_swl", "do_swr")?;
+            let [E::Ident(r), a, b, v] = args.as_slice() else { return None };
+            if r != "rdram" {
+                return None;
+            }
+            let (base, off) = addr(a, b)?;
+            Some(Op::StoreU(k, base, off, val(v)?))
+        }
+        _ => None,
+    }
+}
+
 pub fn ops_of_line(stmts: &[crate::c::Stmt]) -> Result<Vec<Op>, Refusal> {
     use crate::c::Stmt;
     let mut out = Vec::new();
     let mut k = 0;
     while k < stmts.len() {
+        if let Some(op) = unaligned_stmt(&stmts[k]) {
+            out.push(op);
+            k += 1;
+            continue;
+        }
         if let Some(op) = dword_stmt(&stmts[k]) {
             out.push(op);
             k += 1;
@@ -1023,7 +1082,13 @@ mod tests {
         assert_eq!(ops("LOOKUP_FUNC(0X80012340)(rdram, ctx);").unwrap(), [Op::CallIndirect(Val::I(0x8001_2340))]);
         assert_eq!(ops("LOOKUP_FUNC(ctx->r25 + 4)(rdram, ctx);").unwrap_err().kind, "indirect call");
         assert_eq!(ops("do_break(ctx->r4);").unwrap_err().kind, "break");
-        assert_eq!(ops("ctx->r1 = do_lwr(rdram, ctx->r1, ctx->r14, 0X12);").unwrap_err().kind, "unaligned access");
+        assert_eq!(
+            ops("ctx->r1 = do_lwr(rdram, ctx->r1, ctx->r14, 0X12);").unwrap(),
+            [Op::LoadU(Unaligned::R, 1, Val::R(1), Val::R(14), 0x12)]
+        );
+        assert_eq!(ops("do_swl(rdram, -0XC, ctx->r2, ctx->r1);").unwrap(), [Op::StoreU(Unaligned::L, Val::R(2), -0xC, Val::R(1))]);
+        assert_eq!(ops("do_swr(rdram, 0X4, 0, ctx->r14);").unwrap(), [Op::StoreU(Unaligned::R, Val::I(0), 4, Val::R(14))]);
+        assert_eq!(ops("do_swr(rdram, ctx->r4, ctx->r2, ctx->r1);").unwrap_err().kind, "unaligned access");
     }
 
     #[test]
