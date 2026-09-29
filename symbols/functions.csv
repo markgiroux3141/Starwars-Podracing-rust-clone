@@ -43,15 +43,15 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80005B44,func_80005B44,ours,0,,rust_verified,unit_diff,high,"getter for func_80005B1C: 3/5 -> the word, else -1 (game::misc)"
 0x80005B80,func_80005B80,ours,0,anim,rust_verified,unit_diff,high,[0x8009A2A0] = 0; zero 300 words 0x800AF4C0..0x800AF970 (game::anim)
 0x80005BB8,func_80005BB8,ours,0,anim,rust_verified,unit_diff,high,"add o to 0x800AF4C0 table, start: +F0=0, +F4=+10C/+108 by bit 5, kind 8 clears target bit 3, flags |= 1<<24 (game::anim)"
-0x80005C54,func_80005C54,ours,1,,recomp,,,
+0x80005C54,func_80005C54,ours,1,,rust_verified,unit_diff,high,"animation reset: zero 0x800AF970..0x800AF9E8, then the object table (game::anim)"
 0x80005CAC,func_80005CAC,ours,0,anim,rust_verified,unit_diff,high,"(x - k[i]) / (k[i+1] - k[i]), k = [o+0x11C] (game::anim)"
-0x80005CD4,func_80005CD4,ours,1,,recomp,,,
-0x80005DA8,func_80005DA8,ours,1,,recomp,,,
+0x80005CD4,func_80005CD4,ours,1,,rust_verified,unit_diff,high,"float track value: v[i+1] after k[i+1], v[i] at or before k[i], else t v[i+1] + (1-t) v[i] (game::anim)"
+0x80005DA8,func_80005DA8,ours,1,,rust_verified,unit_diff,high,"vec3 track value: as 80005CD4, the blend through func_800155EC (game::anim)"
 0x80005F54,func_80005F54,ours,3,,recomp,,,
 0x80006120,func_80006120,ours,2,,recomp,,,
 0x80006200,func_80006200,ours,2,,recomp,,,
 0x8000630C,func_8000630C,ours,4,,recomp,,,
-0x8000646C,func_8000646C,ours,1,,recomp,,,
+0x8000646C,func_8000646C,ours,1,,rust_verified,unit_diff,high,"step track: w = v[s+1] if k[s+1] < u else v[s], to [e+8] of each listed target (game::anim)"
 0x8000651C,func_8000651C,ours,2,,recomp,,,
 0x800066DC,func_800066DC,ours,0,,rust_verified,unit_diff,high,empty; spills a0 to [sp] (game::misc)
 0x800066E4,func_800066E4,ours,0,,rust_verified,unit_diff,high,empty; spills a0 to [sp] (game::misc)
@@ -66,9 +66,9 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80006DE8,func_80006DE8,ours,0,anim,rust_verified,unit_diff,high,range +F0/+F4/+F8 clamped at 0; b < a hangs (pause_self) (game::anim)
 0x80006E50,func_80006E50,ours,0,anim,rust_verified,unit_diff,high,[a0+0x100] |= a1 (game::anim)
 0x80006E60,func_80006E60,ours,0,anim,rust_verified,unit_diff,high,[a0+0x100] &= ~a1 (game::anim)
-0x80006E74,func_80006E74,ours,1,,recomp,,,
+0x80006E74,func_80006E74,ours,1,,rust_verified,unit_diff,high,"set a track's time and segment, flags bit 24 (game::anim)"
 0x80006EB4,func_80006EB4,ours,0,anim,rust_verified,unit_diff,high,[o+0x110] = f (a1) (game::anim)
-0x80006EC0,func_80006EC0,ours,1,,recomp,,,
+0x80006EC0,func_80006EC0,ours,1,,rust_verified,unit_diff,high,"start a blend: old segment and trunc(old time) kept, flags bit 29 (game::anim)"
 0x80006F28,func_80006F28,ours,0,anim,rust_verified,unit_diff,high,[o+0xDC] = f (a1) (game::anim)
 0x80006F34,func_80006F34,ours,0,,rust_verified,unit_diff,high,empty; spills a0 (game::misc)
 0x80006F3C,func_80006F3C,ours,0,,rust_verified,unit_diff,high,"empty; spills a0, a1; returns 0 (game::misc)"
@@ -94,7 +94,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80007CE4,func_80007CE4,ours,0,,rust_verified,unit_diff,high,"handle: bit15 clear -> [0x800AFA54]; k = byte 3: 0/1 -> [0x8009A32C + 4*byte2], else [0x8009A388 + 4*k]; QUIRK: unbounded indices (game::misc)"
 0x80007D44,func_80007D44,ours,17,,recomp,,,
 0x80007E80,func_80007E80,ours,15,,recomp,,,"only caller heap_set_level. For each nonzero word in 0x8009A32C..A388 and A388..A3A8: func_80007A80, func_80007A44, zero it; if any: [0x800B05B0] = 0 and func_80008F28 until another thread raises it to 5"
-0x80007F5C,func_80007F5C,ours,1,,recomp,,,
+0x80007F5C,func_80007F5C,ours,1,,rust_verified,unit_diff,high,"a handle's length: f32(n) * K through the object func_80007CE4 finds, 0.0 if none (game::misc)"
 0x80007FC8,func_80007FC8,ours,1,,recomp,,,
 0x8000803C,func_8000803C,ours,0,,rust_verified,unit_diff,high,1 if table entry k has room ([q]+[q+4] <u [p+0x54]) (game::misc)
 0x80008090,func_80008090,ours,3,,recomp,,,

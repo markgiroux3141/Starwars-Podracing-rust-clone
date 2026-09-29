@@ -5,7 +5,7 @@
 #![allow(non_snake_case)]
 use crate::imports;
 use n64mem::Mem;
-use crate::recomp::{addu, div, enter, fpu, lb, lbu, ld, lh, lhu, li, lw, multu, reg::*, s32, sb, sd, sh, sll, sllv, slt, sltu, sra, subu, sw, swl, swr, RecompContext};
+use crate::recomp::{addu, call, div, enter, fpu, lb, lbu, ld, lh, lhu, li, lw, multu, reg::*, s32, sb, sd, sh, sll, sllv, slt, sltu, sra, subu, sw, swl, swr, RecompContext};
 
 /// The state [`func_8000097C`] records: a time (f32) at `0x800AE8B0`, then
 /// two float triples at `0x800AE8B8` (a position, **guess**) and
@@ -737,6 +737,53 @@ pub unsafe extern "C" fn func_80007CE4(rdram: *mut u8, ctx: *mut RecompContext) 
     g[T0] = sll(g[T9], 2);
     g[V0] = addu(li(0x800A_0000), g[T0]);
     g[V0] = lw(&mem, g[V0], -0x5CD4);
+}
+
+/// `func_80007F5C(handle)` (a handle's length, **guess**: a sound's
+/// duration): with `o` = [`func_80007CE4`]`(handle)`, `f0 = 0.0` if `o` is
+/// 0, else `f0 = f32(n) * K` with `n = [[[[o + 0xC] + 4j + 0x10] + 8] +
+/// 4]` (a signed word, `j = handle & 0x7FFF`) and `K` the float at
+/// `0x800A81C8`.
+///
+/// Frame (`sp - 0x18`): `ra` at `+0x14`; `handle` spilled to its home slot
+/// `sp + 0` around the call. Leaves `a0 = j`, `t6 = j`, and on the lookup
+/// path `t7`..`t1` the pointers, `v1 = n`, `f4 = n`, `f6 = f32(n)`, `f8 =
+/// K`; [`func_80007CE4`]'s registers otherwise.
+///
+/// Domain: [`func_80007CE4`]'s; for a nonzero `o`, the chain's words in
+/// RDRAM and `K` not NaN.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80007F5C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    sw(m, g[SP], 0x18, g[A0]);
+    call(imports::func_80007CE4, m, ctx);
+    let g = &mut ctx.gpr;
+    g[A0] = lw(m, g[SP], 0x18);
+    g[RA] = lw(m, g[SP], 0x14);
+    g[T6] = g[A0] & 0x7FFF;
+    g[A0] = g[T6];
+    if g[V0] != 0 {
+        g[T7] = lw(m, g[V0], 0xC);
+        g[T8] = sll(g[A0], 2);
+        g[AT] = li(0x800B_0000);
+        g[T9] = addu(g[T7], g[T8]);
+        g[T0] = lw(m, g[T9], 0x10);
+        ctx.fpr[8].set_u32l(lw(m, g[AT], -0x7E38) as u32);
+        g[T1] = lw(m, g[T0], 8);
+        g[V1] = lw(m, g[T1], 4);
+        ctx.fpr[4].set_u32l(g[V1] as u32);
+        ctx.fpr[6].set_fl(fpu::cvt_s_w(ctx.fpr[4].u32l(), fpu::NEAREST));
+        ctx.fpr[0].set_fl(ctx.fpr[6].fl() * ctx.fpr[8].fl());
+    } else {
+        ctx.fpr[0].set_u32l(0);
+    }
+    g[SP] = addu(g[SP], 0x18);
 }
 
 /// `func_8000803C(o, k)`: 1 if entry `k` of `o`'s table has room, else 0.

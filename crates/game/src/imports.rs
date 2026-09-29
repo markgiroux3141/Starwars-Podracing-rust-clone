@@ -12,13 +12,19 @@ recomp_imports! {
     func_8000097C, // collision record step
     func_8000550C, // matrix stack reset
     func_800059A8, // matrix stack top
+    func_80005B80, // object table clear
+    func_80005CAC, // key fraction
+    func_80006704, // key segment
+    func_80007CE4, // handle lookup
     func_80011940, // comp_decompress
     func_80011CDC, // rom_read
     func_80011D60, // rom_read_small
     func_80015538, // vec3 cross
+    func_800155EC, // vec3 multiply-add
     func_800160BC, // matrix inverse
     func_80016BF4, // vec3 x 3x3
     func_80016CAC, // point x 4x4
+    func_80017E70, // node +8 setter
     func_8002FAC4, // heap_set_cursor
     func_8002FAFC, // heap_cursor
     func_8002FC58, // heap_free
