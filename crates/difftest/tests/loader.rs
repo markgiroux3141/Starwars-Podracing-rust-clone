@@ -235,6 +235,9 @@ proptest! {
     #[test]
     fn heap_limits(i in 0usize..307, frac in 0.0f64..1.3, jitter in 0u32..0x400, cursor_off in 0u32..8) {
         let _rom = install_rom_doubles();
+        // A window overlapping the output can corrupt the tag, which reaches
+        // the error path (see tight_comp_layouts): give it its stand-in.
+        let _err = doubles::install("func_800827C0", |_, ctx| doubles::clobber_caller_saved(ctx, &[]));
         let total = need(i);
         let cursor = HEAP_8MB.cursor + cursor_off;
         let end = cursor + (f64::from(total) * frac) as u32 + jitter;
