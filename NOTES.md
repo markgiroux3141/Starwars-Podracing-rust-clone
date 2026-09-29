@@ -566,6 +566,7 @@ Findings from sp00nznet/racer we can use as facts (addresses, not code):
 - **Two of the ROM's constant pairs repeat** (`func_8006C828`'s steps 0.33, `func_8006D9DC`'s rates 3.2): the tests perturb them.
 - My own mistakes, not port bugs: the quad's command count (17 in my statement, 14 in the code; C and Rust agreed; found by recounting the pointer steps); a separator search with too few mantissa bits; a mutant filter naming a function instead of a test (five mutants "missed" in 1.5 s because no test ran: a miss that fast means a wrong filter); a proptest block closed in the wrong place. The one regression file from a wrong model was deleted.
 - `mutants.py` died once while restoring a file (a transient Windows lock) and left a mutant in `math.rs`; every pattern's uniqueness check found and undid it. Now it retries.
+- **Porting a function can break a test that uses it as a fixture**: `indirect.rs`'s `bad_callbacks_trap` used `func_8003B860` as "a function with no C in the oracle", and porting it made the callback run instead of trap. Only a `--no-fail-fast` full run showed it (plain `cargo test` stops at the first failing binary). The fixture is now the depth-27 `func_8004AF60`, and the test asserts it is still unported. Fixtures of that kind should be deep functions.
 - Environment: an unquoted heredoc containing backticks runs them as command substitutions (a doc comment hung a command). Use a quoted `<<'EOF'` or a file.
 
 **In progress / not done**

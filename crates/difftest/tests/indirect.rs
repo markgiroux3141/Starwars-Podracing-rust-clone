@@ -182,9 +182,11 @@ fn trap_child() {
 
 /// An address where no function starts traps in get_function; a function
 /// with no C in the oracle and no double traps in its stub. C and Rust alike.
+/// The unported function is a depth-27 one, so it stays unported longest.
 #[test]
 fn bad_callbacks_trap() {
-    for (callback, message) in [("80010000", "LOOKUP_FUNC(0x80010000)"), ("8003B860", "call to func_8003B860")] {
+    assert!(oracle::recomp::by_name("func_8004AF60").is_none(), "func_8004AF60 is in the oracle now: pick an unported function");
+    for (callback, message) in [("80010000", "LOOKUP_FUNC(0x80010000)"), ("8004AF60", "call to func_8004AF60")] {
         for side in ["c", "rust"] {
             let out = Command::new(std::env::current_exe().unwrap())
                 .args(["--exact", "trap_child", "--nocapture", "--test-threads=1"])
