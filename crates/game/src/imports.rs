@@ -15,7 +15,11 @@ recomp_imports! {
     func_80005B80, // object table clear
     func_80005CAC, // key fraction
     func_80006704, // key segment
+    func_80007A44, // slot +0x18 clear
     func_80007CE4, // handle lookup
+    func_80008718, // special sound id
+    func_8000A44C, // record init
+    func_8000AED4, // entry flags |=
     func_80011940, // comp_decompress
     func_80011CDC, // rom_read
     func_80011D60, // rom_read_small
@@ -24,7 +28,13 @@ recomp_imports! {
     func_800160BC, // matrix inverse
     func_80016BF4, // vec3 x 3x3
     func_80016CAC, // point x 4x4
+    func_80017874, // 4x4 identity
+    func_80017C18, // node transform to 4x4
+    func_80017C98, // node transform to 4x4 (same code)
+    func_80017DA4, // node type word
     func_80017E70, // node +8 setter
+    func_80017EE4, // [o + 4]
+    func_80017EEC, // [o + 4] = v
     func_8002FAC4, // heap_set_cursor
     func_8002FAFC, // heap_cursor
     func_8002FC58, // heap_free
@@ -35,6 +45,9 @@ recomp_imports! {
     func_80031560, // channel start (self-call for all four)
     func_800315D8, // channel +0xC = 0 (self-call)
     func_80031640, // channel +8 = 0 (self-call)
+    func_8003D488, // [0x800A48D4] = v & 0xFFFF
+    func_8003F7B8, // pool count by id
+    func_80051FF4, // first zero of four words
     func_80081A2C, // closest point on a segment
     func_800827C0, // model_load's error path (not yet understood)
 }

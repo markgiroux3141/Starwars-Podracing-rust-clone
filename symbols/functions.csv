@@ -104,10 +104,10 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80008610,func_80008610,ours,9,,recomp,,,
 0x80008630,func_80008630,ours,0,,rust_verified,unit_diff,high,on/off switch over the off flag 0x8009A2C4 (game::misc)
 0x80008694,func_80008694,ours,0,,rust_verified,unit_diff,high,on/off switch over the off flag 0x8009A2C0 (game::misc)
-0x800086F8,func_800086F8,ours,1,,recomp,,,
+0x800086F8,func_800086F8,ours,1,,rust_verified,unit_diff,high,func_80007A44 through a frame (game::misc)
 0x80008718,func_80008718,ours,0,,rust_verified,unit_diff,high,1 if 0x8E <= a0 < 0x9E or a0 == 0x22 (game::misc)
 0x80008750,func_80008750,ours,0,,rust_verified,unit_diff,high,spills a0; byte [0x8009A324] = a0 (game::misc)
-0x80008760,func_80008760,ours,1,,recomp,,,
+0x80008760,func_80008760,ours,1,,rust_verified,unit_diff,high,"request a sound: slot refresh (keep) or free / lowest-priority slot, volume scaled by settings, pan forced to 0x40 unless stereo; QUIRK writes the caller's pan slot (game::misc)"
 0x80008B14,func_80008B14,ours,2,,recomp,,,
 0x80008B68,func_80008B68,ours,2,,recomp,,,
 0x80008BC4,func_80008BC4,ours,4,,recomp,,,
@@ -126,16 +126,16 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8000955C,func_8000955C,ours,0,,rust_verified,unit_diff,high,FLAG_WORDS[k] &= ~bits (game::misc)
 0x80009580,func_80009580,ours,19,,recomp,,,
 0x80009704,func_80009704,ours,19,,recomp,,,
-0x80009744,func_80009744,ours,1,,recomp,,,
+0x80009744,func_80009744,ours,1,,rust_verified,unit_diff,high,mode 0..3 parameters at 0x8009AEE0.. (T[k%5] or 0x8F without a Test pool; -2.0) (game::misc)
 0x80009820,func_80009820,ours,3,,recomp,,,
-0x80009B8C,func_80009B8C,ours,1,,recomp,,,
+0x80009B8C,func_80009B8C,ours,1,,rust_verified,unit_diff,high,"parameter T[k%12] and a float, unless a Test pool and func_80051FF4() == 0 (game::misc)"
 0x80009C0C,func_80009C0C,ours,3,,recomp,,,
-0x80009F6C,func_80009F6C,ours,1,,recomp,,,
+0x80009F6C,func_80009F6C,ours,1,,rust_verified,unit_diff,high,"func_80007A44, [0x8009AEF0] = [0x8009ADE8] = -1 (game::misc)"
 0x80009FA0,func_80009FA0,ours,3,,recomp,,,
 0x8000A330,func_8000A330,ours,4,,recomp,,,
 0x8000A418,func_8000A418,ours,0,,rust_verified,unit_diff,high,append to the 64-word list 0x800D3A90 (count 0x8009B774) (game::misc)
 0x8000A44C,func_8000A44C,ours,0,,rust_verified,unit_diff,high,"init record id (s16, < 200; negatives pass: QUIRK) at 0x800D2190, count [0x8009B770] raised to id+1 (game::misc)"
-0x8000A4D8,func_8000A4D8,ours,1,,recomp,,,
+0x8000A4D8,func_8000A4D8,ours,1,,rust_verified,unit_diff,high,"init records 0..count-1 (func_8000A44C), count = 0 (game::misc)"
 0x8000A53C,func_8000A53C,ours,5,,recomp,,,
 0x8000A920,func_8000A920,ours,0,,rust_verified,unit_diff,high,"on/off: globals for ids -201/-103/-104, else RECORDS[id] bit 0x20 (game::misc)"
 0x8000AA04,func_8000AA04,ours,0,,rust_verified,unit_diff,high,"id -201: floats [0x8009B784/88] = x, y; id >= 0: record halfwords +0/+2 (game::misc)"
@@ -147,8 +147,8 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8000AC0C,func_8000AC0C,ours,0,,rust_verified,unit_diff,high,set RECORDS[id]+0x1C (game::misc)
 0x8000AC34,func_8000AC34,ours,0,,rust_verified,unit_diff,high,RECORDS[id] flags |= bits; QUIRK no id check (game::misc)
 0x8000AC60,func_8000AC60,ours,0,,rust_verified,unit_diff,high,RECORDS[id] flags &= ~bits; QUIRK no id check (game::misc)
-0x8000AC90,func_8000AC90,ours,1,,recomp,,,
-0x8000ACC0,func_8000ACC0,ours,1,,recomp,,,
+0x8000AC90,func_8000AC90,ours,1,,rust_verified,unit_diff,high,func_8003D488(v & 0xFFFF) (game::misc)
+0x8000ACC0,func_8000ACC0,ours,1,,rust_verified,unit_diff,high,"reset the 32 entries (identity, zeros) and the entry at 0x800D4B20; entry 1 flags |= 4 (game::misc)"
 0x8000AEB4,func_8000AEB4,ours,0,,rust_verified,unit_diff,high,ENTRIES[k] flags (game::misc)
 0x8000AED4,func_8000AED4,ours,0,,rust_verified,unit_diff,high,ENTRIES[k] flags |= bits (game::misc)
 0x8000AEFC,func_8000AEFC,ours,0,,rust_verified,unit_diff,high,ENTRIES[id] +6/+4/+8 (game::misc)
@@ -157,9 +157,9 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8000B02C,func_8000B02C,ours,0,,rust_verified,unit_diff,high,ENTRIES[id] +0xC/+0x10 (game::misc)
 0x8000B06C,func_8000B06C,ours,0,,rust_verified,unit_diff,high,ENTRIES[id] +0x78 (game::misc)
 0x8000B098,func_8000B098,ours,0,,rust_verified,unit_diff,high,ENTRIES[id] selected bit (game::misc)
-0x8000B0E0,func_8000B0E0,ours,1,,recomp,,,
+0x8000B0E0,func_8000B0E0,ours,1,,rust_verified,unit_diff,high,"select entry id for o: clear the old entry's bit 0, set [o+4] and the selected entry's bit 0 (game::misc)"
 0x8000B1B0,func_8000B1B0,ours,0,,rust_verified,unit_diff,high,select ENTRIES[id] (0x8009B798) (game::misc)
-0x8000B254,func_8000B254,ours,1,,recomp,,,
+0x8000B254,func_8000B254,ours,1,,rust_verified,unit_diff,high,"node transform as 4x4 by mode, identity for non-0xD065 nodes; QUIRK type tested twice (game::misc)"
 0x8000B318,func_8000B318,ours,5,,recomp,,,
 0x8000B98C,func_8000B98C,ours,1,,recomp,,,
 0x8000BB78,func_8000BB78,ours,1,,recomp,,,
