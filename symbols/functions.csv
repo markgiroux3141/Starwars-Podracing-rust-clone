@@ -390,7 +390,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80029494,func_80029494,ours,2,,recomp,,,
 0x8002963C,func_8002963C,ours,21,,recomp,,,
 0x80029A3C,func_80029A3C,ours,0,,recomp,,,
-0x80029C24,func_80029C24,ours,0,,recomp,,,
+0x80029C24,func_80029C24,ours,0,,rust_verified,unit_diff,high,"A = trunc(f32(byte*word)*[0x800A9E08])+1 -> [0x800D6CC8], B likewise -> [0x800D6CCC], halfword [0x800D6CC4] = [0x80113E78]+A < B (game::misc)"
 0x80029D38,func_80029D38,ours,9,,recomp,,,
 0x8002A7D4,func_8002A7D4,ours,9,,recomp,,,
 0x8002AD70,func_8002AD70,ours,5,,recomp,,,
@@ -432,10 +432,10 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8002E8E8,func_8002E8E8,ours,11,,recomp,,,
 0x8002EA28,func_8002EA28,ours,0,,recomp,,,
 0x8002ECA0,func_8002ECA0,ours,1,,recomp,,,
-0x8002F000,func_8002F000,ours,0,,recomp,,,
+0x8002F000,func_8002F000,ours,0,,rust_verified,unit_diff,high,"[0x800A26F4] = 0, [0x800A26F8] = 1, float [0x800D7740] = 0 (game::misc)"
 0x8002F024,func_8002F024,ours,6,,recomp,,,
 0x8002F054,func_8002F054,ours,0,,rust_verified,unit_diff,high,get [0x800A26F4] (game::misc)
-0x8002F060,func_8002F060,ours,0,,recomp,,,
+0x8002F060,func_8002F060,ours,0,,rust_verified,unit_diff,high,f0 = [0x800D7740] (game::misc)
 0x8002F06C,func_8002F06C,ours,4,,recomp,,,
 0x8002F0EC,func_8002F0EC,ours,1,,recomp,,,
 0x8002F144,func_8002F144,ours,3,,recomp,,,
@@ -450,7 +450,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8002F550,func_8002F550,ours,7,,recomp,,,
 0x8002F740,func_8002F740,ours,0,,rust_verified,unit_diff,high,"bare epilogue, unreferenced (game::misc)"
 0x8002F750,func_8002F750,ours,24,,recomp,,,
-0x8002F9C0,func_8002F9C0,ours,0,,recomp,,,
+0x8002F9C0,func_8002F9C0,ours,0,,rust_verified,unit_diff,high,"bare epilogue: ra, f20, f22, s0-s2 from frame, sp += 0x38 (game::misc)"
 0x8002F9E0,func_8002F9E0,ours,0,,rust_verified,unit_diff,high,"empty, spills a0..a3 (game::misc)"
 0x8002FA00,heap_set_level,ours,16,asset,recomp,,low,"level = a0; cursors[a0] = cursors[a0-1]; texture_cache_trim(that cursor); func_80007E80(1); zeroes cursors above; clears 0x800A2864. First call only: func_8002E034, then [0x800A68A0] = 1. Not portable yet: func_80007E80 and func_8002E034 cannot be doubled honestly (NOTES)"
 0x8002FAC4,heap_set_cursor,ours,1,asset,rust_verified,unit_diff,high,cursors[level] = a0; heap_check(1)
@@ -509,13 +509,13 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80031F80,func_80031F80,ours,0,,rust_verified,unit_diff,high,animation dest = [p+8] (game::misc)
 0x80031F94,func_80031F94,ours,0,,rust_verified,unit_diff,high,animation dest = 0 (game::misc)
 0x80031FA4,func_80031FA4,ours,0,,rust_verified,unit_diff,high,"cycle animation step of [0x800A2DD4] (timer, phases, dest[map[i]] = src[phase]); do_break unreachable (game::misc)"
-0x800320E0,func_800320E0,ours,0,,recomp,,,
+0x800320E0,func_800320E0,ours,0,,rust_verified,unit_diff,high,"normalise 7 pod stats (/1000, 1-sqrt/K, (x-450)/200, 8/sqrt - K, /20), clamp [K3, 1] (game::misc)"
 0x800321F0,func_800321F0,ours,0,,rust_verified,unit_diff,high,"7 float stats of a0 by a1 (sltu 7), level a2 1..5: += c*a3 or *= b + a*(1-a3), clamp hi then lo; table-driven port (STATS) with per-block registers; pod upgrades (guess) (game::misc)"
 0x80032F2C,func_80032F2C,ours,1,,recomp,,,
 0x80033010,func_80033010,ours,5,,recomp,,,
 0x80033140,func_80033140,ours,5,,recomp,,,
-0x80033328,func_80033328,ours,0,,recomp,,,
-0x800334F4,func_800334F4,ours,0,,recomp,,,
+0x80033328,func_80033328,ours,0,,rust_verified,unit_diff,high,"ease *x toward target by rate*dt (double; 5x toward 0), bias-sided clamp, heading += (x+bias+add)*dt wrapped to +-180 (game::misc)"
+0x800334F4,func_800334F4,ours,0,,rust_verified,unit_diff,high,"*x += (clamp(-(a/b)*s, +-80) - *x) * 5 * dt (double) (game::misc)"
 0x80033590,func_80033590,ours,1,,recomp,,,
 0x8003365C,func_8003365C,ours,1,,recomp,,,
 0x80033780,func_80033780,ours,4,,recomp,,,
@@ -523,23 +523,23 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80033928,func_80033928,ours,1,,recomp,,,
 0x8003398C,func_8003398C,ours,2,,recomp,,,
 0x80033B14,func_80033B14,ours,0,,rust_verified,unit_diff,high,"1 if p, *p nonzero and bit 29 of [*p + 0x100] (game::misc)"
-0x80033B5C,func_80033B5C,ours,0,,recomp,,,
-0x80033B94,func_80033B94,ours,0,,recomp,,,
+0x80033B5C,func_80033B5C,ours,0,,rust_verified,unit_diff,high,f0 = (*pp)->+0x110 or 0.0 (game::misc)
+0x80033B94,func_80033B94,ours,0,,rust_verified,unit_diff,high,f0 = (*pp)->+0x114 or 0.0 (game::misc)
 0x80033BCC,func_80033BCC,ours,1,,recomp,,,
-0x80033C70,func_80033C70,ours,0,,recomp,,,
-0x80033D30,func_80033D30,ours,0,,recomp,,,
+0x80033C70,func_80033C70,ours,0,,rust_verified,unit_diff,high,"fill table entries at 0x800A31E0/0x800A5CA0 (words, floats from 0x800AAA90) (game::misc)"
+0x80033D30,func_80033D30,ours,0,,rust_verified,unit_diff,high,"as 80033C70, other entries (game::misc)"
 0x80033DC4,func_80033DC4,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
 0x80033DD0,func_80033DD0,ours,0,,rust_verified,unit_diff,high,next of 256 x 32-byte ring at 0x800E0C50 (index 0x800A3CC0) (game::misc)
 0x80033E08,func_80033E08,ours,0,,rust_verified,unit_diff,high,next of 3072 x 64-byte ring at 0x800E2C50 (index 0x800A3CC4) (game::misc)
-0x80033E40,func_80033E40,ours,0,,recomp,,,
-0x80033EEC,func_80033EEC,ours,0,,recomp,,,
+0x80033E40,func_80033E40,ours,0,,rust_verified,unit_diff,high,copy vec3 to 0x800A3FDC and 4x4 to 0x80112E20 (game::misc)
+0x80033EEC,func_80033EEC,ours,0,,rust_verified,unit_diff,high,"3x4 stack push at 0x80112EA0 (depth [0x800A3FF0] < 32), flag [0x800A3FF4] = 1 (game::misc)"
 0x80033F94,func_80033F94,ours,0,,recomp,,,
-0x8003423C,func_8003423C,ours,0,,recomp,,,
-0x80034374,func_80034374,ours,0,,recomp,,,
+0x8003423C,func_8003423C,ours,0,,rust_verified,unit_diff,high,copy 3x4 stack top; depth re-read per word (QUIRK) (game::misc)
+0x80034374,func_80034374,ours,0,,rust_verified,unit_diff,high,"3x4 stack top as 4x4 (column 3 = 0,0,0,1) (game::misc)"
 0x800344C8,func_800344C8,ours,0,,rust_verified,unit_diff,high,[0x800A3FF4] = 1; decrement [0x800A3FF0] if positive (game::misc)
-0x800344F4,func_800344F4,ours,0,,recomp,,,
-0x80034650,func_80034650,ours,0,,recomp,,,
-0x800347D8,func_800347D8,ours,0,,recomp,,,
+0x800344F4,func_800344F4,ours,0,,rust_verified,unit_diff,high,"4x4 float -> s15.16 Mtx: clamp +-32000, |v| < 1e-6 -> 0, column 0 mirrored by settings bit 14 (game::misc)"
+0x80034650,func_80034650,ours,0,,rust_verified,unit_diff,high,as 800344F4 for 4x3 (column 3 = 0/1) (game::misc)
+0x800347D8,func_800347D8,ours,0,,rust_verified,unit_diff,high,4x4 copy with s16 counters (game::misc)
 0x8003483C,func_8003483C,ours,1,,recomp,,,
 0x80034948,func_80034948,ours,1,,recomp,,,
 0x800349C4,func_800349C4,ours,2,,recomp,,,
@@ -563,7 +563,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80036F98,func_80036F98,ours,3,,recomp,,,
 0x800374C4,func_800374C4,ours,4,,recomp,,,
 0x80037BF0,func_80037BF0,ours,0,,rust_verified,unit_diff,high,"empty, spills a0 (game::misc)"
-0x80037BF8,func_80037BF8,ours,0,,recomp,,,
+0x80037BF8,func_80037BF8,ours,0,,rust_verified,unit_diff,high,"t[9+k] += p[k] - p . r column k (rotate about pivot, guess) (game::misc)"
 0x80037C8C,func_80037C8C,ours,6,,recomp,,,
 0x80037E9C,func_80037E9C,ours,6,,recomp,,,
 0x80038294,func_80038294,ours,1,,recomp,,,
@@ -607,7 +607,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80039EC0,func_80039EC0,ours,17,,recomp,,,
 0x8003A440,func_8003A440,ours,18,,recomp,,,
 0x8003A478,func_8003A478,ours,18,,recomp,,,
-0x8003A4A0,func_8003A4A0,ours,0,,recomp,,,
+0x8003A4A0,func_8003A4A0,ours,0,spline,rust_verified,unit_diff,high,out = position of point i ([spline+0xC] + 84i + 0x10) (game::spline)
 0x8003A4E8,func_8003A4E8,ours,0,spline,rust_verified,unit_diff,high,spline point i halfword +0x40 (game::spline)
 0x8003A50C,func_8003A50C,ours,0,spline,rust_verified,unit_diff,high,"first point from 'from' with +0x40 == id, else -1 (game::spline)"
 0x8003A568,func_8003A568,ours,0,spline,rust_verified,unit_diff,high,"walker point index, or point halfword +0x42 by path bits (QUIRK) (game::spline)"
@@ -626,9 +626,9 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8003D370,func_8003D370,ours,0,render,rust_verified,unit_diff,high,"DL gSPTexture, combine, othermode; optional two by [0x800A4960] (game::render)"
 0x8003D444,func_8003D444,ours,1,,recomp,,,
 0x8003D488,func_8003D488,ours,0,,rust_verified,unit_diff,high,[0x800A48D4] = v & 0xFFFF (game::misc)
-0x8003D49C,func_8003D49C,ours,0,,recomp,,,
+0x8003D49C,func_8003D49C,ours,0,,rust_verified,unit_diff,high,"*x = h0/320, *y = h1/240 in double (0x80114470) (game::misc)"
 0x8003D4F4,func_8003D4F4,ours,2,,recomp,,,
-0x8003E0A0,func_8003E0A0,ours,0,,recomp,,,
+0x8003E0A0,func_8003E0A0,ours,0,,rust_verified,unit_diff,high,"scroll halfwords +4/+6 by s*size of [o+8], wrapped; [o] |= 0x8000 (game::misc)"
 0x8003E18C,func_8003E18C,ours,1,,recomp,,,
 0x8003E1D0,func_8003E1D0,ours,0,,rust_verified,unit_diff,high,clear 0x800A4984/70/78 (game::misc)
 0x8003E1EC,func_8003E1EC,ours,6,,recomp,,,
@@ -677,7 +677,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80040CE8,func_80040CE8,ours,4,,recomp,,,
 0x80041058,func_80041058,ours,4,,recomp,,,
 0x800410D4,func_800410D4,ours,5,,recomp,,,
-0x8004110C,func_8004110C,ours,0,,recomp,,,
+0x8004110C,func_8004110C,ours,0,,rust_verified,unit_diff,high,"copy +0x20..+0x5C to +0x224.., +0x108..+0x144 to +0x264..; [o+0x7C] = a1 (game::misc)"
 0x80041214,func_80041214,ours,1,,recomp,,,
 0x80041258,func_80041258,ours,4,,recomp,,,
 0x800419B4,func_800419B4,ours,5,,recomp,,,

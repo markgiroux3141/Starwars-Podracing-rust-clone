@@ -9,6 +9,39 @@
 use crate::imports;
 use crate::recomp::{addu, div, enter, lh, li, lw, multu, reg::*, sll, slt, sra, srav, sw, RecompContext};
 
+/// `func_8003A4A0(spline, i, out)`: the position (the float triple `+0x10`)
+/// of point `i` (`84 * i`, 32-bit, unbounded) of the spline's points
+/// (`[spline + 0xC]`, re-read before each word) copied to `out`.
+///
+/// Leaves `v0 = 84 i`, `t6`..`t1` = the points pointer and addresses,
+/// `f4`/`f6`/`f8` = the words.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003A4A0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    g[V0] = sll(g[A1], 2);
+    g[V0] = addu(g[V0], g[A1]);
+    g[T6] = lw(m, g[A0], 0xC);
+    g[V0] = sll(g[V0], 2);
+    g[V0] = addu(g[V0], g[A1]);
+    g[V0] = sll(g[V0], 2);
+    g[T7] = addu(g[T6], g[V0]);
+    f[4].set_u32l(lw(m, g[T7], 0x10) as u32);
+    sw(m, g[A2], 0, u64::from(f[4].u32l()));
+    g[T8] = lw(m, g[A0], 0xC);
+    g[T9] = addu(g[T8], g[V0]);
+    f[6].set_u32l(lw(m, g[T9], 0x14) as u32);
+    sw(m, g[A2], 4, u64::from(f[6].u32l()));
+    g[T0] = lw(m, g[A0], 0xC);
+    g[T1] = addu(g[T0], g[V0]);
+    f[8].set_u32l(lw(m, g[T1], 0x18) as u32);
+    sw(m, g[A2], 8, u64::from(f[8].u32l()));
+}
+
 /// `84 * i` (0x54, a spline point) as the code computes it into `t`: `((i
 /// << 2) + i) << 2`, `+ i`, `<< 2`.
 fn point_offset(g: &mut [u64; 32], i: usize, t: usize) {
