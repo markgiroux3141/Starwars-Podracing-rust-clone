@@ -16,6 +16,7 @@ recomp_imports! {
     func_80005BB8, // object start
     func_80005CAC, // key fraction
     func_80006704, // key segment
+    func_80006EB4, // [o + 0x110] = x
     func_80007A44, // slot +0x18 clear
     func_80007CE4, // handle lookup
     func_80008718, // special sound id
@@ -41,8 +42,10 @@ recomp_imports! {
     func_800125E4, // texture load
     func_800129E4, // text width
     func_80014D4C, // asin in degrees
+    func_80014F54, // atan2 in degrees
     func_800151C0, // vec2 length
     func_80015268, // vec3 set
+    func_80015288, // vec3 copy
     func_800152CC, // vec3 equal
     func_8001535C, // vec3 subtract
     func_800153C0, // vec3 length
@@ -86,6 +89,10 @@ recomp_imports! {
     func_800315D8, // channel +0xC = 0 (self-call)
     func_80031640, // channel +8 = 0 (self-call)
     func_800321F0, // stat update
+    func_80033E08, // Mtx ring next
+    func_800344F4, // 4x4 float to Mtx
+    func_80034650, // 4x3 float to Mtx
+    func_8003609C, // render mode switches
     func_80038DF8, // six halfwords
     func_8003D488, // [0x800A48D4] = v & 0xFFFF
     func_8003F714, // pool element by tag
@@ -94,6 +101,7 @@ recomp_imports! {
     func_8003FA24, // pool broadcast
     func_8003FB78, // pool count and base
     func_80051FF4, // first zero of four words
+    func_80081530, // n bytes equal
     func_80081730, // point x 4x4 (w = 1)
     func_80081A2C, // closest point on a segment
     func_800827C0, // model_load's error path (not yet understood)

@@ -519,13 +519,13 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80033590,func_80033590,ours,1,,rust_verified,unit_diff,high,"out = node a's translation, moved along its second axis by node b's y; 0 without a (game::misc)"
 0x8003365C,func_8003365C,ours,1,,rust_verified,unit_diff,high,v = b's translation; a moves along its second axis by -(b.y - v.y) if outside +-lim or flag bit 30 (game::misc)
 0x80033780,func_80033780,ours,4,,recomp,,,
-0x80033878,func_80033878,ours,1,,recomp,,,
-0x80033928,func_80033928,ours,1,,recomp,,,
+0x80033878,func_80033878,ours,1,,rust_verified,unit_diff,high,"node a's transform with translation v, lowered along its second axis by node b's y (game::misc)"
+0x80033928,func_80033928,ours,1,,rust_verified,unit_diff,high,[o+0x110] = x for each object of a list (game::anim)
 0x8003398C,func_8003398C,ours,2,,recomp,,,
 0x80033B14,func_80033B14,ours,0,,rust_verified,unit_diff,high,"1 if p, *p nonzero and bit 29 of [*p + 0x100] (game::misc)"
 0x80033B5C,func_80033B5C,ours,0,,rust_verified,unit_diff,high,f0 = (*pp)->+0x110 or 0.0 (game::misc)
 0x80033B94,func_80033B94,ours,0,,rust_verified,unit_diff,high,f0 = (*pp)->+0x114 or 0.0 (game::misc)
-0x80033BCC,func_80033BCC,ours,1,,recomp,,,
+0x80033BCC,func_80033BCC,ours,1,,rust_verified,unit_diff,high,"atan2 in degrees of a node's (-N[1][0], N[1][1]); 0.0 for null links (game::misc)"
 0x80033C70,func_80033C70,ours,0,,rust_verified,unit_diff,high,"fill table entries at 0x800A31E0/0x800A5CA0 (words, floats from 0x800AAA90) (game::misc)"
 0x80033D30,func_80033D30,ours,0,,rust_verified,unit_diff,high,"as 80033C70, other entries (game::misc)"
 0x80033DC4,func_80033DC4,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
@@ -540,11 +540,11 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800344F4,func_800344F4,ours,0,,rust_verified,unit_diff,high,"4x4 float -> s15.16 Mtx: clamp +-32000, |v| < 1e-6 -> 0, column 0 mirrored by settings bit 14 (game::misc)"
 0x80034650,func_80034650,ours,0,,rust_verified,unit_diff,high,as 800344F4 for 4x3 (column 3 = 0/1) (game::misc)
 0x800347D8,func_800347D8,ours,0,,rust_verified,unit_diff,high,4x4 copy with s16 counters (game::misc)
-0x8003483C,func_8003483C,ours,1,,recomp,,,
-0x80034948,func_80034948,ours,1,,recomp,,,
+0x8003483C,func_8003483C,ours,1,,rust_verified,unit_diff,high,"reset the 4x3 stack (0x80112EA0, depth 0x800A3FF0) to identity (game::misc)"
+0x80034948,func_80034948,ours,1,,rust_verified,unit_diff,high,4x3 at the depth and the 4x4 at 0x80112E60 to ring Mtx entries (game::misc)
 0x800349C4,func_800349C4,ours,2,,recomp,,,
 0x80034DA8,func_80034DA8,ours,0,render,rust_verified,unit_diff,high,clear [0x800A3FF8]; DL gSPMatrix(proj) + gSPForceMatrix from 0x801134D0/D4 (game::render)
-0x80034E20,func_80034E20,ours,1,,recomp,,,
+0x80034E20,func_80034E20,ours,1,,rust_verified,unit_diff,high,"gSPMatrix(4x3 below the depth), gSPForceMatrix(its product with 0x80112E20); QUIRK: offset round trip (game::misc)"
 0x8003527C,func_8003527C,ours,0,render,rust_verified,unit_diff,high,DL gSPMatrix(proj) + gSPForceMatrix from [cam+0x34]/[cam+0x38] (game::render)
 0x800352E4,func_800352E4,ours,0,render,rust_verified,unit_diff,high,DL gSPMatrix(proj) + gSPForceMatrix from 0x801134D0/D4 (game::render)
 0x80035354,func_80035354,ours,3,,recomp,,,
@@ -553,10 +553,10 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800356BC,func_800356BC,ours,0,render,rust_verified,unit_diff,high,"render mode words 0x800A3DA0/A4: ZBZB and AAEN switches, Full sets both (game::render)"
 0x800358A0,func_800358A0,ours,0,,rust_verified,unit_diff,high,"input mask: clear bits 16/17 by settings, clear or swap bits 9/10 (game::misc)"
 0x8003594C,func_8003594C,ours,0,render,rust_verified,unit_diff,high,material render flags and combiner byte rewrite (1/2/8/9 selectors to 4 or 6) (game::render)
-0x80035BF0,func_80035BF0,ours,1,,recomp,,,
+0x80035BF0,func_80035BF0,ours,1,,rust_verified,unit_diff,high,"material render state: othermode, combine, prim/env/fog/blend colours against the sent copy (game::render)"
 0x80036094,func_80036094,ours,0,,rust_verified,unit_diff,high,"empty, spills a0 (game::misc)"
 0x8003609C,func_8003609C,ours,0,render,rust_verified,unit_diff,high,render mode switches: two-bit fields to SetOtherMode_H at [0x80112C90] (game::render)
-0x80036314,func_80036314,ours,1,,recomp,,,
+0x80036314,func_80036314,ours,1,,rust_verified,unit_diff,high,"material texture: render mode, gSPTexture, load block, TLUT, tiles (game::render)"
 0x800366DC,func_800366DC,ours,2,,recomp,,,
 0x80036A1C,func_80036A1C,ours,0,render,rust_verified,unit_diff,high,"box culling against the clip matrix at 0x80112E60 (0 culled, 1 visible, 2 all inside) (game::render)"
 0x80036F7C,func_80036F7C,ours,0,,rust_verified,unit_diff,high,"[0x800A3D30] = 0x800DB930, [0x800A3D38] = 0 (game::misc)"
@@ -566,12 +566,12 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80037BF8,func_80037BF8,ours,0,,rust_verified,unit_diff,high,"t[9+k] += p[k] - p . r column k (rotate about pivot, guess) (game::misc)"
 0x80037C8C,func_80037C8C,ours,6,,recomp,,,
 0x80037E9C,func_80037E9C,ours,6,,recomp,,,
-0x80038294,func_80038294,ours,1,,recomp,,,
+0x80038294,func_80038294,ours,1,,rust_verified,unit_diff,high,"count of keys below 10.0 before -1.0, or -1 / 0 (game::misc)"
 0x80038388,func_80038388,ours,6,,recomp,,,
 0x800387F8,func_800387F8,ours,7,,recomp,,,
 0x80038950,func_80038950,ours,2,,recomp,,,
 0x80038C3C,func_80038C3C,ours,2,,recomp,,,
-0x80038D5C,func_80038D5C,ours,1,,recomp,,,
+0x80038D5C,func_80038D5C,ours,1,,rust_verified,unit_diff,high,append gSPMatrix of the 4x4 at 0x80112E20 (game::misc)
 0x80038DBC,func_80038DBC,ours,0,,rust_verified,unit_diff,high,"settings [0x800D697C] bit 6 set for 0, cleared otherwise (game::misc)"
 0x80038DF8,func_80038DF8,ours,0,,rust_verified,unit_diff,high,store nonnegative args as halfwords at 0x800A3D44..50 (game::misc)
 0x80038E58,func_80038E58,ours,0,render,rust_verified,unit_diff,high,"fill Lights1 at 0x800A3DB0 (ambient, light, negated dir) (game::render)"

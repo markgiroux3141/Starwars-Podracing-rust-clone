@@ -8,7 +8,7 @@
 #![allow(non_snake_case)]
 
 use crate::imports;
-use crate::recomp::{addu, call, enter, fpu, lhu, li, lw, reg::*, s32, sh, sll, sltu, subu, sw, Fpr, RecompContext};
+use crate::recomp::{addu, call, enter, fpu, ld, lhu, li, lw, reg::*, s32, sd, sh, sll, sltu, subu, sw, Fpr, RecompContext};
 use n64mem::Mem;
 
 /// Object table searched by [`func_80006D5C`] (300 words, cleared by
@@ -844,6 +844,60 @@ pub unsafe extern "C" fn func_80030964(rdram: *mut u8, ctx: *mut RecompContext) 
     g[V0] = lw(m, g[SP], 0x20);
     g[S0] = lw(m, g[SP], 0x14);
     g[S1] = lw(m, g[SP], 0x18);
+    g[SP] = addu(g[SP], 0x28);
+}
+
+/// `func_80033928(list, x)` with the float `x` in `a1`: for each object of
+/// the zero-terminated list (nothing if `list` or its first entry is
+/// null), [`func_80006EB4`]`(o, x)` (`[o + 0x110] = x`).
+///
+/// Frame (`sp - 0x28`): `f20` (all 64 bits; `x` in between) at `+0x10`,
+/// `s0` at `+0x1C`, `s1` at `+0x20`, `ra` at `+0x24`, all restored.
+/// Leaves `a1 = x` (sign-extended), `a0` = the last object, `t6` = the
+/// first entry, and the callee's registers.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80033928(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    'b_80033978: {
+        g[SP] = addu(g[SP], (-0x28i64) as u64);
+        sd(m, g[SP], 0x10, ctx.fpr[20].u64);
+        ctx.fpr[20].set_u32l(g[A1] as u32);
+        sw(m, g[SP], 0x24, g[RA]);
+        sw(m, g[SP], 0x20, g[S1]);
+        sw(m, g[SP], 0x1C, g[S0]);
+        if g[A0] != 0 {
+            g[T6] = lw(m, g[A0], 0);
+            g[S0] = g[A0];
+            if g[T6] == 0 {
+                g[RA] = lw(m, g[SP], 0x24);
+                break 'b_80033978;
+            }
+            g[S1] = lw(m, g[A0], 0);
+            g[A1] = s32(ctx.fpr[20].u32l());
+            loop {
+                let g = &mut ctx.gpr;
+                g[A0] = g[S1];
+                call(imports::func_80006EB4, m, ctx);
+                let g = &mut ctx.gpr;
+                g[S1] = lw(m, g[S0], 4);
+                g[S0] = addu(g[S0], 4);
+                if g[S1] == 0 {
+                    break;
+                }
+                g[A1] = s32(ctx.fpr[20].u32l());
+            }
+        }
+        let g = &mut ctx.gpr;
+        g[RA] = lw(m, g[SP], 0x24);
+    }
+    let g = &mut ctx.gpr;
+    ctx.fpr[20].u64 = ld(m, g[SP], 0x10);
+    g[S0] = lw(m, g[SP], 0x1C);
+    g[S1] = lw(m, g[SP], 0x20);
     g[SP] = addu(g[SP], 0x28);
 }
 

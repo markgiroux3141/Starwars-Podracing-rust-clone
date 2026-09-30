@@ -4,6 +4,7 @@
 // Ports keep N64Recomp's names (func_80005AFC), capitals included.
 #![allow(non_snake_case)]
 use crate::imports;
+use crate::render::DL2_HEAD;
 use n64mem::Mem;
 use crate::recomp::{addu, call, div, divu, enter, fpu, lb, lbu, ld, lh, lhu, li, lw, multu, reg::*, s32, sb, sd, sh, sll, sllv, slt, sltu, sra, srav, subu, sw, swl, swr, RecompContext};
 
@@ -9722,6 +9723,86 @@ pub unsafe extern "C" fn func_8003365C(rdram: *mut u8, ctx: *mut RecompContext) 
     g[SP] = addu(g[SP], 0xB8);
 }
 
+/// `func_80033878(pair, v)` (place node `a` at `v`, **guess**; the inverse
+/// of [`func_80033590`]), `pair` two node pointers `a`, `b` at `+0`/`+4`:
+/// nothing if `pair` or `a` is null. Otherwise `M` = `a`'s transform as a
+/// 4x4 ([`func_80017C18`], copied by [`func_800156DC`]) with its
+/// translation row `M[3] = v` ([`func_80015288`]); if `b` is nonzero, with
+/// `B` = `b`'s transform, `M[3] = M[1] * -B[3][1] + M[3]`
+/// ([`func_800155EC`]); then `M` goes back into `a` ([`func_80017BA8`],
+/// which also sets its flag bits 0 and 1).
+///
+/// Frame (`sp - 0xE8`): `s0` (holding `a`) at `+0x18` and `ra` at
+/// `+0x1C`, both restored sign-extended; `v` spilled to its slot `+0xEC`;
+/// `b` at `+0x20` (once `pair` is read), `B` at `+0x28`, the 4x4 at
+/// `+0x68`, `M` at `+0xA8`. Leaves `t6 = b`, with `b` `f4 = B[3][1]` and
+/// `f6 = -f4`, and the callees' registers.
+///
+/// Domain: with `b`, `B[3][1]` not NaN (negated), and `M[1]`, `v` and the
+/// products not NaN.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80033878(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    'b_80033918: {
+        g[SP] = addu(g[SP], (-0xE8i64) as u64);
+        sw(m, g[SP], 0x1C, g[RA]);
+        sw(m, g[SP], 0x18, g[S0]);
+        sw(m, g[SP], 0xEC, g[A1]);
+        if g[A0] != 0 {
+            g[S0] = lw(m, g[A0], 0);
+            g[T6] = lw(m, g[A0], 4);
+            g[A1] = addu(g[SP], 0x68);
+            sw(m, g[SP], 0x20, g[T6]);
+            if g[S0] != 0 {
+                g[A0] = g[S0];
+                call(imports::func_80017C18, m, ctx);
+                let g = &mut ctx.gpr;
+                g[A0] = addu(g[SP], 0xA8);
+                g[A1] = addu(g[SP], 0x68);
+                call(imports::func_800156DC, m, ctx);
+                let g = &mut ctx.gpr;
+                g[A0] = addu(g[SP], 0xD8);
+                g[A1] = lw(m, g[SP], 0xEC);
+                call(imports::func_80015288, m, ctx);
+                let g = &mut ctx.gpr;
+                g[A0] = lw(m, g[SP], 0x20);
+                g[A1] = addu(g[SP], 0xA8);
+                if g[A0] == 0 {
+                    g[A0] = g[S0];
+                    call(imports::func_80017BA8, m, ctx);
+                    let g = &mut ctx.gpr;
+                    g[RA] = lw(m, g[SP], 0x1C);
+                    break 'b_80033918;
+                }
+                let g = &mut ctx.gpr;
+                g[A1] = addu(g[SP], 0x28);
+                call(imports::func_80017C18, m, ctx);
+                let g = &mut ctx.gpr;
+                ctx.fpr[4].set_u32l(lw(m, g[SP], 0x5C) as u32);
+                g[A0] = addu(g[SP], 0xD8);
+                g[A1] = g[A0];
+                ctx.fpr[6].set_fl(-ctx.fpr[4].fl());
+                g[A3] = addu(g[SP], 0xB8);
+                g[A2] = s32(ctx.fpr[6].u32l());
+                call(imports::func_800155EC, m, ctx);
+                let g = &mut ctx.gpr;
+                g[A0] = g[S0];
+                g[A1] = addu(g[SP], 0xA8);
+                call(imports::func_80017BA8, m, ctx);
+            }
+        }
+        let g = &mut ctx.gpr;
+        g[RA] = lw(m, g[SP], 0x1C);
+    }
+    let g = &mut ctx.gpr;
+    g[S0] = lw(m, g[SP], 0x18);
+    g[SP] = addu(g[SP], 0xE8);
+}
+
 /// `func_80033B14(p)`: 1 if `p != 0`, `o = *p != 0` and bit 29 of the
 /// object's flags `[o + 0x100]` is set (NOTES.md, the object table), else
 /// 0. Leaves `v0`, and `t6`/`t7` = the flags and `flags << 2` when read.
@@ -9791,6 +9872,68 @@ pub unsafe extern "C" fn func_80033B94(rdram: *mut u8, ctx: *mut RecompContext) 
     } else {
         f[0].set_u32l(0 as u32);
     }
+}
+
+/// `func_80033BCC(p, q)`, a float in `f0` (a node's heading in degrees,
+/// **guess**): 0.0 unless `q`, `[q]`, `p`, `[p + 4]` and `n = [p + 8]` are
+/// all nonzero; then, with `N` = `n`'s transform as a 4x4
+/// ([`func_80017C18`]), [`func_80014F54`]`(-N[1][0], N[1][1])`, the game's
+/// atan2 in degrees (`y` in `f12`, `x` in `f14`).
+///
+/// Frame (`sp - 0x60`): `ra` at `+0x14`, `N` at `+0x18`. Leaves `f12`,
+/// `f14` = the arguments and the callees' registers; for 0.0, `t6`, `t7`
+/// and `a2` as far as the tests got.
+///
+/// Domain: `N[1][0]` not NaN (negated), and the callee's.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80033BCC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x60i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    if g[A1] != 0 {
+        g[T6] = lw(m, g[A1], 0);
+        if g[T6] != 0 {
+            if g[A0] != 0 {
+                g[T7] = lw(m, g[A0], 4);
+                if g[T7] != 0 {
+                    g[A2] = lw(m, g[A0], 8);
+                    g[A0] = g[A2];
+                    if g[A2] != 0 {
+                        g[A1] = addu(g[SP], 0x18);
+                        call(imports::func_80017C18, m, ctx);
+                        let g = &mut ctx.gpr;
+                        ctx.fpr[12].set_u32l(lw(m, g[SP], 0x28) as u32);
+                        ctx.fpr[14].set_u32l(lw(m, g[SP], 0x2C) as u32);
+                        ctx.fpr[12].set_fl(-ctx.fpr[12].fl());
+                        call(imports::func_80014F54, m, ctx);
+                        let g = &mut ctx.gpr;
+                        g[RA] = lw(m, g[SP], 0x14);
+                    } else {
+                        ctx.fpr[0].set_u32l(0);
+                        g[RA] = lw(m, g[SP], 0x14);
+                    }
+                } else {
+                    ctx.fpr[0].set_u32l(0);
+                    g[RA] = lw(m, g[SP], 0x14);
+                }
+            } else {
+                ctx.fpr[0].set_u32l(0);
+                g[RA] = lw(m, g[SP], 0x14);
+            }
+        } else {
+            ctx.fpr[0].set_u32l(0);
+            g[RA] = lw(m, g[SP], 0x14);
+        }
+    } else {
+        ctx.fpr[0].set_u32l(0);
+        g[RA] = lw(m, g[SP], 0x14);
+    }
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], 0x60);
 }
 
 /// `func_80033C70()`: fill fixed entries of two tables (**guess**: menu or
@@ -10795,6 +10938,440 @@ pub unsafe extern "C" fn func_800347D8(rdram: *mut u8, ctx: *mut RecompContext) 
     }
 }
 
+/// A stack of 4x3 float matrices (four rows of three, 48 bytes each), as
+/// [`func_80034650`] converts them; the depth word is [`MTX43_DEPTH`].
+pub const MTX43_STACK: u32 = 0x8011_2EA0;
+
+/// The depth of [`MTX43_STACK`] (a word).
+pub const MTX43_DEPTH: u32 = 0x800A_3FF0;
+
+/// `func_8003483C()` (reset the 4x3 stack, **guess**): the depth
+/// [`MTX43_DEPTH`] `= 0`, `[0x800A3FF4] = 1`, `[0x800A3FF8] = 0`; then the
+/// matrix at the depth in [`MTX43_STACK`] (the depth re-read for each row)
+/// = identity, row by row through [`func_80015268`]: `(1, 0, 0)`, `(0, 1,
+/// 0)`, `(0, 0, 1)`, `(0, 0, 0)`.
+///
+/// Frame (`sp - 0x20`): `f20` (all 64 bits; 0.0 in between) at `+0x10`,
+/// restored, and `ra` at `+0x1C`. Leaves `v0 = MTX43_DEPTH`, the last
+/// row's address arithmetic in `t8`, `t9`, `t0`, `t1`, and the callee's
+/// registers.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003483C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V0] = li(MTX43_DEPTH);
+    sw(m, g[V0], 0, 0);
+    g[T6] = 1;
+    g[AT] = li(0x800A_0000);
+    sw(m, g[AT], 0x3FF4, g[T6]);
+    g[AT] = li(0x800A_0000);
+    g[SP] = addu(g[SP], (-0x20i64) as u64);
+    sw(m, g[AT], 0x3FF8, 0);
+    g[T7] = lw(m, g[V0], 0);
+    sd(m, g[SP], 0x10, ctx.fpr[20].u64);
+    ctx.fpr[20].set_u32l(0);
+    g[T8] = sll(g[T7], 2);
+    g[T9] = li(0x8011_0000);
+    g[T8] = subu(g[T8], g[T7]);
+    sw(m, g[SP], 0x1C, g[RA]);
+    g[T8] = sll(g[T8], 4);
+    g[T9] = addu(g[T9], 0x2EA0);
+    g[A2] = s32(ctx.fpr[20].u32l());
+    g[A3] = s32(ctx.fpr[20].u32l());
+    g[A0] = addu(g[T8], g[T9]);
+    g[A1] = li(0x3F80_0000);
+    call(imports::func_80015268, m, ctx);
+    let g = &mut ctx.gpr;
+    g[T0] = li(0x800A_0000);
+    g[T0] = lw(m, g[T0], 0x3FF0);
+    g[T3] = li(0x8011_2EA0);
+    g[T1] = sll(g[T0], 2);
+    g[T1] = subu(g[T1], g[T0]);
+    g[T1] = sll(g[T1], 4);
+    g[T2] = addu(g[T1], 0xC);
+    g[A1] = s32(ctx.fpr[20].u32l());
+    g[A3] = s32(ctx.fpr[20].u32l());
+    g[A0] = addu(g[T2], g[T3]);
+    g[A2] = li(0x3F80_0000);
+    call(imports::func_80015268, m, ctx);
+    let g = &mut ctx.gpr;
+    g[T4] = li(0x800A_0000);
+    g[T4] = lw(m, g[T4], 0x3FF0);
+    g[T7] = li(0x8011_2EA0);
+    g[T5] = sll(g[T4], 2);
+    g[T5] = subu(g[T5], g[T4]);
+    g[T5] = sll(g[T5], 4);
+    g[T6] = addu(g[T5], 0x18);
+    g[A1] = s32(ctx.fpr[20].u32l());
+    g[A2] = s32(ctx.fpr[20].u32l());
+    g[A0] = addu(g[T6], g[T7]);
+    g[A3] = li(0x3F80_0000);
+    call(imports::func_80015268, m, ctx);
+    let g = &mut ctx.gpr;
+    g[T8] = li(0x800A_0000);
+    g[T8] = lw(m, g[T8], 0x3FF0);
+    g[T1] = li(0x8011_2EA0);
+    g[T9] = sll(g[T8], 2);
+    g[T9] = subu(g[T9], g[T8]);
+    g[T9] = sll(g[T9], 4);
+    g[T0] = addu(g[T9], 0x24);
+    g[A1] = s32(ctx.fpr[20].u32l());
+    g[A2] = s32(ctx.fpr[20].u32l());
+    g[A3] = s32(ctx.fpr[20].u32l());
+    g[A0] = addu(g[T0], g[T1]);
+    call(imports::func_80015268, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x1C);
+    ctx.fpr[20].u64 = ld(m, g[SP], 0x10);
+    g[SP] = addu(g[SP], 0x20);
+}
+
+/// `func_80034948()` (the stack's matrices to the RSP, **guess**): with `p`
+/// = the 4x3 matrix at the depth in [`MTX43_STACK`] (at the depth itself,
+/// unlike [`func_80034E20`]): `[0x801134D0]` = the next ring entry
+/// ([`func_80033E08`]), filled from `p` ([`func_80034650`]); then
+/// `[0x801134D4]` = the next, filled from the 4x4 at `0x80112E60`
+/// ([`func_800344F4`]).
+///
+/// Frame (`sp - 0x20`): `ra` at `+0x14`, `p` at `+0x1C`. Leaves `v1 =
+/// 0x801134D4`, `a1 = 0x80112E60`, `a0` = the second entry, and the
+/// callees' registers.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80034948(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T6] = li(0x800A_0000);
+    g[T6] = lw(m, g[T6], 0x3FF0);
+    g[T8] = li(0x8011_0000);
+    g[SP] = addu(g[SP], (-0x20i64) as u64);
+    g[T7] = sll(g[T6], 2);
+    g[T7] = subu(g[T7], g[T6]);
+    g[T7] = sll(g[T7], 4);
+    g[T8] = addu(g[T8], 0x2EA0);
+    sw(m, g[SP], 0x14, g[RA]);
+    g[T9] = addu(g[T7], g[T8]);
+    sw(m, g[SP], 0x1C, g[T9]);
+    call(imports::func_80033E08, m, ctx);
+    let g = &mut ctx.gpr;
+    g[V1] = li(0x8011_34D0);
+    sw(m, g[V1], 0, g[V0]);
+    g[A0] = g[V0];
+    g[A1] = lw(m, g[SP], 0x1C);
+    call(imports::func_80034650, m, ctx);
+    call(imports::func_80033E08, m, ctx);
+    let g = &mut ctx.gpr;
+    g[V1] = li(0x8011_34D4);
+    g[A1] = li(0x8011_0000);
+    sw(m, g[V1], 0, g[V0]);
+    g[A1] = addu(g[A1], 0x2E60);
+    g[A0] = g[V0];
+    call(imports::func_800344F4, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x20);
+}
+
+/// `func_80034E20()` (load the model matrix, **guess**): with `p` = the 4x3
+/// matrix one below the depth in [`MTX43_STACK`] (`MTX43_STACK + 48 *
+/// (depth - 1)`), `V` = the 4x4 at `0x80112E20` and, if the word
+/// `[0x800A3FEC]` is nonzero, `o` = the vec3 at `0x800A3FDC`:
+/// 1. With `o`: `p`'s row 3 `-= o`, component by component (stored).
+/// 2. `P = p × V` into the frame, `p` taken as a 4x4 with column 3 `(0, 0,
+///    0, 1)`: `P[r][c] = (p[r][0] * V[0][c] + p[r][1] * V[1][c]) + p[r][2] *
+///    V[2][c]`, with `V[3][c]` added last in row 3. Not fused; row by row.
+/// 3. With `o`: `p`'s row 3 `+= o`. QUIRK: `(t - o) + o` rounds, so the
+///    translation can change.
+/// 4. `gSPMatrix`: the next ring entry ([`func_80033E08`]) filled from `p`
+///    ([`func_80034650`]) is appended to the list at
+///    [`DL2_HEAD`](crate::render::DL2_HEAD) as `DA380003`, entry; then
+///    `gSPForceMatrix`: another entry filled from
+///    `P` ([`func_800344F4`]), appended as `DC38000E`, entry, and
+///    `DB0C0000`, `0x10000`.
+///
+/// Frame (`sp - 0xD0`): `f20`..`f30` (all 64 bits) at `+0x10`..`+0x38`,
+/// restored; `ra` at `+0x44`; the entry at `+0x88`, `P` at `+0x8C`, `p` at
+/// `+0xCC`. Leaves `a2` = the list head's address, `v0` = the last command's address,
+/// `t3`..`t8` from the appends, the callees' registers, and before them
+/// `v1` = the flag (re-read with `o`).
+///
+/// Domain: the entries of `p` and `V`, `o`, and every sum not NaN.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80034E20(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T6] = li(0x800A_0000);
+    g[T6] = lw(m, g[T6], 0x3FF0);
+    g[SP] = addu(g[SP], (-0xD0i64) as u64);
+    g[V1] = li(0x800A_0000);
+    g[T7] = sll(g[T6], 2);
+    g[V1] = lw(m, g[V1], 0x3FEC);
+    g[T7] = subu(g[T7], g[T6]);
+    g[T7] = sll(g[T7], 4);
+    g[T9] = li(MTX43_STACK);
+    g[T8] = addu(g[T7], (-0x30i64) as u64);
+    sw(m, g[SP], 0x44, g[RA]);
+    sd(m, g[SP], 0x38, ctx.fpr[30].u64);
+    sd(m, g[SP], 0x30, ctx.fpr[28].u64);
+    sd(m, g[SP], 0x28, ctx.fpr[26].u64);
+    sd(m, g[SP], 0x20, ctx.fpr[24].u64);
+    sd(m, g[SP], 0x18, ctx.fpr[22].u64);
+    sd(m, g[SP], 0x10, ctx.fpr[20].u64);
+    let f = &mut ctx.fpr;
+    g[A1] = addu(g[T8], g[T9]);
+    if g[V1] != 0 {
+        g[A0] = li(0x800A_3FDC);
+        f[6].set_u32l(lw(m, g[A0], 0) as u32);
+        f[4].set_u32l(lw(m, g[A1], 0x24) as u32);
+        f[10].set_u32l(lw(m, g[A1], 0x28) as u32);
+        g[V1] = li(0x800A_0000);
+        f[8].set_fl(f[4].fl() - f[6].fl());
+        sw(m, g[A1], 0x24, u64::from(f[8].u32l()));
+        f[4].set_u32l(lw(m, g[A0], 4) as u32);
+        f[8].set_u32l(lw(m, g[A1], 0x2C) as u32);
+        f[6].set_fl(f[10].fl() - f[4].fl());
+        sw(m, g[A1], 0x28, u64::from(f[6].u32l()));
+        f[10].set_u32l(lw(m, g[A0], 8) as u32);
+        f[4].set_fl(f[8].fl() - f[10].fl());
+        sw(m, g[A1], 0x2C, u64::from(f[4].u32l()));
+        g[V1] = lw(m, g[V1], 0x3FEC);
+    }
+    g[V0] = li(0x8011_2E20);
+    f[2].set_u32l(lw(m, g[V0], 0) as u32);
+    f[6].set_u32l(lw(m, g[A1], 0) as u32);
+    f[12].set_u32l(lw(m, g[V0], 0x10) as u32);
+    f[10].set_u32l(lw(m, g[A1], 4) as u32);
+    f[8].set_fl(f[2].fl() * f[6].fl());
+    f[0].set_u32l(lw(m, g[V0], 0x20) as u32);
+    f[16].set_u32l(lw(m, g[V0], 4) as u32);
+    f[4].set_fl(f[12].fl() * f[10].fl());
+    f[10].set_u32l(lw(m, g[A1], 8) as u32);
+    f[18].set_u32l(lw(m, g[V0], 0x14) as u32);
+    f[14].set_u32l(lw(m, g[V0], 0x24) as u32);
+    f[22].set_u32l(lw(m, g[V0], 8) as u32);
+    f[24].set_u32l(lw(m, g[V0], 0x18) as u32);
+    f[20].set_u32l(lw(m, g[V0], 0x28) as u32);
+    f[6].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[10].fl() * f[0].fl());
+    f[28].set_u32l(lw(m, g[V0], 0xC) as u32);
+    f[30].set_u32l(lw(m, g[V0], 0x1C) as u32);
+    f[26].set_u32l(lw(m, g[V0], 0x2C) as u32);
+    g[A0] = li(0x800A_3FDC);
+    f[4].set_fl(f[8].fl() + f[6].fl());
+    sw(m, g[SP], 0x8C, u64::from(f[4].u32l()));
+    f[10].set_u32l(lw(m, g[A1], 0) as u32);
+    f[6].set_u32l(lw(m, g[A1], 4) as u32);
+    f[8].set_fl(f[16].fl() * f[10].fl());
+    f[4].set_fl(f[18].fl() * f[6].fl());
+    f[6].set_u32l(lw(m, g[A1], 8) as u32);
+    f[10].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[6].fl() * f[14].fl());
+    f[4].set_fl(f[8].fl() + f[10].fl());
+    sw(m, g[SP], 0x90, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A1], 0) as u32);
+    f[10].set_u32l(lw(m, g[A1], 4) as u32);
+    f[8].set_fl(f[22].fl() * f[6].fl());
+    f[4].set_fl(f[24].fl() * f[10].fl());
+    f[10].set_u32l(lw(m, g[A1], 8) as u32);
+    f[6].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[10].fl() * f[20].fl());
+    f[4].set_fl(f[8].fl() + f[6].fl());
+    sw(m, g[SP], 0x94, u64::from(f[4].u32l()));
+    f[10].set_u32l(lw(m, g[A1], 0) as u32);
+    f[6].set_u32l(lw(m, g[A1], 4) as u32);
+    f[8].set_fl(f[28].fl() * f[10].fl());
+    f[4].set_fl(f[30].fl() * f[6].fl());
+    f[6].set_u32l(lw(m, g[A1], 8) as u32);
+    f[10].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[6].fl() * f[26].fl());
+    f[4].set_fl(f[8].fl() + f[10].fl());
+    sw(m, g[SP], 0x98, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A1], 0xC) as u32);
+    f[10].set_u32l(lw(m, g[A1], 0x10) as u32);
+    f[8].set_fl(f[2].fl() * f[6].fl());
+    f[4].set_fl(f[12].fl() * f[10].fl());
+    f[10].set_u32l(lw(m, g[A1], 0x14) as u32);
+    f[6].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[10].fl() * f[0].fl());
+    f[4].set_fl(f[8].fl() + f[6].fl());
+    sw(m, g[SP], 0x9C, u64::from(f[4].u32l()));
+    f[10].set_u32l(lw(m, g[A1], 0xC) as u32);
+    f[6].set_u32l(lw(m, g[A1], 0x10) as u32);
+    f[8].set_fl(f[16].fl() * f[10].fl());
+    f[4].set_fl(f[18].fl() * f[6].fl());
+    f[6].set_u32l(lw(m, g[A1], 0x14) as u32);
+    f[10].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[6].fl() * f[14].fl());
+    f[4].set_fl(f[8].fl() + f[10].fl());
+    sw(m, g[SP], 0xA0, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A1], 0xC) as u32);
+    f[10].set_u32l(lw(m, g[A1], 0x10) as u32);
+    f[8].set_fl(f[22].fl() * f[6].fl());
+    f[4].set_fl(f[24].fl() * f[10].fl());
+    f[10].set_u32l(lw(m, g[A1], 0x14) as u32);
+    f[6].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[10].fl() * f[20].fl());
+    f[4].set_fl(f[8].fl() + f[6].fl());
+    sw(m, g[SP], 0xA4, u64::from(f[4].u32l()));
+    f[10].set_u32l(lw(m, g[A1], 0xC) as u32);
+    f[6].set_u32l(lw(m, g[A1], 0x10) as u32);
+    f[8].set_fl(f[28].fl() * f[10].fl());
+    f[4].set_fl(f[30].fl() * f[6].fl());
+    f[6].set_u32l(lw(m, g[A1], 0x14) as u32);
+    f[10].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[6].fl() * f[26].fl());
+    f[4].set_fl(f[8].fl() + f[10].fl());
+    sw(m, g[SP], 0xA8, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A1], 0x18) as u32);
+    f[10].set_u32l(lw(m, g[A1], 0x1C) as u32);
+    f[8].set_fl(f[2].fl() * f[6].fl());
+    f[4].set_fl(f[12].fl() * f[10].fl());
+    f[10].set_u32l(lw(m, g[A1], 0x20) as u32);
+    f[6].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[10].fl() * f[0].fl());
+    f[4].set_fl(f[8].fl() + f[6].fl());
+    sw(m, g[SP], 0xAC, u64::from(f[4].u32l()));
+    f[10].set_u32l(lw(m, g[A1], 0x18) as u32);
+    f[6].set_u32l(lw(m, g[A1], 0x1C) as u32);
+    f[8].set_fl(f[16].fl() * f[10].fl());
+    f[4].set_fl(f[18].fl() * f[6].fl());
+    f[6].set_u32l(lw(m, g[A1], 0x20) as u32);
+    f[10].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[6].fl() * f[14].fl());
+    f[4].set_fl(f[8].fl() + f[10].fl());
+    sw(m, g[SP], 0xB0, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A1], 0x18) as u32);
+    f[10].set_u32l(lw(m, g[A1], 0x1C) as u32);
+    f[8].set_fl(f[22].fl() * f[6].fl());
+    f[4].set_fl(f[24].fl() * f[10].fl());
+    f[10].set_u32l(lw(m, g[A1], 0x20) as u32);
+    f[6].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[10].fl() * f[20].fl());
+    f[4].set_fl(f[8].fl() + f[6].fl());
+    sw(m, g[SP], 0xB4, u64::from(f[4].u32l()));
+    f[10].set_u32l(lw(m, g[A1], 0x18) as u32);
+    f[6].set_u32l(lw(m, g[A1], 0x1C) as u32);
+    f[8].set_fl(f[28].fl() * f[10].fl());
+    f[4].set_fl(f[30].fl() * f[6].fl());
+    f[6].set_u32l(lw(m, g[A1], 0x20) as u32);
+    f[10].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[6].fl() * f[26].fl());
+    f[4].set_fl(f[8].fl() + f[10].fl());
+    sw(m, g[SP], 0xB8, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A1], 0x24) as u32);
+    f[10].set_u32l(lw(m, g[A1], 0x28) as u32);
+    f[8].set_fl(f[2].fl() * f[6].fl());
+    f[4].set_fl(f[12].fl() * f[10].fl());
+    f[10].set_u32l(lw(m, g[A1], 0x2C) as u32);
+    f[6].set_fl(f[8].fl() + f[4].fl());
+    f[8].set_fl(f[0].fl() * f[10].fl());
+    f[10].set_u32l(lw(m, g[V0], 0x30) as u32);
+    f[4].set_fl(f[6].fl() + f[8].fl());
+    f[6].set_fl(f[10].fl() + f[4].fl());
+    sw(m, g[SP], 0xBC, u64::from(f[6].u32l()));
+    f[8].set_u32l(lw(m, g[A1], 0x24) as u32);
+    f[4].set_u32l(lw(m, g[A1], 0x28) as u32);
+    f[10].set_fl(f[16].fl() * f[8].fl());
+    f[6].set_fl(f[18].fl() * f[4].fl());
+    f[4].set_u32l(lw(m, g[A1], 0x2C) as u32);
+    f[8].set_fl(f[10].fl() + f[6].fl());
+    f[10].set_fl(f[14].fl() * f[4].fl());
+    f[4].set_u32l(lw(m, g[V0], 0x34) as u32);
+    f[6].set_fl(f[8].fl() + f[10].fl());
+    f[8].set_fl(f[4].fl() + f[6].fl());
+    sw(m, g[SP], 0xC0, u64::from(f[8].u32l()));
+    f[10].set_u32l(lw(m, g[A1], 0x24) as u32);
+    f[6].set_u32l(lw(m, g[A1], 0x28) as u32);
+    f[4].set_fl(f[22].fl() * f[10].fl());
+    f[8].set_fl(f[24].fl() * f[6].fl());
+    f[6].set_u32l(lw(m, g[A1], 0x2C) as u32);
+    f[10].set_fl(f[4].fl() + f[8].fl());
+    f[4].set_fl(f[20].fl() * f[6].fl());
+    f[6].set_u32l(lw(m, g[V0], 0x38) as u32);
+    f[8].set_fl(f[10].fl() + f[4].fl());
+    f[10].set_fl(f[6].fl() + f[8].fl());
+    sw(m, g[SP], 0xC4, u64::from(f[10].u32l()));
+    f[4].set_u32l(lw(m, g[A1], 0x24) as u32);
+    f[8].set_u32l(lw(m, g[A1], 0x28) as u32);
+    f[6].set_fl(f[28].fl() * f[4].fl());
+    f[10].set_fl(f[30].fl() * f[8].fl());
+    f[8].set_u32l(lw(m, g[A1], 0x2C) as u32);
+    f[4].set_fl(f[6].fl() + f[10].fl());
+    f[6].set_fl(f[26].fl() * f[8].fl());
+    f[8].set_u32l(lw(m, g[V0], 0x3C) as u32);
+    f[10].set_fl(f[4].fl() + f[6].fl());
+    f[4].set_fl(f[8].fl() + f[10].fl());
+    sw(m, g[SP], 0xC8, u64::from(f[4].u32l()));
+    if g[V1] != 0 {
+        f[6].set_u32l(lw(m, g[A0], 0) as u32);
+        f[8].set_u32l(lw(m, g[A1], 0x24) as u32);
+        f[10].set_fl(f[6].fl() + f[8].fl());
+        f[6].set_u32l(lw(m, g[A1], 0x28) as u32);
+        sw(m, g[A1], 0x24, u64::from(f[10].u32l()));
+        f[4].set_u32l(lw(m, g[A0], 4) as u32);
+        f[8].set_fl(f[4].fl() + f[6].fl());
+        f[4].set_u32l(lw(m, g[A1], 0x2C) as u32);
+        sw(m, g[A1], 0x28, u64::from(f[8].u32l()));
+        f[10].set_u32l(lw(m, g[A0], 8) as u32);
+        f[6].set_fl(f[10].fl() + f[4].fl());
+        sw(m, g[A1], 0x2C, u64::from(f[6].u32l()));
+    }
+    sw(m, g[SP], 0xCC, g[A1]);
+    call(imports::func_80033E08, m, ctx);
+    let g = &mut ctx.gpr;
+    g[A1] = lw(m, g[SP], 0xCC);
+    sw(m, g[SP], 0x88, g[V0]);
+    g[A0] = g[V0];
+    call(imports::func_80034650, m, ctx);
+    let g = &mut ctx.gpr;
+    g[A2] = li(DL2_HEAD);
+    g[V0] = lw(m, g[A2], 0);
+    g[T1] = li(0xDA38_0003);
+    g[T0] = addu(g[V0], 8);
+    sw(m, g[A2], 0, g[T0]);
+    sw(m, g[V0], 0, g[T1]);
+    g[T2] = lw(m, g[SP], 0x88);
+    sw(m, g[V0], 4, g[T2]);
+    call(imports::func_80033E08, m, ctx);
+    let g = &mut ctx.gpr;
+    sw(m, g[SP], 0x88, g[V0]);
+    g[A0] = g[V0];
+    g[A1] = addu(g[SP], 0x8C);
+    call(imports::func_800344F4, m, ctx);
+    let g = &mut ctx.gpr;
+    g[A2] = li(DL2_HEAD);
+    g[V0] = lw(m, g[A2], 0);
+    g[T4] = li(0xDC38_000E);
+    g[T3] = addu(g[V0], 8);
+    sw(m, g[A2], 0, g[T3]);
+    sw(m, g[V0], 0, g[T4]);
+    g[T5] = lw(m, g[SP], 0x88);
+    g[T7] = li(0xDB0C_0000);
+    g[T8] = li(0x1_0000);
+    sw(m, g[V0], 4, g[T5]);
+    g[V0] = lw(m, g[A2], 0);
+    g[T6] = addu(g[V0], 8);
+    sw(m, g[A2], 0, g[T6]);
+    sw(m, g[V0], 4, g[T8]);
+    sw(m, g[V0], 0, g[T7]);
+    g[RA] = lw(m, g[SP], 0x44);
+    ctx.fpr[30].u64 = ld(m, g[SP], 0x38);
+    ctx.fpr[28].u64 = ld(m, g[SP], 0x30);
+    ctx.fpr[26].u64 = ld(m, g[SP], 0x28);
+    ctx.fpr[24].u64 = ld(m, g[SP], 0x20);
+    ctx.fpr[22].u64 = ld(m, g[SP], 0x18);
+    ctx.fpr[20].u64 = ld(m, g[SP], 0x10);
+    g[SP] = addu(g[SP], 0xD0);
+}
+
 /// `func_80035698(v)`: `[0x800A3D9C] = 1` if `v == 1` (full 64-bit
 /// compare), else 0. Leaves `v0 = 1`, `at = 0x800A0000`.
 ///
@@ -10971,6 +11548,126 @@ pub unsafe extern "C" fn func_80037BF8(rdram: *mut u8, ctx: *mut RecompContext) 
             break;
         }
     }
+}
+
+/// `func_80038294(o)` (pick a level by thresholds, **guess**): with `n =
+/// [o + 0x14]` ([`func_80017DAC`]) and the floats `k[j] = [o + 0x1C +
+/// 4j]`: -1 if `n <= 0`; 0 if the word `[0x800A3FE8]` is 0; -1 if `10.0 <
+/// k[0]`. Otherwise `c` = how many keys from `k[1]` on (at most 7) come
+/// before the first that is -1.0 or not below 10.0 (`k[j] == -1.0` tested
+/// first, then `k[j] < 10.0`, so NaN stops too); the result is `c` if `c <
+/// n` (signed), else -1.
+///
+/// Frame (`sp - 0x18`): `ra` at `+0x14`, `o` spilled to its slot `+0x18`.
+/// Leaves `a0 = o`; past the count test `t6` = the flag and `at`; past the
+/// flag test `f14 = f2 = 10.0` and `f4 = k[0]`; for the key tests `f12 =
+/// -1.0`, `f0` = the last key read, `v1 = c`, and `t7`, `t8` from the
+/// loop.
+///
+/// Domain: any memory contents (compares only).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80038294(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    sw(m, g[SP], 0x18, g[A0]);
+    call(imports::func_80017DAC, m, ctx);
+    let g = &mut ctx.gpr;
+    g[A0] = lw(m, g[SP], 0x18);
+    if (g[V0] as i64) > 0 {
+        g[T6] = li(0x800A_0000);
+        g[T6] = lw(m, g[T6], 0x3FE8);
+        g[AT] = li(0x4120_0000);
+        if g[T6] == 0 {
+            g[V0] = 0;
+        } else {
+            ctx.fpr[14].set_u32l(g[AT] as u32);
+            ctx.fpr[4].set_u32l(lw(m, g[A0], 0x1C) as u32);
+            g[AT] = li(0xBF80_0000);
+            ctx.fpr[2].set_u32l(ctx.fpr[14].u32l());
+            if !(ctx.fpr[14].fl() < ctx.fpr[4].fl()) {
+                // c: the keys from k[1] before the first that is -1.0 or
+                // not below 10.0, at most 7. Every exit ends in v1 -= 1.
+                ctx.fpr[12].set_u32l(g[AT] as u32);
+                ctx.fpr[0].set_u32l(lw(m, g[A0], 0x20) as u32);
+                g[V1] = 1;
+                if ctx.fpr[12].fl() != ctx.fpr[0].fl() && ctx.fpr[0].fl() < ctx.fpr[14].fl() {
+                    g[V1] = addu(g[V1], 1);
+                    loop {
+                        g[AT] = slt(g[V1], 8);
+                        g[T7] = sll(g[V1], 2);
+                        if g[AT] == 0 {
+                            break;
+                        }
+                        g[T8] = addu(g[A0], g[T7]);
+                        ctx.fpr[0].set_u32l(lw(m, g[T8], 0x1C) as u32);
+                        if ctx.fpr[12].fl() == ctx.fpr[0].fl() || !(ctx.fpr[0].fl() < ctx.fpr[2].fl()) {
+                            break;
+                        }
+                        g[V1] = addu(g[V1], 1);
+                    }
+                }
+                g[V1] = addu(g[V1], u64::MAX);
+                g[AT] = slt(g[V1], g[V0]);
+                if g[AT] != 0 {
+                    g[V0] = g[V1];
+                } else {
+                    g[V0] = u64::MAX;
+                }
+            } else {
+                g[V0] = u64::MAX;
+            }
+        }
+    } else {
+        g[V0] = u64::MAX;
+    }
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x18);
+}
+
+/// `func_80038D5C(pp)` (append a matrix, **guess**: the projection): with
+/// `dl = *pp`, `mtx` = the next ring entry ([`func_80033E08`]) filled from
+/// the 4x4 at `0x80112E20` ([`func_800344F4`]): `dl[0] = 0xDA380007`,
+/// `dl[1] = mtx` (`gSPMatrix`), `*pp = dl + 8`.
+///
+/// Frame (`sp - 0x20`): `ra` at `+0x14`, `dl` at `+0x18`, `mtx` at
+/// `+0x1C`, `pp` spilled to its slot `+0x20`. Leaves `v0 = dl`, `v1 = dl +
+/// 8`, `t7 = 0xDA380007`, `t8 = mtx`, `t9 = pp`, and the callees'
+/// registers.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80038D5C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x20i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    sw(m, g[SP], 0x20, g[A0]);
+    g[V1] = lw(m, g[A0], 0);
+    sw(m, g[SP], 0x18, g[V1]);
+    call(imports::func_80033E08, m, ctx);
+    let g = &mut ctx.gpr;
+    g[A1] = li(0x8011_0000);
+    sw(m, g[SP], 0x1C, g[V0]);
+    g[A1] = addu(g[A1], 0x2E20);
+    g[A0] = g[V0];
+    call(imports::func_800344F4, m, ctx);
+    let g = &mut ctx.gpr;
+    g[V0] = lw(m, g[SP], 0x18);
+    g[T7] = li(0xDA38_0007);
+    sw(m, g[V0], 0, g[T7]);
+    g[T8] = lw(m, g[SP], 0x1C);
+    g[V1] = addu(g[V0], 8);
+    sw(m, g[V0], 4, g[T8]);
+    g[T9] = lw(m, g[SP], 0x20);
+    sw(m, g[T9], 0, g[V1]);
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x20);
 }
 
 /// `func_80038DBC(off)`: bit 6 of the settings word `[0x800D697C]` (the
