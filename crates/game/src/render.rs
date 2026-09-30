@@ -3930,6 +3930,37 @@ pub unsafe extern "C" fn func_8003D370(rdram: *mut u8, ctx: *mut RecompContext) 
     }
 }
 
+/// `func_8003D444()` (reset the render state and the screen rectangle,
+/// **guess**): [`func_8003D110`], then
+/// [`func_8003B300`](crate::misc::func_8003B300)`(0, W - 1, 0, H - 1)` with
+/// `W`, `H` the s16 at `0x80114470`/`72` (the screen size, **guess**).
+///
+/// Frame (`sp - 0x18`): `ra` at `+0x14`. Leaves `v0 = 0x80114470` and the
+/// callees' registers.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003D444(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    call(imports::func_8003D110, m, ctx);
+    let g = &mut ctx.gpr;
+    g[V0] = li(0x8011_4470);
+    g[A1] = lh(m, g[V0], 0);
+    g[A3] = lh(m, g[V0], 2);
+    g[A0] = 0;
+    g[A2] = 0;
+    g[A1] = addu(g[A1], u64::MAX);
+    g[A3] = addu(g[A3], u64::MAX);
+    call(imports::func_8003B300, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x18);
+}
+
 /// `func_80084C30(type)`: fill the `OSTask` at `[0x801488C0]` (read again
 /// before every field): `ucode_boot` (`+8`) = rspboot at `0x80097FF0`,
 /// `ucode_boot_size` (`+0xC`) = `0xD0` (NOTES.md, "Code segment"),

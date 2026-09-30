@@ -256,6 +256,56 @@ pub unsafe extern "C" fn func_8003F890(rdram: *mut u8, ctx: *mut RecompContext) 
     g[V0] = addu(g[T9], g[T1]);
 }
 
+/// `func_8003F8FC(a, b, src)` (a message to a debug hook, **guess**):
+/// builds `{a, b, src[0], ..., src[13]}` (16 words) in the frame at
+/// `+0x2C`, and calls [`func_80018450`]`(0xEE06, &msg)`, an empty
+/// function.
+///
+/// Frame (`sp - 0x70`): `ra` at `+0x14`, the message at `+0x2C..+0x6C`.
+/// Leaves `v0 = sp + 0x6C`, `v1 = src + 0x40`, `a0 = 0xEE06`, `a1` = the
+/// message, `t6`..`t1` the last words copied.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003F8FC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x70i64) as u64);
+    sw(m, g[SP], 0x2C, g[A0]);
+    sw(m, g[SP], 0x14, g[RA]);
+    sw(m, g[SP], 0x30, g[A1]);
+    g[A0] = addu(g[A2], 8);
+    g[T6] = lw(m, g[A0], -8);
+    g[V0] = addu(g[SP], 0x3C);
+    g[V1] = addu(g[A2], 0x10);
+    sw(m, g[SP], 0x34, g[T6]);
+    g[T7] = lw(m, g[A0], -4);
+    g[A0] = addu(g[SP], 0x6C);
+    g[A1] = addu(g[SP], 0x2C);
+    sw(m, g[SP], 0x38, g[T7]);
+    loop {
+        g[T8] = lw(m, g[V1], -8);
+        g[V0] = addu(g[V0], 0x10);
+        g[V1] = addu(g[V1], 0x10);
+        sw(m, g[V0], -0x10, g[T8]);
+        g[T9] = lw(m, g[V1], -0x14);
+        sw(m, g[V0], -0xC, g[T9]);
+        g[T0] = lw(m, g[V1], -0x10);
+        sw(m, g[V0], -8, g[T0]);
+        g[T1] = lw(m, g[V1], -0xC);
+        sw(m, g[V0], -4, g[T1]);
+        if g[V0] == g[A0] {
+            break;
+        }
+    }
+    g[A0] = 0xEE06;
+    call(imports::func_80018450, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x70);
+}
+
 /// `func_8003F99C(elem, arg)`: call the callback `[pool + 0x24]` of the
 /// first pool whose id equals the element's `[elem + 0]`, as `cb(elem,
 /// arg)`, unless `elem` is 0, no pool matches, the callback is 0, or bit 8
@@ -410,6 +460,36 @@ pub unsafe extern "C" fn func_8003FA24(rdram: *mut u8, ctx: *mut RecompContext) 
     g[SP] = addu(g[SP], 0x40);
 }
 
+/// `func_8003FB34(elem, x)` (a query, **guess**): with the answer word `r
+/// = 0` in the frame, sends `elem` the message `{"Qery", x, &r, "Qery"}`
+/// ([`func_8003F99C`]) and returns `r` as the callback left it.
+///
+/// Frame (`sp - 0x60`): `ra` at `+0x14`, `r` at `+0x1C`, the message at
+/// `+0x20..+0x30`. Leaves `t6 = &r`, `v0 = r` and the callee's registers.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003FB34(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x60i64) as u64);
+    g[V0] = li(0x5165_7279);
+    sw(m, g[SP], 0x14, g[RA]);
+    sw(m, g[SP], 0x24, g[A1]);
+    g[T6] = addu(g[SP], 0x1C);
+    sw(m, g[SP], 0x1C, 0);
+    sw(m, g[SP], 0x20, g[V0]);
+    sw(m, g[SP], 0x28, g[T6]);
+    sw(m, g[SP], 0x2C, g[V0]);
+    g[A1] = addu(g[SP], 0x20);
+    call(imports::func_8003F99C, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[V0] = lw(m, g[SP], 0x1C);
+    g[SP] = addu(g[SP], 0x60);
+}
+
 /// `func_8003FB78(id, count, base)`: set the first pool with this id to
 /// `count` elements at `base` (`+8`, `+0x10`) and return `count * size`
 /// (low 32 bits), or 0 if there is none. Leaves `a3 = id`, `v1` = the
@@ -429,6 +509,229 @@ pub unsafe extern "C" fn func_8003FB78(rdram: *mut u8, ctx: *mut RecompContext) 
     sw(m, g[V1], 0x10, g[A2]);
     sw(m, g[V1], 8, g[A1]);
     g[V0] = multu(g[T7], g[A1]).0;
+}
+
+/// `func_8003FBD4(id)` (allocate an element, **guess**): in the first pool
+/// with this id, if its callback `[pool + 0x24]` is nonzero, the first
+/// element whose halfword `+6` has bit 8 set (walked by the size `[pool +
+/// 0xC]`, re-read, up to the count `[pool + 8]`, read once): the bit is
+/// cleared, the element is sent `"Aloc"` ([`func_8003F99C`]; the message
+/// word in the frame at `+0x24`) and returned. Otherwise 0.
+///
+/// Frame (`sp - 0x58`): `ra` at `+0x14`, the message at `+0x24`, the
+/// element at `+0x44`. Leaves `t0 = "Aloc"`, `a1` = the descriptor, `a2`
+/// = the count, and the search's, the loop's or the callee's registers.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003FBD4(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    'b_8003FC84: {
+        g[V0] = li(0x800A_0000);
+        g[V0] = lw(m, g[V0], 0x2170);
+        g[SP] = addu(g[SP], (-0x58i64) as u64);
+        sw(m, g[SP], 0x14, g[RA]);
+        g[V1] = lw(m, g[V0], 0);
+        g[T0] = li(0x416C_6F63);
+        if g[V1] != 0 {
+            g[T6] = lw(m, g[V1], 0);
+            loop {
+                g[A1] = g[V1];
+                if g[A0] == g[T6] {
+                    break;
+                }
+                g[V1] = lw(m, g[V0], 4);
+                g[V0] = addu(g[V0], 4);
+                if g[V1] == 0 {
+                    g[V0] = 0;
+                    break 'b_8003FC84;
+                }
+                g[T6] = lw(m, g[V1], 0);
+            }
+            g[T7] = lw(m, g[V1], 0x24);
+            if g[T7] != 0 {
+                g[A2] = lw(m, g[V1], 8);
+                g[A0] = lw(m, g[V1], 0x10);
+                g[V0] = 0;
+                if (g[A2] as i64) > 0 {
+                    loop {
+                        let g = &mut ctx.gpr;
+                        g[V1] = lh(m, g[A0], 6);
+                        g[V0] = addu(g[V0], 1);
+                        g[T8] = g[V1] & 0x100;
+                        g[T9] = g[V1] & 0xFEFF;
+                        if g[T8] != 0 {
+                            sh(m, g[A0], 6, g[T9]);
+                            sw(m, g[SP], 0x24, g[T0]);
+                            sw(m, g[SP], 0x44, g[A0]);
+                            g[A1] = addu(g[SP], 0x24);
+                            call(imports::func_8003F99C, m, ctx);
+                            let g = &mut ctx.gpr;
+                            g[V0] = lw(m, g[SP], 0x44);
+                            break 'b_8003FC84;
+                        }
+                        let g = &mut ctx.gpr;
+                        g[T1] = lw(m, g[A1], 0xC);
+                        g[AT] = slt(g[V0], g[A2]);
+                        g[A0] = addu(g[A0], g[T1]);
+                        if g[AT] == 0 {
+                            break;
+                        }
+                    }
+                }
+            }
+            let g = &mut ctx.gpr;
+            g[V0] = 0;
+            break 'b_8003FC84;
+        }
+        let g = &mut ctx.gpr;
+        g[V0] = 0;
+    }
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x58);
+}
+
+/// `func_8003FC94(id)` (free a pool's elements, **guess**): for every pool
+/// with this id, each element whose halfword `+6` has bit 8 clear is sent
+/// `"Free"` ([`func_8003F99C`]; the message word in the frame at `+0x38`)
+/// and then gets the bit set (re-read, OR'ed, stored). The elements are
+/// walked by the size `[pool + 0xC]` (re-read), the index kept as an s16,
+/// up to the count `[pool + 8]` (re-read after each message).
+///
+/// Frame (`sp - 0x50`): `s0`..`s5` at `+0x14..+0x28` and `ra` at `+0x2C`,
+/// restored sign-extended. Leaves `v0 = 0` (the list's end), `t7` the last
+/// pool's id, and the loop's and callee's registers.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003FC94(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    'b_8003FD5C: {
+        g[SP] = addu(g[SP], (-0x50i64) as u64);
+        sw(m, g[SP], 0x24, g[S4]);
+        g[S4] = li(0x800A_0000);
+        g[S4] = lw(m, g[S4], 0x2170);
+        g[T6] = li(0x4672_6565);
+        sw(m, g[SP], 0x2C, g[RA]);
+        sw(m, g[SP], 0x28, g[S5]);
+        sw(m, g[SP], 0x20, g[S3]);
+        sw(m, g[SP], 0x1C, g[S2]);
+        sw(m, g[SP], 0x18, g[S1]);
+        sw(m, g[SP], 0x14, g[S0]);
+        sw(m, g[SP], 0x38, g[T6]);
+        g[V0] = lw(m, g[S4], 0);
+        g[S5] = g[A0];
+        g[S3] = addu(g[SP], 0x38);
+        if g[V0] != 0 {
+            g[T7] = lw(m, g[V0], 0);
+            loop {
+                let g = &mut ctx.gpr;
+                g[S2] = g[V0];
+                if g[S5] != g[T7] {
+                    g[V0] = lw(m, g[S4], 4);
+                } else {
+                    g[S0] = lw(m, g[V0], 0x10);
+                    g[V0] = lw(m, g[V0], 8);
+                    g[S1] = 0;
+                    if (g[V0] as i64) <= 0 {
+                        g[V0] = lw(m, g[S4], 4);
+                    } else {
+                        loop {
+                            let g = &mut ctx.gpr;
+                            g[T8] = lh(m, g[S0], 6);
+                            g[A0] = g[S0];
+                            g[T9] = g[T8] & 0x100;
+                            if g[T9] != 0 {
+                                g[S1] = addu(g[S1], 1);
+                            } else {
+                                g[A1] = g[S3];
+                                call(imports::func_8003F99C, m, ctx);
+                                let g = &mut ctx.gpr;
+                                g[T0] = lh(m, g[S0], 6);
+                                g[T1] = g[T0] | 0x100;
+                                sh(m, g[S0], 6, g[T1]);
+                                g[V0] = lw(m, g[S2], 8);
+                                g[S1] = addu(g[S1], 1);
+                            }
+                            let g = &mut ctx.gpr;
+                            g[T3] = sll(g[S1], 16);
+                            g[T2] = lw(m, g[S2], 0xC);
+                            g[S1] = sra(g[T3], 16);
+                            g[AT] = slt(g[S1], g[V0]);
+                            g[S0] = addu(g[S0], g[T2]);
+                            if g[AT] == 0 {
+                                break;
+                            }
+                        }
+                        let g = &mut ctx.gpr;
+                        g[V0] = lw(m, g[S4], 4);
+                    }
+                }
+                let g = &mut ctx.gpr;
+                g[S4] = addu(g[S4], 4);
+                if g[V0] == 0 {
+                    break;
+                }
+                g[T7] = lw(m, g[V0], 0);
+            }
+            let g = &mut ctx.gpr;
+            g[RA] = lw(m, g[SP], 0x2C);
+            break 'b_8003FD5C;
+        }
+        let g = &mut ctx.gpr;
+        g[RA] = lw(m, g[SP], 0x2C);
+    }
+    let g = &mut ctx.gpr;
+    g[S0] = lw(m, g[SP], 0x14);
+    g[S1] = lw(m, g[SP], 0x18);
+    g[S2] = lw(m, g[SP], 0x1C);
+    g[S3] = lw(m, g[SP], 0x20);
+    g[S4] = lw(m, g[SP], 0x24);
+    g[S5] = lw(m, g[SP], 0x28);
+    g[SP] = addu(g[SP], 0x50);
+}
+
+/// `func_8003FD7C(elem)` (free an element, **guess**): if `elem` is nonzero
+/// and bit 8 of its halfword `+6` is clear, sends it `"Free"`
+/// ([`func_8003F99C`]) and then sets the bit (re-read).
+///
+/// Frame (`sp - 0x38`): `ra` at `+0x14`, the message at `+0x18`, `elem`
+/// spilled to its slot `+0x38`. Leaves `t6`/`t7` = the halfword and its
+/// bit, `t8 = "Free"`, `a1` = the message, and after a message `t9`/`t0`
+/// and the callee's registers.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003FD7C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x38i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    if g[A0] != 0 {
+        g[T6] = lh(m, g[A0], 6);
+        g[T8] = li(0x4672_6565);
+        g[T7] = g[T6] & 0x100;
+        g[A1] = addu(g[SP], 0x18);
+        if g[T7] == 0 {
+            sw(m, g[SP], 0x18, g[T8]);
+            sw(m, g[SP], 0x38, g[A0]);
+            call(imports::func_8003F99C, m, ctx);
+            let g = &mut ctx.gpr;
+            g[A0] = lw(m, g[SP], 0x38);
+            g[T9] = lh(m, g[A0], 6);
+            g[T0] = g[T9] | 0x100;
+            sh(m, g[A0], 6, g[T0]);
+        }
+    }
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x38);
 }
 
 /// `func_8003FDCC(id, pos, max, skip, cap, dist, delta, found)` (nearest

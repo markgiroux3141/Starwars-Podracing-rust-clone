@@ -9,7 +9,7 @@
 
 use n64mem::Mem;
 use crate::imports;
-use crate::recomp::{addu, call, enter, lb, lbu, li, lw, multu, reg::*, sb, sh, sll, sllv, slt, subu, sw, RecompContext};
+use crate::recomp::{addu, call, enter, lb, lbu, li, lw, multu, reg::*, sb, sh, sll, sllv, slt, srl, subu, sw, RecompContext};
 
 /// `func_8001F464()`: 1 if bit 1 of `[0x80113688]` is set, else 0. Leaves
 /// `t6` = the word, `t7` = the bit.
@@ -618,6 +618,62 @@ fn copy_words(m: &mut Mem, g: &mut [u64; 32], (src, dst, end): (usize, usize, us
         g[t] = lw(m, g[src], 4);
         sw(m, g[dst], 4, g[t]);
     }
+}
+
+/// `func_80039178(p, n)` (crc32, MSB first): builds the table at
+/// `0x80114070` first if its entry 1 is 0 ([`func_800390C0`]); then `c =
+/// -1` and, for each byte `b` of `p[0..n]` (none for `n <= 0`, signed),
+/// `c = T[b ^ (c >> 24)] ^ (c << 8)`; returns `!c`.
+///
+/// Frame (`sp - 0x18`): `ra` at `+0x14`, `p` spilled to its slot `+0x18`,
+/// `n` to `+0x1C` when the table is built. Leaves `a2` = the table, `a1 =
+/// 0` (or `n` if `n <= 0`), `v1 = c`, from the last byte `t7` (the byte),
+/// `t8 = c >> 24`, `t9`, `t0` (the entry's offset), `t1`, `t2` (the entry),
+/// `t3 = c << 8`, and the callee's registers if it ran.
+///
+/// Domain: the table's entry 1 and the bytes in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80039178(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[A2] = li(0x8011_4070);
+    g[T6] = lw(m, g[A2], 4);
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    sw(m, g[SP], 0x18, g[A0]);
+    if g[T6] == 0 {
+        sw(m, g[SP], 0x1C, g[A1]);
+        call(imports::func_800390C0, m, ctx);
+        let g = &mut ctx.gpr;
+        g[A2] = li(0x8011_4070);
+        g[A1] = lw(m, g[SP], 0x1C);
+    }
+    let g = &mut ctx.gpr;
+    g[V1] = u64::MAX;
+    g[V0] = lw(m, g[SP], 0x18);
+    if (g[A1] as i64) > 0 {
+        loop {
+            g[T7] = lbu(m, g[V0], 0);
+            g[T8] = srl(g[V1], 24);
+            g[A1] = addu(g[A1], u64::MAX);
+            g[T9] = g[T7] ^ g[T8];
+            g[T0] = sll(g[T9], 2);
+            g[T1] = addu(g[A2], g[T0]);
+            g[T2] = lw(m, g[T1], 0);
+            g[T3] = sll(g[V1], 8);
+            g[V0] = addu(g[V0], 1);
+            g[V1] = g[T2] ^ g[T3];
+            if (g[A1] as i64) <= 0 {
+                break;
+            }
+        }
+    }
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x18);
+    g[V0] = !g[V1];
 }
 
 /// `func_8003960C()`: copy the 0x3F0-byte block at `0x80113680` (the save

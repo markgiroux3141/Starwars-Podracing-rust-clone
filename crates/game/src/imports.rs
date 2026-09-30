@@ -58,6 +58,7 @@ recomp_imports! {
     func_800167E4, // lubksb (n = 3)
     func_80016BF4, // vec3 x 3x3
     func_80016CAC, // point x 4x4
+    func_80016DD8, // vec4 x 4x4
     func_80017874, // 4x4 identity
     func_80017BA8, // 4x4 to node transform
     func_80017C18, // node transform to 4x4
@@ -72,6 +73,7 @@ recomp_imports! {
     func_80017F20, // returns 4
     func_80017F28, // RECORDS_170 + 0x170 k
     func_800181BC, // node flags walk (self)
+    func_80018450, // empty (two arguments)
     func_80029A3C, // profile record reset
     func_8002D968, // three bytes equal (bit 14)
     func_8002D9D0, // 4 or 3
@@ -94,12 +96,18 @@ recomp_imports! {
     func_80034650, // 4x3 float to Mtx
     func_8003609C, // render mode switches
     func_80038DF8, // six halfwords
+    func_800390C0, // crc32_table_init
+    func_8003B300, // four screen words
+    func_8003D110, // render state reset
     func_8003D488, // [0x800A48D4] = v & 0xFFFF
+    func_8003E0A0, // texture scroll
     func_8003F714, // pool element by tag
     func_8003F7B8, // pool count by id
     func_8003F800, // pool iteration begin
+    func_8003F99C, // element callback
     func_8003FA24, // pool broadcast
     func_8003FB78, // pool count and base
+    func_8004110C, // save a pose
     func_80051FF4, // first zero of four words
     func_80081530, // n bytes equal
     func_80081730, // point x 4x4 (w = 1)

@@ -582,7 +582,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800390A4,func_800390A4,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
 0x800390AC,func_800390AC,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
 0x800390C0,crc32_table_init,ours,0,,rust_verified,unit_diff,high,MSB-first CRC-32 table (poly 0x04C11DB7) at 0x80114070 (game::misc)
-0x80039178,func_80039178,ours,1,,recomp,,,
+0x80039178,crc32,ours,1,,rust_verified,unit_diff,high,"CRC-32 MSB first (table 0x80114070, built if entry 1 is 0), init and final xor -1 (game::save)"
 0x800391F4,func_800391F4,ours,15,,recomp,,,
 0x800392A4,func_800392A4,ours,5,,recomp,,,
 0x800392E8,func_800392E8,ours,16,,recomp,,,
@@ -611,7 +611,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8003A4E8,func_8003A4E8,ours,0,spline,rust_verified,unit_diff,high,spline point i halfword +0x40 (game::spline)
 0x8003A50C,func_8003A50C,ours,0,spline,rust_verified,unit_diff,high,"first point from 'from' with +0x40 == id, else -1 (game::spline)"
 0x8003A568,func_8003A568,ours,0,spline,rust_verified,unit_diff,high,"walker point index, or point halfword +0x42 by path bits (QUIRK) (game::spline)"
-0x8003A5D0,func_8003A5D0,ours,1,,recomp,,,
+0x8003A5D0,func_8003A5D0,ours,1,,rust_verified,unit_diff,high,"evaluate a segment: T x basis weights, 4 control points (type 0 or point/handles), position, up, tangent, second derivative by flags (game::spline)"
 0x8003ABA0,func_8003ABA0,ours,0,spline,rust_verified,unit_diff,high,"spline walker step, forward/backward, fork choice and path bits; do_break unreachable (game::spline)"
 0x8003AE64,func_8003AE64,ours,2,,recomp,,,
 0x8003B02C,func_8003B02C,ours,3,,recomp,,,
@@ -624,12 +624,12 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8003BAB0,func_8003BAB0,ours,1,,recomp,,,
 0x8003D110,func_8003D110,ours,0,render,rust_verified,unit_diff,high,render state reset commands (game::render)
 0x8003D370,func_8003D370,ours,0,render,rust_verified,unit_diff,high,"DL gSPTexture, combine, othermode; optional two by [0x800A4960] (game::render)"
-0x8003D444,func_8003D444,ours,1,,recomp,,,
+0x8003D444,func_8003D444,ours,1,,rust_verified,unit_diff,high,"8003D110, then 8003B300(0, W - 1, 0, H - 1) (game::render)"
 0x8003D488,func_8003D488,ours,0,,rust_verified,unit_diff,high,[0x800A48D4] = v & 0xFFFF (game::misc)
 0x8003D49C,func_8003D49C,ours,0,,rust_verified,unit_diff,high,"*x = h0/320, *y = h1/240 in double (0x80114470) (game::misc)"
 0x8003D4F4,func_8003D4F4,ours,2,,recomp,,,
 0x8003E0A0,func_8003E0A0,ours,0,,rust_verified,unit_diff,high,"scroll halfwords +4/+6 by s*size of [o+8], wrapped; [o] |= 0x8000 (game::misc)"
-0x8003E18C,func_8003E18C,ours,1,,recomp,,,
+0x8003E18C,func_8003E18C,ours,1,,rust_verified,unit_diff,high,"8003E0A0([p], sx, sy) (game::misc)"
 0x8003E1D0,func_8003E1D0,ours,0,,rust_verified,unit_diff,high,clear 0x800A4984/70/78 (game::misc)
 0x8003E1EC,func_8003E1EC,ours,6,,recomp,,,
 0x8003E2B0,func_8003E2B0,ours,3,,recomp,,,
@@ -661,15 +661,15 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8003F7B8,func_8003F7B8,ours,0,pools,rust_verified,unit_diff,high,count of first pool with id (game::pools)
 0x8003F800,func_8003F800,ours,0,pools,rust_verified,unit_diff,high,"pool iteration begin at i (0x800A4AA4, 0x80118D10) (game::pools)"
 0x8003F890,func_8003F890,ours,0,pools,rust_verified,unit_diff,high,pool iteration next (game::pools)
-0x8003F8FC,func_8003F8FC,ours,1,,recomp,,,
+0x8003F8FC,func_8003F8FC,ours,1,,rust_verified,unit_diff,high,"16-word message {a, b, src[0..14]} to the empty 80018450(0xEE06, msg) (game::pools)"
 0x8003F974,func_8003F974,ours,2,,recomp,,,
 0x8003F99C,func_8003F99C,ours,0,pools,rust_verified,unit_diff,high,"call the element's pool callback [pool+0x24](elem, arg) unless flagged (LOOKUP_FUNC) (game::pools)"
 0x8003FA24,func_8003FA24,ours,0,pools,rust_verified,unit_diff,high,"broadcast cb(elem, arg, arg) to pools with id or All!; 2 stops (LOOKUP_FUNC) (game::pools)"
-0x8003FB34,func_8003FB34,ours,1,,recomp,,,
+0x8003FB34,func_8003FB34,ours,1,,rust_verified,unit_diff,high,Qery message to an element; returns the answer word (game::pools)
 0x8003FB78,func_8003FB78,ours,0,pools,rust_verified,unit_diff,high,set pool count and base; returns count * size (game::pools)
-0x8003FBD4,func_8003FBD4,ours,1,,recomp,,,
-0x8003FC94,func_8003FC94,ours,1,,recomp,,,
-0x8003FD7C,func_8003FD7C,ours,1,,recomp,,,
+0x8003FBD4,func_8003FBD4,ours,1,,rust_verified,unit_diff,high,Aloc: first element with +6 bit 8 set in the first pool with the id (clears it) (game::pools)
+0x8003FC94,func_8003FC94,ours,1,,rust_verified,unit_diff,high,"Free to every unflagged element of the pools with the id, then flag it (game::pools)"
+0x8003FD7C,func_8003FD7C,ours,1,,rust_verified,unit_diff,high,"Free an unflagged element, then flag it (game::pools)"
 0x8003FDCC,func_8003FDCC,ours,0,pools,rust_verified,unit_diff,high,"nearest pool elements, sorted by squared distance (capped) (game::pools)"
 0x80040050,func_80040050,ours,3,,recomp,,,
 0x800401FC,func_800401FC,ours,3,,recomp,,,
@@ -678,7 +678,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80041058,func_80041058,ours,4,,recomp,,,
 0x800410D4,func_800410D4,ours,5,,recomp,,,
 0x8004110C,func_8004110C,ours,0,,rust_verified,unit_diff,high,"copy +0x20..+0x5C to +0x224.., +0x108..+0x144 to +0x264..; [o+0x7C] = a1 (game::misc)"
-0x80041214,func_80041214,ours,1,,recomp,,,
+0x80041214,func_80041214,ours,1,,rust_verified,unit_diff,high,"8004110C(o, v) for v = [o+0x80] in 1, 2, else [o+0x7C] = v (game::misc)"
 0x80041258,func_80041258,ours,4,,recomp,,,
 0x800419B4,func_800419B4,ours,5,,recomp,,,
 0x800419EC,func_800419EC,ours,4,,recomp,,,

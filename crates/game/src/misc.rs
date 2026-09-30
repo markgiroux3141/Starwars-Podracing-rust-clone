@@ -11941,6 +11941,37 @@ pub unsafe extern "C" fn func_8003E0A0(rdram: *mut u8, ctx: *mut RecompContext) 
     // L_8003E184
 }
 
+/// `func_8003E18C(p, _, sx, sy)` with the floats in `a2`/`a3`:
+/// [`func_8003E0A0`]`([p], sx, sy)`. The second argument is spilled to its
+/// slot and not used.
+///
+/// Frame (`sp - 0x18`): `ra` at `+0x14`, `p` and the second argument
+/// spilled to their slots `+0x18`/`+0x1C`. Leaves `f12 = sx`, `f14 = sy`
+/// (from the moves) and the callee's registers.
+///
+/// Domain: the callee's.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003E18C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    ctx.fpr[12].set_u32l(g[A2] as u32);
+    ctx.fpr[14].set_u32l(g[A3] as u32);
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    sw(m, g[SP], 0x1C, g[A1]);
+    sw(m, g[SP], 0x14, g[RA]);
+    sw(m, g[SP], 0x18, g[A0]);
+    g[A1] = s32(ctx.fpr[12].u32l());
+    g[A2] = s32(ctx.fpr[14].u32l());
+    g[A0] = lw(m, g[A0], 0);
+    call(imports::func_8003E0A0, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x18);
+}
+
 /// `func_8003E1D0()`: `[0x800A4984] = [0x800A4970] = [0x800A4978] = 0`
 /// (the first is [`func_8003E54C`]'s count). Leaves `at = 0x800A0000`.
 ///
@@ -12066,6 +12097,38 @@ pub unsafe extern "C" fn func_8004110C(rdram: *mut u8, ctx: *mut RecompContext) 
     sw(m, g[A0], 0x29C, u64::from(f[4].u32l()));
     sw(m, g[A0], 0x294, u64::from(f[16].u32l()));
     sw(m, g[A0], 0x298, u64::from(f[18].u32l()));
+}
+
+/// `func_80041214(o)`: with `v = [o + 0x80]`, [`func_8004110C`]`(o, v)` if
+/// `v` is 1 or 2, else `[o + 0x7C] = v` (which the callee also stores).
+///
+/// Frame (`sp - 0x18`): `ra` at `+0x14`. Leaves `a1 = v`, `at = 1`, and
+/// the callee's registers.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80041214(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    'b_8004124C: {
+        g[SP] = addu(g[SP], (-0x18i64) as u64);
+        sw(m, g[SP], 0x14, g[RA]);
+        g[A1] = lw(m, g[A0], 0x80);
+        g[AT] = 2;
+        let c0 = g[A1] != g[AT];
+        g[AT] = 1;
+        if c0 && g[A1] != g[AT] {
+            sw(m, g[A0], 0x7C, g[A1]);
+            g[RA] = lw(m, g[SP], 0x14);
+            break 'b_8004124C;
+        }
+        call(imports::func_8004110C, m, ctx);
+        let g = &mut ctx.gpr;
+        g[RA] = lw(m, g[SP], 0x14);
+    }
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], 0x18);
 }
 
 /// `func_80045634(obj, old, new)`: if all three are nonzero, replace every
