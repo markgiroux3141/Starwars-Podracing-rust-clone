@@ -26,7 +26,9 @@ recomp_imports! {
     func_8000AA78, // record +4/+6 halfwords
     func_8000AAC0, // record +8/+0xC floats
     func_8000AB24, // record or global colour bytes
+    func_8000AC34, // record flags |=
     func_8000AED4, // entry flags |=
+    func_8000AEFC, // entry +6/+4/+8
     func_8000C5F0, // push current id
     func_8000C6C8, // float clamp-add
     func_8000C724, // int clamp-add
@@ -73,6 +75,7 @@ recomp_imports! {
     func_80017F20, // returns 4
     func_80017F28, // RECORDS_170 + 0x170 k
     func_800181BC, // node flags walk (self)
+    func_80018324, // node header init
     func_80018450, // empty (two arguments)
     func_80029A3C, // profile record reset
     func_8002D968, // three bytes equal (bit 14)
@@ -108,6 +111,7 @@ recomp_imports! {
     func_8003FA24, // pool broadcast
     func_8003FB78, // pool count and base
     func_8004110C, // save a pose
+    func_8004E488, // mask bits set/clear
     func_80051FF4, // first zero of four words
     func_80081530, // n bytes equal
     func_80081730, // point x 4x4 (w = 1)

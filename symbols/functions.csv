@@ -702,27 +702,27 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80045004,func_80045004,ours,3,,recomp,,,
 0x80045144,func_80045144,ours,6,,recomp,,,
 0x80045314,func_80045314,ours,23,,recomp,,,
-0x800454A8,func_800454A8,ours,1,,recomp,,,
+0x800454A8,func_800454A8,ours,1,,rust_verified,unit_diff,high,"largest [v+0x108] of a list to [o+0xB68]; [o+0x58] = (laps - 1) / it; entry 5, colour -103 (game::misc)"
 0x80045588,func_80045588,ours,19,,recomp,,,
 0x80045634,func_80045634,ours,0,,rust_verified,unit_diff,high,replace every old with new in the word list at [obj+0x18] (game::misc)
 0x80045694,func_80045694,ours,20,,recomp,,,
 0x80045C88,func_80045C88,ours,20,,recomp,,,
-0x80045DA0,func_80045DA0,ours,1,,recomp,,,
-0x80045E80,func_80045E80,ours,1,,recomp,,,
+0x80045DA0,func_80045DA0,ours,1,,rust_verified,unit_diff,high,node group of 12 (type 0x5064) with 0xD065 children at o+0x1710 (game::misc)
+0x80045E80,func_80045E80,ours,1,,rust_verified,unit_diff,high,node group of 18 with 0xD065 children at o+0x1094 (game::misc)
 0x80045F60,func_80045F60,ours,3,,recomp,,,
 0x8004611C,func_8004611C,ours,21,,recomp,,,
 0x80046330,func_80046330,ours,2,,recomp,,,
 0x800464E8,func_800464E8,ours,22,,recomp,,,
 0x80046670,func_80046670,ours,20,,recomp,,,
-0x80046764,func_80046764,ours,1,,recomp,,,
+0x80046764,func_80046764,ours,1,,rust_verified,unit_diff,high,"zero the scene lists 0x8011A2A8.. and 0x8011A508.., clear the object table (game::misc)"
 0x800467F8,func_800467F8,ours,2,,recomp,,,
-0x80046870,func_80046870,ours,1,,recomp,,,
-0x80046974,func_80046974,ours,1,,recomp,,,
+0x80046870,func_80046870,ours,1,,rust_verified,unit_diff,high,"drop each slot object's word from the root list 0x8011A2A8.., clear the slots and the object table (game::misc)"
+0x80046974,func_80046974,ours,1,,rust_verified,unit_diff,high,scene root node 0x8011A288 (151 children at 0x8011A2A8) (game::misc)
 0x800469B4,func_800469B4,ours,24,,recomp,,,
 0x80046DC4,func_80046DC4,ours,8,,recomp,,,
 0x80047920,func_80047920,ours,0,,rust_verified,unit_diff,high,"player objects: +0xE = (i != current), +0x10 |= 4 (game::misc)"
 0x800479A4,func_800479A4,ours,2,,recomp,,,
-0x80047A78,func_80047A78,ours,1,,recomp,,,
+0x80047A78,func_80047A78,ours,1,,rust_verified,unit_diff,high,two-record gauge (ids from 0x800A4BB8); FCR31 idiom for the colour (game::misc)
 0x80047DB0,func_80047DB0,ours,9,,recomp,,,
 0x8004850C,func_8004850C,ours,5,,recomp,,,
 0x80048A50,func_80048A50,ours,4,,recomp,,,
@@ -744,18 +744,18 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8004B568,func_8004B568,ours,19,,recomp,,,
 0x8004B6E8,func_8004B6E8,ours,19,,recomp,,,
 0x8004B868,func_8004B868,ours,19,,recomp,,,
-0x8004BAC8,func_8004BAC8,ours,1,,recomp,,,
+0x8004BAC8,func_8004BAC8,ours,1,,rust_verified,unit_diff,high,track-select grid records (4 x 7); QUIRK: a medal re-init drops the colour (game::misc)
 0x8004BDFC,func_8004BDFC,ours,21,,recomp,,,
 0x8004BE90,func_8004BE90,ours,22,,recomp,,,
 0x8004CA50,func_8004CA50,ours,23,,recomp,,,
 0x8004DC0C,func_8004DC0C,ours,25,,recomp,,,
 0x8004DFEC,func_8004DFEC,ours,0,,rust_verified,unit_diff,high,"mask arrays 0x800A4B94 = -1, 0x800A4BA4 = 0 (x4) (game::misc)"
 0x8004E034,func_8004E034,ours,2,,recomp,,,
-0x8004E0A0,func_8004E0A0,ours,1,,recomp,,,
+0x8004E0A0,func_8004E0A0,ours,1,,rust_verified,unit_diff,high,"menu input: 24 held bits into the state word, stick directions, band bits set directions (game::misc)"
 0x8004E488,func_8004E488,ours,0,,rust_verified,unit_diff,high,"clear mask bits, or set them and record newly set (game::misc)"
 0x8004E4F4,func_8004E4F4,ours,2,,recomp,,,
 0x8004EA08,func_8004EA08,ours,20,,recomp,,,
-0x8004F254,func_8004F254,ours,1,,recomp,,,
+0x8004F254,func_8004F254,ours,1,,rust_verified,unit_diff,high,NAsn messages to the cMan elements for Locl or flagged records (game::misc)
 0x8004F358,func_8004F358,ours,18,,recomp,,,
 0x8004F6E8,func_8004F6E8,ours,0,,rust_verified,unit_diff,high,"0x800A4B7C: 4 x -1, then word i = i for i < (s8)[p+0x70]; QUIRK unbounded (game::misc)"
 0x8004F790,func_8004F790,ours,3,,recomp,,,
