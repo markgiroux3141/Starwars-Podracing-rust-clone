@@ -885,7 +885,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80067AB4,func_80067AB4,ours,4,,recomp,,,
 0x80067C70,func_80067C70,ours,3,,recomp,,,
 0x80068410,func_80068410,ours,1,,recomp,,,
-0x800689A0,func_800689A0,ours,1,,recomp,,,
+0x800689A0,func_800689A0,ours,1,,rust_verified,unit_diff,high,"boost charge (dt, decay through func_80081700) (game::misc)"
 0x80068AAC,func_80068AAC,ours,4,,recomp,,,
 0x80068D04,func_80068D04,ours,2,,recomp,,,
 0x8006907C,func_8006907C,ours,6,,recomp,,,
@@ -899,7 +899,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8006AF48,func_8006AF48,ours,5,,recomp,,,
 0x8006B304,func_8006B304,ours,0,,rust_verified,unit_diff,high,grid-cell mask from thresholds at 0x8011C858 (game::misc)
 0x8006B568,func_8006B568,ours,7,,recomp,,,
-0x8006B9C8,func_8006B9C8,ours,1,,recomp,,,
+0x8006B9C8,func_8006B9C8,ours,1,,rust_verified,unit_diff,high,closest approach of two moving 2D points (game::misc)
 0x8006BB50,func_8006BB50,ours,21,,recomp,,,
 0x8006BC74,func_8006BC74,ours,22,,recomp,,,
 0x8006C0D4,func_8006C0D4,ours,24,,recomp,,,
@@ -910,7 +910,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8006CA2C,func_8006CA2C,ours,21,,recomp,,,
 0x8006D0C0,func_8006D0C0,ours,0,,rust_verified,unit_diff,high,threshold flag at [p + 0x2FC] (game::misc)
 0x8006D150,func_8006D150,ours,5,,recomp,,,
-0x8006D7F0,func_8006D7F0,ours,1,,recomp,,,
+0x8006D7F0,func_8006D7F0,ours,1,,rust_verified,unit_diff,high,steer away from the nearest Test element (game::misc)
 0x8006D9DC,func_8006D9DC,ours,0,,rust_verified,unit_diff,high,value eased toward a target by rate * dt (game::misc)
 0x8006DB1C,func_8006DB1C,ours,3,,recomp,,,
 0x8006E008,func_8006E008,ours,0,,rust_verified,unit_diff,high,QUIRK uninitialised frame word [sp-8] == 2 (game::misc)
@@ -921,7 +921,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8006E6F8,func_8006E6F8,ours,22,,recomp,,,
 0x8006FA08,func_8006FA08,ours,4,,recomp,,,
 0x8006FB00,func_8006FB00,ours,23,,recomp,,,
-0x8006FC80,func_8006FC80,ours,1,,recomp,,,
+0x8006FC80,func_8006FC80,ours,1,,rust_verified,unit_diff,high,part timer; Snap message and six clamps (game::misc)
 0x8006FDE4,func_8006FDE4,ours,21,,recomp,,,
 0x8006FED0,func_8006FED0,ours,0,,rust_verified,unit_diff,high,get [p+0x60] (dead bit-7 branch) (game::misc)
 0x8006FEE8,func_8006FEE8,ours,24,,recomp,,,
@@ -950,12 +950,12 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800747E4,func_800747E4,ours,4,,recomp,,,
 0x80074B08,func_80074B08,ours,2,,recomp,,,
 0x80074CDC,func_80074CDC,ours,5,,recomp,,,
-0x8007531C,func_8007531C,ours,1,,recomp,,,
-0x80075490,func_80075490,ours,1,,recomp,,,
+0x8007531C,func_8007531C,ours,1,,rust_verified,unit_diff,high,collect a node tree's materials (self-recursive) (game::misc)
+0x80075490,func_80075490,ours,1,,rust_verified,unit_diff,high,hand out collected materials round-robin (self) (game::misc)
 0x800755FC,func_800755FC,ours,2,,recomp,,,
 0x80075648,func_80075648,ours,3,,recomp,,,
 0x80075940,func_80075940,ours,2,,recomp,,,
-0x80075A3C,func_80075A3C,ours,1,,recomp,,,
+0x80075A3C,func_80075A3C,ours,1,,rust_verified,unit_diff,high,push a point out of a slab of two planes (game::misc)
 0x80075BA8,func_80075BA8,ours,5,,recomp,,,
 0x80075FC4,func_80075FC4,ours,2,,recomp,,,
 0x80076180,func_80076180,ours,4,,recomp,,,
@@ -963,7 +963,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80077054,func_80077054,ours,6,,recomp,,,
 0x80077C94,func_80077C94,ours,3,,recomp,,,
 0x800784F8,func_800784F8,ours,4,,recomp,,,
-0x80079714,func_80079714,ours,1,,recomp,,,
+0x80079714,func_80079714,ours,1,,rust_verified,unit_diff,high,rate-limited control value (func_80073C58) (game::misc)
 0x80079824,func_80079824,ours,4,,recomp,,,
 0x8007ACEC,func_8007ACEC,ours,7,,recomp,,,
 0x8007AFE0,func_8007AFE0,ours,0,,rust_verified,unit_diff,high,"empty, spills a0 (game::misc)"

@@ -49,6 +49,7 @@ recomp_imports! {
     func_800129E4, // text width
     func_80014D4C, // asin in degrees
     func_80014F54, // atan2 in degrees
+    func_80015190, // vec2 multiply-add
     func_800151C0, // vec2 length
     func_80015268, // vec3 set
     func_80015288, // vec3 copy
@@ -121,11 +122,16 @@ recomp_imports! {
     func_8003F99C, // element callback
     func_8003FA24, // pool broadcast
     func_8003FB78, // pool count and base
+    func_8003FDCC, // nearest pool elements
     func_8004110C, // save a pose
     func_8004E488, // mask bits set/clear
     func_80051FF4, // first zero of four words
     func_80052134, // progress figure
+    func_80073C58, // float clamp
+    func_8007531C, // material collect (self)
+    func_80075490, // material hand-out (self)
     func_80081530, // n bytes equal
+    func_80081700, // 1 - r / (r + a)
     func_80081730, // point x 4x4 (w = 1)
     func_80081A2C, // closest point on a segment
     func_800827C0, // model_load's error path (not yet understood)
