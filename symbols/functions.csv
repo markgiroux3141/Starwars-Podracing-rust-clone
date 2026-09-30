@@ -879,12 +879,12 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800665A4,func_800665A4,ours,22,,recomp,,,
 0x80066A80,func_80066A80,ours,23,,recomp,,,
 0x800670CC,func_800670CC,ours,5,,recomp,,,
-0x800672D4,func_800672D4,ours,1,,recomp,,,
+0x800672D4,func_800672D4,ours,1,,rust_verified,unit_diff,high,"pod engine step (thrust, force, Hitt message) (game::misc)"
 0x80067718,func_80067718,ours,3,,recomp,,,
 0x800678A8,func_800678A8,ours,6,,recomp,,,
 0x80067AB4,func_80067AB4,ours,4,,recomp,,,
 0x80067C70,func_80067C70,ours,3,,recomp,,,
-0x80068410,func_80068410,ours,1,,recomp,,,
+0x80068410,func_80068410,ours,1,,rust_verified,unit_diff,high,pod speed limit (saturating rate curve) (game::misc)
 0x800689A0,func_800689A0,ours,1,,rust_verified,unit_diff,high,"boost charge (dt, decay through func_80081700) (game::misc)"
 0x80068AAC,func_80068AAC,ours,4,,recomp,,,
 0x80068D04,func_80068D04,ours,2,,recomp,,,

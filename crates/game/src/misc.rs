@@ -17301,6 +17301,744 @@ pub unsafe extern "C" fn func_80066144(rdram: *mut u8, ctx: *mut RecompContext) 
     g[SP] = addu(g[SP], 0x1F8);
 }
 
+/// `func_800672D4(o, v, s)` (**guess**: a pod's engine step; `s` the float
+/// in `a2`, `v` a vec3 moved by the force): with `dt` the double at
+/// `0x80120BF0` (narrowed where used in f32), `lo = [o + 0xA4]`, `M = [o +
+/// 0x94] - lo`, and `e = s - lo`, lowered by `q - 3` if `q = |[o + 0x28]| *
+/// [o + 0xA8]` exceeds 3 (the absolute value as `x < 0` negates):
+///
+/// 1. The boost timer `[o + 0x2C8]`: `+= dt` if `K < s` (`K` the float at
+///    `0x800AD4C4`, 99999 in the ROM), then bit 12 of `[o + 0x60]` is set if
+///    it is above 3 (re-read); else it becomes 0. Bit 9 of `[o + 0x64]` is
+///    set if `30 < s`, else cleared.
+/// 2. The thrust `p = [o + 0x1B4]`: if `e <= 12` (not `12 < e`), `p += dt *
+///    (1 - (12 - e) / (12 - M))`, and then if `M < e` and `p < 0` (both
+///    re-read), `p *= `[`func_80081700`]`(4.0, dt)`. Else `p = f32(f64(p) +
+///    2 dt)` if `[o + 0x1A0] < 0` (not `0 <= x`), or `f32(f64(p) + dt)`, in
+///    double.
+/// 3. The force `F = [o + 0x1B0] = ((dt * 30) * [o + 0x190]) * p`; if `[o +
+///    0x2FC] < 0`, `0 <= [o + 0x1A0]` and `0 < F`, `F *= [o + 0x2FC] * K2 +
+///    1` (`K2` at `0x800AD4C8`, 0.9 in the ROM).
+/// 4. If `e < F`: `F = e` (stored), `p = -(p / 5)` if `0 < p`, and if `4 <
+///    8 p` (the `p` before) and bit 24 of `[o + 0x60]` is clear, the message
+///    `("Hitt", "Botm", f32(f64(F) / dt) * 0.5)` (the `F` before, at `sp +
+///    0x40`) goes to `o` ([`crate::pools::func_8003F99C`]); then bit 24 is
+///    set. Else bit 24 is cleared.
+/// 5. `v += d * F` component by component (`F` re-read each time), with `d`
+///    = `-[o + 0x160..]` if bit 10 of `[o + 0x64]` is set, else `[o +
+///    0x194..]`.
+///
+/// Frame (`sp - 0x80`): `ra` at `+0x14`, `d` at `+0x28..+0x30`, the message
+/// at `+0x40`, `e` at `+0x70` and `M` at `+0x7C`, `o`, `v`, `s` in their
+/// slots `+0x80..+0x88` (spilled and re-read around the calls). Leaves `v0 =
+/// 0x80120BF0`, `a2 = v`, the tests' `t0`..`t9`, `at`, the products and sums
+/// in `f0`..`f18`, and the callees' registers.
+///
+/// Domain: canonical `o`, `v`; no NaN operand in the arithmetic reached
+/// (`s`, `o`'s fields, `dt`, and no `inf - inf`, `0 / 0` or `0 * inf` on the
+/// way); the callees'.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800672D4(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    g[SP] = addu(g[SP], (-0x80i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    sw(m, g[SP], 0x84, g[A1]);
+    sw(m, g[SP], 0x88, g[A2]);
+    g[T6] = lw(m, g[A0], 0x64);
+    g[V0] = li(0x8012_0000);
+    g[A2] = g[A1];
+    g[T7] = g[T6] & 0x400;
+    g[V0] = addu(g[V0], 0xBF0);
+    if g[T7] == 0 {
+        f[8].set_u32l(lw(m, g[A0], 0x194) as u32);
+        sw(m, g[SP], 0x28, u64::from(f[8].u32l()));
+        f[10].set_u32l(lw(m, g[A0], 0x198) as u32);
+        sw(m, g[SP], 0x2C, u64::from(f[10].u32l()));
+        f[4].set_u32l(lw(m, g[A0], 0x19C) as u32);
+        sw(m, g[SP], 0x30, u64::from(f[4].u32l()));
+    } else {
+        f[4].set_u32l(lw(m, g[A0], 0x160) as u32);
+        f[6].set_fl(-f[4].fl());
+        sw(m, g[SP], 0x28, u64::from(f[6].u32l()));
+        f[8].set_u32l(lw(m, g[A0], 0x164) as u32);
+        f[10].set_fl(-f[8].fl());
+        sw(m, g[SP], 0x2C, u64::from(f[10].u32l()));
+        f[4].set_u32l(lw(m, g[A0], 0x168) as u32);
+        f[6].set_fl(-f[4].fl());
+        sw(m, g[SP], 0x30, u64::from(f[6].u32l()));
+    }
+    f[0].set_u32l(lw(m, g[A0], 0xA4) as u32);
+    f[8].set_u32l(lw(m, g[A0], 0x94) as u32);
+    f[4].set_u32l(0);
+    f[6].set_u32l(lw(m, g[SP], 0x88) as u32);
+    f[10].set_fl(f[8].fl() - f[0].fl());
+    f[12].set_fl(f[6].fl() - f[0].fl());
+    sw(m, g[SP], 0x7C, u64::from(f[10].u32l()));
+    f[2].set_u32l(lw(m, g[A0], 0x28) as u32);
+    f[14].set_u32l(lw(m, g[A0], 0xA8) as u32);
+    f[18].set_u32l(f[12].u32l());
+    let c1 = f[2].fl() < f[4].fl();
+    f[10].set_u32l(lw(m, g[SP], 0x88) as u32);
+    if !c1 {
+        f[0].set_u32l(f[2].u32l());
+    } else {
+        f[0].set_fl(-f[2].fl());
+    }
+    f[2].set_fl(f[0].fl() * f[14].fl());
+    g[AT] = li(0x4040_0000);
+    f[16].set_u32l(g[AT] as u32);
+    g[AT] = li(0x800B_0000);
+    if f[16].fl() < f[2].fl() {
+        f[6].set_fl(f[2].fl() - f[16].fl());
+        f[18].set_fl(f[12].fl() - f[6].fl());
+    }
+    f[8].set_u32l(lw(m, g[AT], -0x2B3C) as u32);
+    if !(f[8].fl() < f[10].fl()) {
+        f[16].set_u32l(0);
+        g[V0] = li(0x8012_0BF0);
+        sw(m, g[A0], 0x2C8, u64::from(f[16].u32l()));
+        g[AT] = li(0x41F0_0000);
+    } else {
+        f[6].u64 = ld(m, g[V0], 0);
+        f[4].set_u32l(lw(m, g[A0], 0x2C8) as u32);
+        f[8].set_fl(fpu::cvt_s_d(f[6].d(), fpu::NEAREST));
+        f[10].set_fl(f[4].fl() + f[8].fl());
+        sw(m, g[A0], 0x2C8, u64::from(f[10].u32l()));
+        f[6].set_u32l(lw(m, g[A0], 0x2C8) as u32);
+        let c2 = f[16].fl() < f[6].fl();
+        f[16].set_u32l(0);
+        if c2 {
+            g[T8] = lw(m, g[A0], 0x60);
+            g[T9] = g[T8] | 0x1000;
+            sw(m, g[A0], 0x60, g[T9]);
+        }
+        g[AT] = li(0x41F0_0000);
+    }
+    f[4].set_u32l(g[AT] as u32);
+    f[8].set_u32l(lw(m, g[SP], 0x88) as u32);
+    if !(f[4].fl() < f[8].fl()) {
+        g[T2] = lw(m, g[A0], 0x64);
+        g[AT] = (-0x201i64) as u64;
+        g[T3] = g[T2] & g[AT];
+        sw(m, g[A0], 0x64, g[T3]);
+    } else {
+        g[T0] = lw(m, g[A0], 0x64);
+        g[T1] = g[T0] | 0x200;
+        sw(m, g[A0], 0x64, g[T1]);
+    }
+    'b_8006755C: {
+        g[AT] = li(0x4140_0000);
+        f[0].set_u32l(g[AT] as u32);
+        f[10].set_u32l(lw(m, g[SP], 0x7C) as u32);
+        if !(f[0].fl() < f[18].fl()) {
+            f[4].set_fl(f[0].fl() - f[18].fl());
+            g[AT] = li(0x3F80_0000);
+            f[8].set_fl(f[0].fl() - f[10].fl());
+            f[10].set_u32l(g[AT] as u32);
+            f[6].set_fl(f[4].fl() / f[8].fl());
+            f[8].u64 = ld(m, g[V0], 0);
+            f[4].set_fl(f[10].fl() - f[6].fl());
+            f[10].set_fl(fpu::cvt_s_d(f[8].d(), fpu::NEAREST));
+            f[8].set_u32l(lw(m, g[A0], 0x1B4) as u32);
+            f[6].set_fl(f[10].fl() * f[4].fl());
+            f[10].set_fl(f[8].fl() + f[6].fl());
+            sw(m, g[A0], 0x1B4, u64::from(f[10].u32l()));
+            f[4].set_u32l(lw(m, g[SP], 0x7C) as u32);
+            if !(f[4].fl() < f[18].fl()) {
+                f[8].u64 = ld(m, g[V0], 0);
+                break 'b_8006755C;
+            }
+            f[8].set_u32l(lw(m, g[A0], 0x1B4) as u32);
+            g[AT] = li(0x4080_0000);
+            if !(f[8].fl() < f[16].fl()) {
+                f[8].u64 = ld(m, g[V0], 0);
+                break 'b_8006755C;
+            }
+            f[6].u64 = ld(m, g[V0], 0);
+            f[12].set_u32l(g[AT] as u32);
+            sw(m, g[SP], 0x80, g[A0]);
+            sw(m, g[SP], 0x84, g[A2]);
+            sw(m, g[SP], 0x70, u64::from(f[18].u32l()));
+            f[14].set_fl(fpu::cvt_s_d(f[6].d(), fpu::NEAREST));
+            call(imports::func_80081700, m, ctx);
+            let g = &mut ctx.gpr;
+            let f = &mut ctx.fpr;
+            g[A0] = lw(m, g[SP], 0x80);
+            g[V0] = li(0x8012_0000);
+            g[A2] = lw(m, g[SP], 0x84);
+            f[10].set_u32l(lw(m, g[A0], 0x1B4) as u32);
+            f[18].set_u32l(lw(m, g[SP], 0x70) as u32);
+            f[16].set_u32l(0);
+            f[4].set_fl(f[10].fl() * f[0].fl());
+            g[V0] = addu(g[V0], 0xBF0);
+            sw(m, g[A0], 0x1B4, u64::from(f[4].u32l()));
+        } else {
+            f[10].set_u32l(lw(m, g[A0], 0x1A0) as u32);
+            g[AT] = li(0x4000_0000);
+            if !(f[16].fl() <= f[10].fl()) {
+                f[4].set_u32h(g[AT] as u32); // f5
+                f[4].set_u32l(0);
+                f[8].u64 = ld(m, g[V0], 0);
+                f[6].set_u32l(lw(m, g[A0], 0x1B4) as u32);
+                f[10].set_d(f[4].d() * f[8].d());
+                f[4].set_d(f64::from(f[6].fl()));
+                f[8].set_d(f[4].d() + f[10].d());
+                f[6].set_fl(fpu::cvt_s_d(f[8].d(), fpu::NEAREST));
+                sw(m, g[A0], 0x1B4, u64::from(f[6].u32l()));
+            } else {
+                f[6].set_u32l(lw(m, g[A0], 0x1B4) as u32);
+                f[8].u64 = ld(m, g[V0], 0);
+                f[4].set_d(f64::from(f[6].fl()));
+                f[10].set_d(f[4].d() + f[8].d());
+                f[6].set_fl(fpu::cvt_s_d(f[10].d(), fpu::NEAREST));
+                sw(m, g[A0], 0x1B4, u64::from(f[6].u32l()));
+            }
+        }
+        let g = &mut ctx.gpr;
+        let f = &mut ctx.fpr;
+        f[8].u64 = ld(m, g[V0], 0);
+    }
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    'b_800675DC: {
+        g[AT] = li(0x41F0_0000);
+        f[10].set_u32l(g[AT] as u32);
+        f[6].set_fl(fpu::cvt_s_d(f[8].d(), fpu::NEAREST));
+        f[8].set_u32l(lw(m, g[A0], 0x190) as u32);
+        f[12].set_u32l(lw(m, g[A0], 0x2FC) as u32);
+        f[4].set_fl(f[6].fl() * f[10].fl());
+        f[10].set_u32l(lw(m, g[A0], 0x1B4) as u32);
+        let c3 = f[12].fl() < f[16].fl();
+        f[6].set_fl(f[4].fl() * f[8].fl());
+        f[4].set_fl(f[6].fl() * f[10].fl());
+        sw(m, g[A0], 0x1B0, u64::from(f[4].u32l()));
+        if c3 {
+            f[8].set_u32l(lw(m, g[A0], 0x1A0) as u32);
+            if !(f[16].fl() <= f[8].fl()) {
+                f[0].set_u32l(lw(m, g[A0], 0x1B0) as u32);
+                break 'b_800675DC;
+            }
+            f[0].set_u32l(lw(m, g[A0], 0x1B0) as u32);
+            g[AT] = li(0x800B_0000);
+            if !(f[16].fl() < f[0].fl()) {
+                f[0].set_u32l(lw(m, g[A0], 0x1B0) as u32);
+                break 'b_800675DC;
+            }
+            f[6].set_u32l(lw(m, g[AT], -0x2B38) as u32);
+            g[AT] = li(0x3F80_0000);
+            f[4].set_u32l(g[AT] as u32);
+            f[10].set_fl(f[12].fl() * f[6].fl());
+            f[2].set_fl(f[10].fl() + f[4].fl());
+            f[8].set_fl(f[0].fl() * f[2].fl());
+            sw(m, g[A0], 0x1B0, u64::from(f[8].u32l()));
+        }
+        f[0].set_u32l(lw(m, g[A0], 0x1B0) as u32);
+    }
+    if !(f[18].fl() < f[0].fl()) {
+        g[T0] = lw(m, g[A0], 0x60);
+        g[AT] = li(0xFEFF_FFFF);
+        g[T1] = g[T0] & g[AT];
+        sw(m, g[A0], 0x60, g[T1]);
+    } else {
+        f[4].u64 = ld(m, g[V0], 0);
+        f[10].set_d(f64::from(f[0].fl()));
+        f[2].set_u32l(lw(m, g[A0], 0x1B4) as u32);
+        f[8].set_d(f[10].d() / f[4].d());
+        g[AT] = li(0x4100_0000);
+        f[6].set_u32l(g[AT] as u32);
+        sw(m, g[A0], 0x1B0, u64::from(f[18].u32l()));
+        let c4 = f[16].fl() < f[2].fl();
+        f[12].set_fl(f[2].fl() * f[6].fl());
+        g[AT] = li(0x40A0_0000);
+        f[14].set_fl(fpu::cvt_s_d(f[8].d(), fpu::NEAREST));
+        if c4 {
+            f[6].set_u32l(g[AT] as u32);
+            f[10].set_fl(f[2].fl() / f[6].fl());
+            f[4].set_fl(-f[10].fl());
+            sw(m, g[A0], 0x1B4, u64::from(f[4].u32l()));
+        }
+        g[AT] = li(0x4080_0000);
+        f[8].set_u32l(g[AT] as u32);
+        if !(f[8].fl() < f[12].fl()) {
+            g[T8] = lw(m, g[A0], 0x60);
+        } else {
+            g[T4] = lw(m, g[A0], 0x60);
+            g[T6] = li(0x4869_7474);
+            g[T5] = sll(g[T4], 7);
+            g[AT] = li(0x3F00_0000);
+            if (g[T5] as i64) >= 0 {
+                f[6].set_u32l(g[AT] as u32);
+                g[T7] = li(0x426F_746D);
+                f[10].set_fl(f[14].fl() * f[6].fl());
+                sw(m, g[SP], 0x40, g[T6]);
+                sw(m, g[SP], 0x44, g[T7]);
+                g[A1] = addu(g[SP], 0x40);
+                sw(m, g[SP], 0x80, g[A0]);
+                sw(m, g[SP], 0x84, g[A2]);
+                sw(m, g[SP], 0x48, u64::from(f[10].u32l()));
+                call(imports::func_8003F99C, m, ctx);
+                let g = &mut ctx.gpr;
+                g[A0] = lw(m, g[SP], 0x80);
+                g[A2] = lw(m, g[SP], 0x84);
+            }
+            let g = &mut ctx.gpr;
+            g[T8] = lw(m, g[A0], 0x60);
+        }
+        let g = &mut ctx.gpr;
+        g[AT] = li(0x100_0000);
+        g[T9] = g[T8] | g[AT];
+        sw(m, g[A0], 0x60, g[T9]);
+    }
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    f[4].set_u32l(lw(m, g[SP], 0x28) as u32);
+    f[8].set_u32l(lw(m, g[A0], 0x1B0) as u32);
+    f[10].set_u32l(lw(m, g[A2], 0) as u32);
+    f[6].set_fl(f[4].fl() * f[8].fl());
+    f[4].set_fl(f[6].fl() + f[10].fl());
+    sw(m, g[A2], 0, u64::from(f[4].u32l()));
+    f[6].set_u32l(lw(m, g[A0], 0x1B0) as u32);
+    f[8].set_u32l(lw(m, g[SP], 0x2C) as u32);
+    f[4].set_u32l(lw(m, g[A2], 4) as u32);
+    f[10].set_fl(f[8].fl() * f[6].fl());
+    f[8].set_fl(f[10].fl() + f[4].fl());
+    sw(m, g[A2], 4, u64::from(f[8].u32l()));
+    f[10].set_u32l(lw(m, g[A0], 0x1B0) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x30) as u32);
+    f[8].set_u32l(lw(m, g[A2], 8) as u32);
+    f[4].set_fl(f[6].fl() * f[10].fl());
+    f[6].set_fl(f[4].fl() + f[8].fl());
+    sw(m, g[A2], 8, u64::from(f[6].u32l()));
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x80);
+}
+
+/// `func_80068410(o)` (**guess**: a pod's speed limit), with `dt` the double
+/// at `0x80120BF0` narrowed to f32, `x = [o + 0x18C]` (a throttle), `r =
+/// [o + 0x1A4]` (a rate, updated in place and re-read at each use) and `d(a)
+/// = `[`func_80081700`]`(a, dt)`. `B = 4.0` if bit 23 of `[o + 0x60]` or bit
+/// 13 of `[o + 0x64]` is set, else 1.5. With the constants `K` at
+/// `0x800AD4EC` if bit 3 of `[[o + 0x1E70] + 8]` is set, else at
+/// `0x800AD500` (`K0..K5` = 0.1, 0.99, 10000, -0.1, -0.6, and 0.2 for the
+/// second set only):
+///
+/// - `K0 < x`: `r += dt x B`; `c = K2` if `K1 <= x`, else `x / (1 - x)`; if
+///   `c < r`, `r *= d([o + 0x84])`.
+/// - `K3 <= x <= K0` (neither test holds, so also NaN): `r *= d([o + 0x84])`,
+///   or with the second set `r *= d(10.0)` if `r < K5`.
+/// - `x < K3`: `r += dt x B`, then if `K4 < x` and `r < 0.5 x`, `r *= d(20.0)`.
+///
+/// Then `r *= d([o + 0x80])` if bit 9 of `[o + 0x60]` is set. The result is
+/// `S = ([o + 0x7C] r) / (r + [o + 0x78])` for `0 < r`, else `((-[o + 0x7C])
+/// (-r)) / (-r + [o + 0x78])`, times `[o + 0x1AC]`; if `[o + 0x184] < 15`,
+/// times `[o + 0x244]` too, and bit 27 of `[o + 0x64]` is set the first time
+/// (with bit 28 if `[o + 0x244] < 1`), else bit 27 is cleared. Plus `[o +
+/// 0x240]`; at least 75 if bit 26 of `[o + 0x60]` is set (`S < 75` gives 75);
+/// and if bit 7 of `[o + 0x60]` is set and `[o + 0x2FC] < -0.5`, times the
+/// float at `0x800AD518` (1.9) if bit 25 of `[o + 0x64]` is set, else at
+/// `0x800AD51C` (1.3). Returned in `f0`.
+///
+/// Frame (`sp - 0x18`): `ra` at `+0x14`, `o` spilled to its slot `+0x18`
+/// around the calls (re-read sign-extended). Leaves `f2 = f0`, the words
+/// and bits tested in `t0`..`t8`, `v0`, `v1`, `at`, the products, sums and
+/// constants in `f4`..`f18` (`f12 = r`), and the callee's registers.
+///
+/// Domain: canonical `o`; no NaN operand in the arithmetic reached (`x`,
+/// `r`, `dt` and `o`'s fields, and no `inf - inf`, `0 / 0` or `0 * inf` on
+/// the way); the callee's.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80068410(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    'b_80068458: {
+        g[SP] = addu(g[SP], (-0x18i64) as u64);
+        sw(m, g[SP], 0x14, g[RA]);
+        g[T6] = lw(m, g[A0], 0x60);
+        g[AT] = li(0x4080_0000);
+        g[T7] = sll(g[T6], 8);
+        if (g[T7] as i64) < 0 {
+            f[2].set_u32l(g[AT] as u32);
+        } else {
+            g[T8] = lw(m, g[A0], 0x64);
+            g[T9] = g[T8] & 0x2000;
+            if g[T9] == 0 {
+                g[AT] = li(0x3FC0_0000);
+                f[2].set_u32l(g[AT] as u32);
+                g[T0] = lw(m, g[A0], 0x1E70);
+                break 'b_80068458;
+            }
+            f[2].set_u32l(g[AT] as u32);
+        }
+        g[T0] = lw(m, g[A0], 0x1E70);
+    }
+    'b_80068834: {
+        g[AT] = li(0x800B_0000);
+        g[T1] = lw(m, g[T0], 8);
+        g[T2] = g[T1] & 8;
+        if g[T2] == 0 {
+            'b_800687FC: {
+                f[0].set_u32l(lw(m, g[A0], 0x18C) as u32);
+                f[4].set_u32l(lw(m, g[AT], -0x2B00) as u32);
+                g[AT] = li(0x800B_0000);
+                if !(f[4].fl() < f[0].fl()) {
+                    f[8].set_u32l(lw(m, g[AT], -0x2AF4) as u32);
+                    g[AT] = li(0x800B_0000);
+                    if !(f[0].fl() < f[8].fl()) {
+                        f[4].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+                        f[6].set_u32l(lw(m, g[AT], -0x2AEC) as u32);
+                        g[AT] = li(0x8012_0000);
+                        if !(f[4].fl() < f[6].fl()) {
+                            f[18].u64 = ld(m, g[AT], 0xBF0);
+                            f[12].set_u32l(lw(m, g[A0], 0x84) as u32);
+                            sw(m, g[SP], 0x18, g[A0]);
+                            f[14].set_fl(fpu::cvt_s_d(f[18].d(), fpu::NEAREST));
+                            call(imports::func_80081700, m, ctx);
+                            let g = &mut ctx.gpr;
+                            let f = &mut ctx.fpr;
+                            g[A0] = lw(m, g[SP], 0x18);
+                            f[4].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+                            f[6].set_fl(f[4].fl() * f[0].fl());
+                            sw(m, g[A0], 0x1A4, u64::from(f[6].u32l()));
+                        } else {
+                            g[AT] = li(0x4120_0000);
+                            f[12].set_u32l(g[AT] as u32);
+                            g[AT] = li(0x8012_0000);
+                            f[10].u64 = ld(m, g[AT], 0xBF0);
+                            sw(m, g[SP], 0x18, g[A0]);
+                            f[14].set_fl(fpu::cvt_s_d(f[10].d(), fpu::NEAREST));
+                            call(imports::func_80081700, m, ctx);
+                            let g = &mut ctx.gpr;
+                            let f = &mut ctx.fpr;
+                            g[A0] = lw(m, g[SP], 0x18);
+                            f[16].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+                            f[8].set_fl(f[16].fl() * f[0].fl());
+                            sw(m, g[A0], 0x1A4, u64::from(f[8].u32l()));
+                        }
+                    } else {
+                        g[AT] = li(0x8012_0000);
+                        f[18].u64 = ld(m, g[AT], 0xBF0);
+                        f[10].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+                        g[AT] = li(0x800B_0000);
+                        f[6].set_fl(fpu::cvt_s_d(f[18].d(), fpu::NEAREST));
+                        f[4].set_fl(f[6].fl() * f[0].fl());
+                        f[16].set_fl(f[4].fl() * f[2].fl());
+                        f[8].set_fl(f[10].fl() + f[16].fl());
+                        sw(m, g[A0], 0x1A4, u64::from(f[8].u32l()));
+                        f[18].set_u32l(lw(m, g[AT], -0x2AF0) as u32);
+                        g[AT] = li(0x3F00_0000);
+                        if f[18].fl() < f[0].fl() {
+                            f[4].set_u32l(g[AT] as u32);
+                            f[6].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+                            g[AT] = li(0x41A0_0000);
+                            f[10].set_fl(f[4].fl() * f[0].fl());
+                            if !(f[6].fl() < f[10].fl()) {
+                                g[T5] = lw(m, g[A0], 0x60);
+                                break 'b_800687FC;
+                            }
+                            f[12].set_u32l(g[AT] as u32);
+                            g[AT] = li(0x8012_0000);
+                            f[16].u64 = ld(m, g[AT], 0xBF0);
+                            sw(m, g[SP], 0x18, g[A0]);
+                            f[14].set_fl(fpu::cvt_s_d(f[16].d(), fpu::NEAREST));
+                            call(imports::func_80081700, m, ctx);
+                            let g = &mut ctx.gpr;
+                            let f = &mut ctx.fpr;
+                            g[A0] = lw(m, g[SP], 0x18);
+                            f[8].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+                            f[18].set_fl(f[8].fl() * f[0].fl());
+                            sw(m, g[A0], 0x1A4, u64::from(f[18].u32l()));
+                        }
+                    }
+                } else {
+                    g[AT] = li(0x8012_0000);
+                    f[16].u64 = ld(m, g[AT], 0xBF0);
+                    f[18].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+                    g[AT] = li(0x800B_0000);
+                    f[8].set_fl(fpu::cvt_s_d(f[16].d(), fpu::NEAREST));
+                    f[10].set_fl(f[8].fl() * f[0].fl());
+                    f[6].set_fl(f[10].fl() * f[2].fl());
+                    f[4].set_fl(f[18].fl() + f[6].fl());
+                    sw(m, g[A0], 0x1A4, u64::from(f[4].u32l()));
+                    f[16].set_u32l(lw(m, g[AT], -0x2AFC) as u32);
+                    g[AT] = li(0x3F80_0000);
+                    if !(f[16].fl() <= f[0].fl()) {
+                        f[8].set_u32l(g[AT] as u32);
+                        f[10].set_fl(f[8].fl() - f[0].fl());
+                        f[2].set_fl(f[0].fl() / f[10].fl());
+                    } else {
+                        g[AT] = li(0x800B_0000);
+                        f[2].set_u32l(lw(m, g[AT], -0x2AF8) as u32);
+                    }
+                    f[18].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+                    g[AT] = li(0x8012_0000);
+                    if !(f[2].fl() < f[18].fl()) {
+                        g[T5] = lw(m, g[A0], 0x60);
+                        break 'b_800687FC;
+                    }
+                    f[6].u64 = ld(m, g[AT], 0xBF0);
+                    f[12].set_u32l(lw(m, g[A0], 0x84) as u32);
+                    sw(m, g[SP], 0x18, g[A0]);
+                    f[14].set_fl(fpu::cvt_s_d(f[6].d(), fpu::NEAREST));
+                    call(imports::func_80081700, m, ctx);
+                    let g = &mut ctx.gpr;
+                    let f = &mut ctx.fpr;
+                    g[A0] = lw(m, g[SP], 0x18);
+                    f[4].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+                    f[16].set_fl(f[4].fl() * f[0].fl());
+                    sw(m, g[A0], 0x1A4, u64::from(f[16].u32l()));
+                }
+                let g = &mut ctx.gpr;
+                g[T5] = lw(m, g[A0], 0x60);
+            }
+            let g = &mut ctx.gpr;
+            let f = &mut ctx.fpr;
+            g[AT] = li(0x8012_0000);
+            g[T6] = g[T5] & 0x200;
+            if g[T6] == 0 {
+                f[12].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+                break 'b_80068834;
+            }
+            f[10].u64 = ld(m, g[AT], 0xBF0);
+            f[12].set_u32l(lw(m, g[A0], 0x80) as u32);
+            sw(m, g[SP], 0x18, g[A0]);
+            f[14].set_fl(fpu::cvt_s_d(f[10].d(), fpu::NEAREST));
+            call(imports::func_80081700, m, ctx);
+            let g = &mut ctx.gpr;
+            let f = &mut ctx.fpr;
+            g[A0] = lw(m, g[SP], 0x18);
+            f[16].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+            f[8].set_fl(f[16].fl() * f[0].fl());
+            sw(m, g[A0], 0x1A4, u64::from(f[8].u32l()));
+        } else {
+            'b_800685F4: {
+                g[AT] = li(0x800B_0000);
+                f[4].set_u32l(lw(m, g[AT], -0x2B14) as u32);
+                f[0].set_u32l(lw(m, g[A0], 0x18C) as u32);
+                g[AT] = li(0x800B_0000);
+                if !(f[4].fl() < f[0].fl()) {
+                    f[10].set_u32l(lw(m, g[AT], -0x2B08) as u32);
+                    g[AT] = li(0x8012_0000);
+                    if !(f[0].fl() < f[10].fl()) {
+                        f[4].u64 = ld(m, g[AT], 0xBF0);
+                        f[12].set_u32l(lw(m, g[A0], 0x84) as u32);
+                        sw(m, g[SP], 0x18, g[A0]);
+                        f[14].set_fl(fpu::cvt_s_d(f[4].d(), fpu::NEAREST));
+                        call(imports::func_80081700, m, ctx);
+                        let g = &mut ctx.gpr;
+                        let f = &mut ctx.fpr;
+                        g[A0] = lw(m, g[SP], 0x18);
+                        f[18].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+                        f[16].set_fl(f[18].fl() * f[0].fl());
+                        sw(m, g[A0], 0x1A4, u64::from(f[16].u32l()));
+                    } else {
+                        g[AT] = li(0x8012_0000);
+                        f[6].u64 = ld(m, g[AT], 0xBF0);
+                        f[16].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+                        g[AT] = li(0x800B_0000);
+                        f[18].set_fl(fpu::cvt_s_d(f[6].d(), fpu::NEAREST));
+                        f[4].set_fl(f[18].fl() * f[0].fl());
+                        f[8].set_fl(f[4].fl() * f[2].fl());
+                        f[10].set_fl(f[16].fl() + f[8].fl());
+                        sw(m, g[A0], 0x1A4, u64::from(f[10].u32l()));
+                        f[6].set_u32l(lw(m, g[AT], -0x2B04) as u32);
+                        g[AT] = li(0x3F00_0000);
+                        if f[6].fl() < f[0].fl() {
+                            f[4].set_u32l(g[AT] as u32);
+                            f[18].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+                            g[AT] = li(0x41A0_0000);
+                            f[16].set_fl(f[4].fl() * f[0].fl());
+                            if !(f[18].fl() < f[16].fl()) {
+                                g[T3] = lw(m, g[A0], 0x60);
+                                break 'b_800685F4;
+                            }
+                            f[12].set_u32l(g[AT] as u32);
+                            g[AT] = li(0x8012_0000);
+                            f[8].u64 = ld(m, g[AT], 0xBF0);
+                            sw(m, g[SP], 0x18, g[A0]);
+                            f[14].set_fl(fpu::cvt_s_d(f[8].d(), fpu::NEAREST));
+                            call(imports::func_80081700, m, ctx);
+                            let g = &mut ctx.gpr;
+                            let f = &mut ctx.fpr;
+                            g[A0] = lw(m, g[SP], 0x18);
+                            f[10].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+                            f[6].set_fl(f[10].fl() * f[0].fl());
+                            sw(m, g[A0], 0x1A4, u64::from(f[6].u32l()));
+                        }
+                    }
+                } else {
+                    g[AT] = li(0x8012_0000);
+                    f[8].u64 = ld(m, g[AT], 0xBF0);
+                    f[6].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+                    g[AT] = li(0x800B_0000);
+                    f[10].set_fl(fpu::cvt_s_d(f[8].d(), fpu::NEAREST));
+                    f[16].set_fl(f[10].fl() * f[0].fl());
+                    f[18].set_fl(f[16].fl() * f[2].fl());
+                    f[4].set_fl(f[6].fl() + f[18].fl());
+                    sw(m, g[A0], 0x1A4, u64::from(f[4].u32l()));
+                    f[8].set_u32l(lw(m, g[AT], -0x2B10) as u32);
+                    g[AT] = li(0x3F80_0000);
+                    if !(f[8].fl() <= f[0].fl()) {
+                        f[10].set_u32l(g[AT] as u32);
+                        f[16].set_fl(f[10].fl() - f[0].fl());
+                        f[2].set_fl(f[0].fl() / f[16].fl());
+                    } else {
+                        g[AT] = li(0x800B_0000);
+                        f[2].set_u32l(lw(m, g[AT], -0x2B0C) as u32);
+                    }
+                    f[6].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+                    g[AT] = li(0x8012_0000);
+                    if !(f[2].fl() < f[6].fl()) {
+                        g[T3] = lw(m, g[A0], 0x60);
+                        break 'b_800685F4;
+                    }
+                    f[18].u64 = ld(m, g[AT], 0xBF0);
+                    f[12].set_u32l(lw(m, g[A0], 0x84) as u32);
+                    sw(m, g[SP], 0x18, g[A0]);
+                    f[14].set_fl(fpu::cvt_s_d(f[18].d(), fpu::NEAREST));
+                    call(imports::func_80081700, m, ctx);
+                    let g = &mut ctx.gpr;
+                    let f = &mut ctx.fpr;
+                    g[A0] = lw(m, g[SP], 0x18);
+                    f[4].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+                    f[8].set_fl(f[4].fl() * f[0].fl());
+                    sw(m, g[A0], 0x1A4, u64::from(f[8].u32l()));
+                }
+                let g = &mut ctx.gpr;
+                g[T3] = lw(m, g[A0], 0x60);
+            }
+            let g = &mut ctx.gpr;
+            let f = &mut ctx.fpr;
+            g[AT] = li(0x8012_0000);
+            g[T4] = g[T3] & 0x200;
+            if g[T4] == 0 {
+                f[12].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+                break 'b_80068834;
+            }
+            f[8].u64 = ld(m, g[AT], 0xBF0);
+            f[12].set_u32l(lw(m, g[A0], 0x80) as u32);
+            sw(m, g[SP], 0x18, g[A0]);
+            f[14].set_fl(fpu::cvt_s_d(f[8].d(), fpu::NEAREST));
+            call(imports::func_80081700, m, ctx);
+            let g = &mut ctx.gpr;
+            let f = &mut ctx.fpr;
+            g[A0] = lw(m, g[SP], 0x18);
+            f[10].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+            f[6].set_fl(f[10].fl() * f[0].fl());
+            sw(m, g[A0], 0x1A4, u64::from(f[6].u32l()));
+        }
+        let g = &mut ctx.gpr;
+        let f = &mut ctx.fpr;
+        f[12].set_u32l(lw(m, g[A0], 0x1A4) as u32);
+    }
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    f[18].set_u32l(0);
+    g[AT] = li(0x4170_0000);
+    if !(f[18].fl() < f[12].fl()) {
+        f[8].set_u32l(lw(m, g[A0], 0x7C) as u32);
+        f[0].set_fl(-f[12].fl());
+        f[10].set_u32l(lw(m, g[A0], 0x78) as u32);
+        f[18].set_fl(-f[8].fl());
+        f[4].set_fl(f[18].fl() * f[0].fl());
+        f[6].set_fl(f[0].fl() + f[10].fl());
+        f[2].set_fl(f[4].fl() / f[6].fl());
+    } else {
+        f[4].set_u32l(lw(m, g[A0], 0x7C) as u32);
+        f[10].set_u32l(lw(m, g[A0], 0x78) as u32);
+        f[6].set_fl(f[4].fl() * f[12].fl());
+        f[16].set_fl(f[12].fl() + f[10].fl());
+        f[2].set_fl(f[6].fl() / f[16].fl());
+    }
+    f[8].set_u32l(lw(m, g[A0], 0x184) as u32);
+    f[18].set_u32l(g[AT] as u32);
+    f[16].set_u32l(lw(m, g[A0], 0x1AC) as u32);
+    g[AT] = li(0xF7FF_0000);
+    let c1 = f[8].fl() < f[18].fl();
+    f[2].set_fl(f[2].fl() * f[16].fl());
+    if !c1 {
+        g[T1] = lw(m, g[A0], 0x64);
+        g[AT] = g[AT] | 0xFFFF;
+        g[V0] = lw(m, g[A0], 0x60);
+        g[T2] = g[T1] & g[AT];
+        sw(m, g[A0], 0x64, g[T2]);
+        f[16].set_u32l(lw(m, g[A0], 0x240) as u32);
+    } else {
+        g[V0] = lw(m, g[A0], 0x64);
+        g[V1] = li(0x800_0000);
+        g[AT] = li(0x3F80_0000);
+        g[T7] = sll(g[V0], 4);
+        if (g[T7] as i64) < 0 {
+            f[6].set_u32l(lw(m, g[A0], 0x244) as u32);
+        } else {
+            f[10].set_u32l(lw(m, g[A0], 0x244) as u32);
+            f[4].set_u32l(g[AT] as u32);
+            g[T8] = g[V0] | g[V1];
+            g[AT] = li(0x1000_0000);
+            let c2 = f[10].fl() < f[4].fl();
+            sw(m, g[A0], 0x64, g[T8]);
+            g[T0] = g[T8] | g[AT];
+            if !c2 {
+                f[6].set_u32l(lw(m, g[A0], 0x244) as u32);
+            } else {
+                sw(m, g[A0], 0x64, g[T0]);
+                f[6].set_u32l(lw(m, g[A0], 0x244) as u32);
+            }
+        }
+        g[V0] = lw(m, g[A0], 0x60);
+        f[2].set_fl(f[2].fl() * f[6].fl());
+        f[16].set_u32l(lw(m, g[A0], 0x240) as u32);
+    }
+    'b_8006893C: {
+        g[T3] = sll(g[V0], 5);
+        f[2].set_fl(f[2].fl() + f[16].fl());
+        if (g[T3] as i64) < 0 {
+            g[AT] = li(0x4296_0000);
+            f[0].set_u32l(g[AT] as u32);
+            if !(f[2].fl() < f[0].fl()) {
+                g[T4] = g[V0] & 0x80;
+                break 'b_8006893C;
+            }
+            f[2].set_u32l(f[0].u32l());
+        }
+        g[T4] = g[V0] & 0x80;
+    }
+    'b_8006899C: {
+        g[RA] = lw(m, g[SP], 0x14);
+        if g[T4] != 0 {
+            g[AT] = li(0xBF00_0000);
+            f[18].set_u32l(g[AT] as u32);
+            f[8].set_u32l(lw(m, g[A0], 0x2FC) as u32);
+            if !(f[8].fl() < f[18].fl()) {
+                f[0].set_u32l(f[2].u32l());
+                break 'b_8006899C;
+            }
+            g[T5] = lw(m, g[A0], 0x64);
+            g[AT] = li(0x800B_0000);
+            g[T6] = sll(g[T5], 6);
+            if (g[T6] as i64) < 0 {
+                g[AT] = li(0x800B_0000);
+                f[10].set_u32l(lw(m, g[AT], -0x2AE8) as u32);
+                f[2].set_fl(f[2].fl() * f[10].fl());
+                f[0].set_u32l(f[2].u32l());
+                break 'b_8006899C;
+            }
+            f[4].set_u32l(lw(m, g[AT], -0x2AE4) as u32);
+            f[2].set_fl(f[2].fl() * f[4].fl());
+        }
+        f[0].set_u32l(f[2].u32l());
+    }
+    g[SP] = addu(g[SP], 0x18);
+}
+
 /// `func_800689A0(o)` (**guess**: a pod's boost charge `c = [o + 0x1A8]`),
 /// with `dt` the double at `0x80120BF0` narrowed to f32: if bit 23 of
 /// `[o + 0x60]` is set, `c += dt * 1.5`; else, if `0 < c`, `c *= `
