@@ -968,19 +968,19 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8007ACEC,func_8007ACEC,ours,7,,recomp,,,
 0x8007AFE0,func_8007AFE0,ours,0,,rust_verified,unit_diff,high,"empty, spills a0 (game::misc)"
 0x8007AFE8,func_8007AFE8,ours,2,,recomp,,,
-0x8007B06C,func_8007B06C,ours,1,,recomp,,,
+0x8007B06C,func_8007B06C,ours,1,,rust_verified,unit_diff,high,"pulse effect frame (colour, scroll, scaled matrix) (game::misc)"
 0x8007B25C,func_8007B25C,ours,2,,recomp,,,
 0x8007B34C,func_8007B34C,ours,2,,recomp,,,
 0x8007B41C,func_8007B41C,ours,0,,rust_verified,unit_diff,high,[0x8011C8E0] = v (game::misc)
-0x8007B430,func_8007B430,ours,1,,recomp,,,
-0x8007B544,func_8007B544,ours,1,,recomp,,,
+0x8007B430,func_8007B430,ours,1,,rust_verified,unit_diff,high,first textured material of a node tree (self) (game::misc)
+0x8007B544,func_8007B544,ours,1,,rust_verified,unit_diff,high,set a node tree's animations (self) (game::misc)
 0x8007B6CC,func_8007B6CC,ours,2,,recomp,,,
 0x8007B744,func_8007B744,ours,2,,recomp,,,
 0x8007B7BC,func_8007B7BC,ours,0,anim,rust_verified,unit_diff,high,800736AC over list [0x8011C8F0 + 4i] (game::anim)
 0x8007B828,func_8007B828,ours,3,,recomp,,,
 0x8007B9E4,func_8007B9E4,ours,4,,recomp,,,
 0x8007BA9C,func_8007BA9C,ours,0,,rust_verified,unit_diff,high,record 0x58*i at 0x8011CB20 for x in 50-entry list; QUIRK one past (game::misc)
-0x8007BB28,func_8007BB28,ours,1,,recomp,,,
+0x8007BB28,func_8007BB28,ours,1,,rust_verified,unit_diff,high,transform node from a pool of 50; QUIRK T[50] (game::misc)
 0x8007BBEC,func_8007BBEC,ours,3,,recomp,,,
 0x8007BDF4,func_8007BDF4,ours,2,,recomp,,,
 0x8007BE68,func_8007BE68,ours,4,,recomp,,,
@@ -997,12 +997,12 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8007DA20,func_8007DA20,ours,0,,rust_verified,unit_diff,high,grid setup for 8006B304; QUIRK: stale frame words for other modes (game::misc)
 0x8007DBA4,func_8007DBA4,ours,2,,recomp,,,
 0x8007DED8,func_8007DED8,ours,4,,recomp,,,
-0x8007E0AC,func_8007E0AC,ours,1,,recomp,,,
+0x8007E0AC,func_8007E0AC,ours,1,,rust_verified,unit_diff,high,reset the scene root at 0x8011C950 (game::misc)
 0x8007E0EC,func_8007E0EC,ours,20,,recomp,,,
 0x8007E988,func_8007E988,ours,5,,recomp,,,
 0x8007EB7C,func_8007EB7C,ours,5,,recomp,,,
 0x8007EE40,func_8007EE40,ours,0,,rust_verified,unit_diff,high,getter [0x800A6700] (game::misc)
-0x8007EE4C,func_8007EE4C,ours,1,,recomp,,,
+0x8007EE4C,func_8007EE4C,ours,1,,rust_verified,unit_diff,high,start a spline walker at its first point (game::misc)
 0x8007EE98,func_8007EE98,ours,0,spline,rust_verified,unit_diff,high,"walker placement by segment (v / 10, fork ids); QUIRK: 99999 stop (game::spline)"
 0x8007F098,func_8007F098,ours,5,,recomp,,,
 0x8007F22C,func_8007F22C,ours,0,,rust_verified,unit_diff,high,"*out = 0, returns 0 (game::misc)"

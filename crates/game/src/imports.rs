@@ -16,6 +16,7 @@ recomp_imports! {
     func_80005BB8, // object start
     func_80005CAC, // key fraction
     func_80006704, // key segment
+    func_80006D5C, // animation object by id and kind
     func_80006EB4, // [o + 0x110] = x
     func_80007A44, // slot +0x18 clear
     func_80007CE4, // handle lookup
@@ -112,6 +113,7 @@ recomp_imports! {
     func_8003609C, // render mode switches
     func_80038DF8, // six halfwords
     func_800390C0, // crc32_table_init
+    func_8003B250, // start a spline walker
     func_8003B300, // four screen words
     func_8003D110, // render state reset
     func_8003D488, // [0x800A48D4] = v & 0xFFFF
@@ -130,6 +132,8 @@ recomp_imports! {
     func_80073C58, // float clamp
     func_8007531C, // material collect (self)
     func_80075490, // material hand-out (self)
+    func_8007B430, // first textured material (self)
+    func_8007B544, // set a tree's animations (self)
     func_80081530, // n bytes equal
     func_80081700, // 1 - r / (r + a)
     func_80081730, // point x 4x4 (w = 1)
