@@ -58,6 +58,12 @@ fn load_data(s: &mut State) {
     }
 }
 
+/// A word of the ROM's data segment, read at test time.
+fn rom_word(va: u32) -> u32 {
+    let o = (va - 0x8000_0400 + 0x1000) as usize;
+    u32::from_be_bytes(baserom()[o..o + 4].try_into().unwrap())
+}
+
 fn same_memory(after: &State, want: &State) -> Result<(), TestCaseError> {
     let (a, w) = (after.rdram.as_words(), want.rdram.as_words());
     if let Some(i) = (0..a.len()).find(|&i| a[i] != w[i]) {
@@ -678,9 +684,10 @@ fn contact_model(s: &State) -> Option<(State, u32)> {
     Some((w, f0))
 }
 
-/// A normal's z: inside, on and just outside ±0.05, 0, or anything.
+/// A normal's z: inside, on and just outside the ROM's bound (0.05), 0, or
+/// anything.
 fn nz() -> BoxedStrategy<f32> {
-    let q = f32::from_bits(0x3D4C_CCCD);
+    let q = f32::from_bits(rom_word(K + 4));
     prop_oneof![Just(0.0f32), Just(-0.0f32), Just(q), Just(-q), Just(q.next_down()), Just((-q).next_up()), Just(q.next_up()), -1.0f32..1.0, coord()].boxed()
 }
 
@@ -713,9 +720,8 @@ proptest! {
         wf(&mut s, NRM + 8, n.2);
         wr(&mut s, SP_AT + 0x10, NRM);
         wr(&mut s, O + 0x1998, count);
-        let rom_k = [0xBD4C_CCCDu32, 0x3D4C_CCCD, 0xC7C3_5000, 0x3B83_126F, 0xC7C3_5000, 0x47C3_5000];
         for q in 0..6 {
-            wr(&mut s, K + 4 * q as u32, if rom { rom_k[q] } else { ks[q].to_bits() });
+            wr(&mut s, K + 4 * q as u32, if rom { rom_word(K + 4 * q as u32) } else { ks[q].to_bits() });
         }
         (s.ctx.gpr[A0], s.ctx.gpr[A1], s.ctx.gpr[A3]) = (sext(O), sext(PT), sext(r.to_bits()));
         let model = contact_model(&s);
@@ -785,8 +791,8 @@ fn func_80066144_ties() {
         }
         wr(&mut s, SP_AT + 0x10, NRM);
         wr(&mut s, O + 0x1998, 200);
-        for (q, v) in [0xBD4C_CCCDu32, 0x3D4C_CCCD, 0xC7C3_5000, 0x3B83_126F, 0xC7C3_5000, 0x47C3_5000].into_iter().enumerate() {
-            wr(&mut s, K + 4 * q as u32, v);
+        for q in 0..6 {
+            wr(&mut s, K + 4 * q, rom_word(K + 4 * q));
         }
         (s.ctx.gpr[A0], s.ctx.gpr[A1], s.ctx.gpr[A3]) = (sext(O), sext(PT), sext(r.to_bits()));
         let (w, f0) = contact_model(&s).unwrap();

@@ -10,7 +10,7 @@
 // Tests are named after the functions (func_8005058C), capitals included.
 #![allow(non_snake_case)]
 
-use difftest::{compare, State};
+use difftest::{compare, rom::baserom, State};
 use game::imports;
 use game::misc;
 use game::recomp::{reg::*, RecompFn};
@@ -49,6 +49,12 @@ fn state(seed: u64) -> State {
     s.randomise_registers(seed);
     s.ctx.gpr[SP] = sext(SP_AT);
     s
+}
+
+/// A float of the ROM's data segment, read at test time.
+fn rom_f(va: u32) -> f32 {
+    let o = (va - 0x8000_0400 + 0x1000) as usize;
+    f32::from_bits(u32::from_be_bytes(baserom()[o..o + 4].try_into().unwrap()))
 }
 
 fn same_memory(after: &State, want: &State) -> Result<(), TestCaseError> {
@@ -728,7 +734,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(512))]
 
     #[test]
-    fn func_8005B2D0(seed: u64, modes in prop::array::uniform2(any::<bool>()), bx in prop_oneof![Just([-6081.0f32, -5086.0, -2801.0, -1182.0]), prop::array::uniform4(ordinary())],
+    fn func_8005B2D0(seed: u64, modes in prop::array::uniform2(any::<bool>()), bx in prop_oneof![Just([0, 4, 8, 12].map(|k| rom_f(BOX + k))), prop::array::uniform4(ordinary())],
                      xy in prop::array::uniform2((0u8..5, ordinary())), node in 0u8..4, flags: u32, bit25: bool, h in prop_oneof![Just(5i16), Just(4i16), any::<i16>()],
                      v in prop_oneof![Just(60.0f32), Just(60.0f32.next_down()), Just(60.0f32.next_up()), Just(-0.0f32), Just(f32::NAN), ordinary()]) {
         let mut s = state(seed);
@@ -951,7 +957,7 @@ proptest! {
     #[test]
     fn func_80056844(seed: u64, flags in prop_oneof![0u32..8, any::<u32>()], n in prop_oneof![3 => 0u32..2, 1 => 2u32..5], v in prop_oneof![Just(0.5f32), 0.0f32..=1.0, ordinary()],
                      l in prop_oneof![4 => 0.0f32..=1.0, 1 => Just(0.0f32), 1 => Just(-0.0f32), 1 => Just(f32::MIN_POSITIVE), 1 => Just(f32::INFINITY), 1 => Just(f32::NAN), 2 => ordinary()],
-                     xs in prop::array::uniform2(prop_oneof![Just(283.0f32), Just(232.75f32), ordinary()])) {
+                     xs in prop::array::uniform2(prop_oneof![Just(rom_f(0x800A_CEDC)), Just(rom_f(0x800A_CEE0)), ordinary()])) {
         let mut s = state(seed);
         s.randomise_memory(seed ^ 0x5EED, RECORDS, 0x800);
         for i in 0..4u32 {
