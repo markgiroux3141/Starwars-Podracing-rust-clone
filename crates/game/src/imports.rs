@@ -38,6 +38,9 @@ recomp_imports! {
     func_8000E9BC, // six optional bytes
     func_8000EA4C, // node tree bytes (self)
     func_8000F5A0, // depth probes
+    func_8000FD74, // 2x8 table entry
+    func_8000FEAC, // marker word and triple
+    func_8000FF54, // light triple k
     func_80011940, // comp_decompress
     func_80011CDC, // rom_read
     func_80011D60, // rom_read_small
@@ -53,7 +56,9 @@ recomp_imports! {
     func_80015328, // vec3 add
     func_8001535C, // vec3 subtract
     func_800153C0, // vec3 length
+    func_80015470, // vec3 distance
     func_80015538, // vec3 cross
+    func_800155C0, // vec3 scale
     func_800155EC, // vec3 multiply-add
     func_800156DC, // 4x4 copy
     func_80015724, // 4x4 product
@@ -64,6 +69,7 @@ recomp_imports! {
     func_80016CAC, // point x 4x4
     func_80016DD8, // vec4 x 4x4
     func_80017874, // 4x4 identity
+    func_80017918, // 4x4 rows scaled
     func_80017BA8, // 4x4 to node transform
     func_80017C18, // node transform to 4x4
     func_80017C98, // node transform to 4x4 (same code)

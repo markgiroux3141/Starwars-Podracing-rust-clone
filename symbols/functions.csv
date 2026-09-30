@@ -811,10 +811,10 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8005B708,func_8005B708,ours,22,,recomp,,,
 0x8005B764,func_8005B764,ours,2,,recomp,,,
 0x8005B810,func_8005B810,ours,3,,recomp,,,
-0x8005C210,func_8005C210,ours,1,,recomp,,,
+0x8005C210,func_8005C210,ours,1,,rust_verified,unit_diff,high,"racers' markers (w = -9999, then h or -h) (game::misc)"
 0x8005C36C,func_8005C36C,ours,21,,recomp,,,
 0x8005CBD8,func_8005CBD8,ours,24,,recomp,,,
-0x8005D10C,func_8005D10C,ours,1,,recomp,,,
+0x8005D10C,func_8005D10C,ours,1,,rust_verified,unit_diff,high,light rig; QUIRK j = 4 set twice (game::misc)
 0x8005D310,func_8005D310,ours,0,,rust_verified,unit_diff,high,"[0x800A59FC] = a, [0x800A5A00] = b (game::misc)"
 0x8005D324,func_8005D324,ours,19,,recomp,,,
 0x8005DBAC,func_8005DBAC,ours,20,,recomp,,,
@@ -824,7 +824,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8005EAC0,func_8005EAC0,ours,20,,recomp,,,
 0x8005EC18,func_8005EC18,ours,20,,recomp,,,
 0x8005ED70,func_8005ED70,ours,20,,recomp,,,
-0x8005EE18,func_8005EE18,ours,1,,recomp,,,
+0x8005EE18,func_8005EE18,ours,1,,rust_verified,unit_diff,high,level light points (Data/LStr list) (game::misc)
 0x8005EEFC,func_8005EEFC,ours,0,,rust_verified,unit_diff,high,get [0x8011AC8C] (game::misc)
 0x8005EF08,func_8005EF08,ours,22,,recomp,,,
 0x8005F31C,func_8005F31C,ours,0,,rust_verified,unit_diff,high,"if p: [p+0x18] = v, [p+0x14]++ (game::misc)"
@@ -847,17 +847,17 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80062EC8,func_80062EC8,ours,3,,recomp,,,
 0x80063084,func_80063084,ours,22,,recomp,,,
 0x80063344,func_80063344,ours,0,,rust_verified,unit_diff,high,float pair by [obj+8] type and [obj+0x88] index (jump table) (game::misc)
-0x800636D0,func_800636D0,ours,1,,recomp,,,
+0x800636D0,func_800636D0,ours,1,,rust_verified,unit_diff,high,arrived at the target (distance <= 10) (game::misc)
 0x8006373C,func_8006373C,ours,22,,recomp,,,
 0x80063AA0,func_80063AA0,ours,22,,recomp,,,
 0x80063AE0,func_80063AE0,ours,3,,recomp,,,
 0x80063B60,func_80063B60,ours,2,,recomp,,,
 0x80063D0C,func_80063D0C,ours,0,,rust_verified,unit_diff,high,point lookup in 16 entries at 0x800A5100 (game::misc)
-0x80063E08,func_80063E08,ours,1,,recomp,,,
+0x80063E08,func_80063E08,ours,1,,rust_verified,unit_diff,high,place at a start point (table 0x800A5100) (game::misc)
 0x80063E4C,func_80063E4C,ours,22,,recomp,,,
-0x80063EF4,func_80063EF4,ours,1,,recomp,,,
+0x80063EF4,func_80063EF4,ours,1,,rust_verified,unit_diff,high,"turn toward the target (atan2, +-5 degree band) (game::misc)"
 0x80064034,func_80064034,ours,5,,recomp,,,
-0x80064A48,func_80064A48,ours,1,,recomp,,,
+0x80064A48,func_80064A48,ours,1,,rust_verified,unit_diff,high,child node position (translation row) (game::misc)
 0x80064A88,func_80064A88,ours,0,,rust_verified,unit_diff,high,"[0x8011A240] += x * dt, clamped to 0..1 (game::misc)"
 0x80064AF4,func_80064AF4,ours,0,,rust_verified,unit_diff,high,[0x8011A278] counted down by dt (game::misc)
 0x80064B44,func_80064B44,ours,4,,recomp,,,
@@ -868,14 +868,14 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80065690,func_80065690,ours,2,,recomp,,,
 0x80065804,func_80065804,ours,0,,rust_verified,unit_diff,high,[0x8011C840] = v (game::misc)
 0x80065810,func_80065810,ours,2,,recomp,,,
-0x80065C50,func_80065C50,ours,1,,recomp,,,
-0x80065C74,func_80065C74,ours,1,,recomp,,,
+0x80065C50,func_80065C50,ours,1,,rust_verified,unit_diff,high,set position +0x50 if o nonzero (game::misc)
+0x80065C74,func_80065C74,ours,1,,rust_verified,unit_diff,high,set vector +0x74 if o nonzero (game::misc)
 0x80065C98,func_80065C98,ours,0,,rust_verified,unit_diff,high,[p + 0x68] = x unless p is null (game::misc)
 0x80065CB0,func_80065CB0,ours,0,,rust_verified,unit_diff,high,if p: [p+0xF0] = v (game::misc)
 0x80065CD0,func_80065CD0,ours,2,,recomp,,,
 0x80065E18,func_80065E18,ours,0,,rust_verified,unit_diff,high,[p + 0x190] = [0x800A3080] / 4 and a vec3 copy (game::misc)
 0x80065E54,func_80065E54,ours,3,,recomp,,,
-0x80066144,func_80066144,ours,1,,recomp,,,
+0x80066144,func_80066144,ours,1,,rust_verified,unit_diff,high,four ground contact points and matrices (game::misc)
 0x800665A4,func_800665A4,ours,22,,recomp,,,
 0x80066A80,func_80066A80,ours,23,,recomp,,,
 0x800670CC,func_800670CC,ours,5,,recomp,,,
