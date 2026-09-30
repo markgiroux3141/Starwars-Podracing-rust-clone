@@ -8,7 +8,7 @@
 #![allow(non_snake_case)]
 
 use crate::imports;
-use crate::recomp::{addu, call, enter, fpu, lhu, li, lw, reg::*, s32, sh, sll, subu, sw, Fpr, RecompContext};
+use crate::recomp::{addu, call, enter, fpu, lhu, li, lw, reg::*, s32, sh, sll, sltu, subu, sw, Fpr, RecompContext};
 use n64mem::Mem;
 
 /// Object table searched by [`func_80006D5C`] (300 words, cleared by
@@ -729,6 +729,122 @@ pub unsafe extern "C" fn func_80006F28(rdram: *mut u8, ctx: *mut RecompContext) 
     let (mut mem, ctx) = enter(rdram, ctx);
     ctx.fpr[12].set_u32l(ctx.gpr[A1] as u32);
     sw(&mut mem, ctx.gpr[A0], 0xDC, u64::from(ctx.fpr[12].u32l()));
+}
+
+/// `func_80030964(p)` (start a block's animations, **guess**): `p` points
+/// at words ending in -1. After the -1, a `"Data"` chunk (the tag, a count
+/// `n`, `n` words; nothing skipped for `n <= 0`) is skipped if present;
+/// then, if an `"Anim"` chunk follows, its zero-terminated list of object
+/// pointers is walked: [`func_80005BB8`]`(o)` for each (starting it),
+/// with `lo` the unsigned minimum of the entries (each re-read after its
+/// call). Returns the list's address, or 0 without an `"Anim"` chunk.
+///
+/// Then, with `lo != -1` (the list had an entry below `0xFFFFFFFF`): `d =
+/// [0x800D9DC4] - lo` is stored at `0x800D9DD0` and `[0x800D9DC8] -= d`;
+/// otherwise `[0x800D9DD0] = 0` (heap bookkeeping, **guess**).
+///
+/// Frame (`sp - 0x28`): `s0` at `+0x14`, `s1` (holding `lo`) at `+0x18`,
+/// `ra` at `+0x1C`, all restored sign-extended; the result at `+0x20`,
+/// read back into `v0`. Leaves `at = -1`, `v1 = 0x800D9DD0`, with `lo`:
+/// `t1`, `t3` the old words, `t2 = d`, `t5` the new `[0x800D9DC8]`; `t6`
+/// .. `t9` from the scans, `t0` = the first entry, and the callee's
+/// registers.
+///
+/// Domain: the words from `p` to the end of the list in RDRAM, and each
+/// entry an object [`func_80005BB8`] can start.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80030964(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x28i64) as u64);
+    sw(m, g[SP], 0x1C, g[RA]);
+    sw(m, g[SP], 0x18, g[S1]);
+    sw(m, g[SP], 0x14, g[S0]);
+    g[T6] = lw(m, g[A0], 0);
+    g[V1] = u64::MAX;
+    g[V0] = g[A0];
+    g[S1] = u64::MAX;
+    if g[V1] != g[T6] {
+        g[T7] = lw(m, g[V0], 4);
+        loop {
+            g[V0] = addu(g[V0], 4);
+            if g[V1] == g[T7] {
+                break;
+            }
+            g[T7] = lw(m, g[V0], 4);
+        }
+    }
+    g[T8] = lw(m, g[V0], 4);
+    g[AT] = li(0x4461_7461);
+    g[V0] = addu(g[V0], 4);
+    if g[T8] == g[AT] {
+        g[V1] = lw(m, g[V0], 4);
+        g[V0] = addu(g[V0], 8);
+        if (g[V1] as i64) <= 0 {
+            g[V1] = addu(g[V1], u64::MAX);
+        } else {
+            loop {
+                g[V1] = addu(g[V1], u64::MAX);
+                g[V0] = addu(g[V0], 4);
+                if (g[V1] as i64) <= 0 {
+                    break;
+                }
+            }
+        }
+    }
+    // An "Anim" chunk: start each object, s1 = the lowest entry.
+    g[T9] = lw(m, g[V0], 0);
+    g[AT] = li(0x416E_696D);
+    g[S0] = addu(g[V0], 4);
+    if g[T9] != g[AT] {
+        sw(m, g[SP], 0x20, 0);
+    } else {
+        sw(m, g[SP], 0x20, g[S0]);
+        g[T0] = lw(m, g[S0], 0);
+        g[A0] = g[T0];
+        if g[T0] != 0 {
+            loop {
+                call(imports::func_80005BB8, m, ctx);
+                let g = &mut ctx.gpr;
+                g[V0] = lw(m, g[S0], 0);
+                g[AT] = sltu(g[V0], g[S1]);
+                if g[AT] != 0 {
+                    g[S1] = g[V0];
+                }
+                g[A0] = lw(m, g[S0], 4);
+                g[S0] = addu(g[S0], 4);
+                if g[A0] == 0 {
+                    break;
+                }
+            }
+        }
+    }
+    let g = &mut ctx.gpr;
+    g[AT] = u64::MAX;
+    g[V0] = li(0x800E_0000);
+    if g[S1] != g[AT] {
+        g[T1] = li(0x800E_0000);
+        g[T1] = lw(m, g[T1], -0x623C);
+        g[V0] = addu(g[V0], (-0x6238i64) as u64);
+        g[T3] = lw(m, g[V0], 0);
+        g[V1] = li(0x800E_0000);
+        g[T2] = subu(g[T1], g[S1]);
+        g[V1] = addu(g[V1], (-0x6230i64) as u64);
+        g[T5] = subu(g[T3], g[T2]);
+        sw(m, g[V1], 0, g[T2]);
+        sw(m, g[V0], 0, g[T5]);
+    } else {
+        g[V1] = li(0x800D_9DD0);
+        sw(m, g[V1], 0, 0);
+    }
+    g[RA] = lw(m, g[SP], 0x1C);
+    g[V0] = lw(m, g[SP], 0x20);
+    g[S0] = lw(m, g[SP], 0x14);
+    g[S1] = lw(m, g[SP], 0x18);
+    g[SP] = addu(g[SP], 0x28);
 }
 
 /// `func_800736AC(list)`: 1 if any object in the 0-terminated pointer list

@@ -462,7 +462,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8002FC80,heap_check,ours,0,asset,rust_verified,unit_diff,med,stripped assert: last nonzero cursor < [0x80114538]; no stores; QUIRK: unbounded walk into texture cache
 0x8002FCD8,func_8002FCD8,ours,19,,recomp,,,
 0x8002FDBC,func_8002FDBC,ours,5,,recomp,,,
-0x8002FDF8,func_8002FDF8,ours,1,,recomp,,,
+0x8002FDF8,func_8002FDF8,ours,1,,rust_verified,unit_diff,high,"clear the block at 0x800D6960 (six floats, +0x18, +0x20 = 2), colour -103 black, 80038DF8(0x3E4, 0x3E8, 0xFF x4) (game::misc)"
 0x8002FE80,func_8002FE80,ours,0,,rust_verified,unit_diff,high,"empty, spills a0..a3 (game::misc)"
 0x8002FE94,func_8002FE94,ours,0,,rust_verified,unit_diff,high,"round up to a power of two, min 16 (game::misc)"
 0x8002FEE4,func_8002FEE4,ours,2,,recomp,,,
@@ -472,20 +472,20 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80030174,spline_load,ours,17,asset,rust_verified,unit_diff,high,"spline block entry to the heap cursor, +0xC = first point; no space check; index = low word (game::loader)"
 0x80030274,func_80030274,ours,18,,recomp,,,
 0x80030298,func_80030298,ours,2,,recomp,,,
-0x80030304,func_80030304,ours,1,,recomp,,,
+0x80030304,func_80030304,ours,1,,rust_verified,unit_diff,high,"8003FB78(id, 0, 0): empty the first pool with this id (game::pools)"
 0x80030328,texture_read,ours,17,asset,rust_verified,unit_diff,high,"(hdr, &pix, &pal): pixels then palette at 64-aligned heap; *pal untouched if no palette; OOM if free < size+0x80"
 0x8003043C,texture_block_init,ours,17,asset,rust_verified,unit_diff,high,count -> 0x800DB890 (rom_read_small); zeroes all 1700 cache words whatever the count; QUIRK: count >= 1701 (signed) hangs: b . = pause_self
 0x800304AC,texture_get,ours,18,asset,rust_verified,unit_diff,high,cache 0x800D9E00 holds &pix of the first loader; QUIRK: later hits copy that pair (null if it OOMed); idx >= count -> null
 0x80030574,texture_cache_trim,ours,0,asset,rust_verified,unit_diff,high,"zero every texture cache word w with a0 < sext(w) (sltu, 64-bit); called by heap_set_level with the new level cursor"
 0x800305E8,model_load,ours,19,asset,rust_verified,unit_diff,high,"mask, Comp to heap top, relocation, tag; QUIRK: Comp header read before space check; window can overlap output (corrupt model)"
-0x80030964,func_80030964,ours,1,,recomp,,,
+0x80030964,func_80030964,ours,1,,rust_verified,unit_diff,high,"skip to -1, optional Data chunk, start each object of an Anim chunk; heap words by the lowest entry (game::anim)"
 0x80030A7C,func_80030A7C,ours,0,,rust_verified,unit_diff,high,"merge q into model-style header p: node list, skip Data/Anim, AltN pointers (game::misc)"
 0x80030B68,model_load_stats,ours,0,,rust_verified,unit_diff,high,"*a/*c/*b = model bytes, texture bytes, 0 (game::misc)"
 0x80030B90,mask_buffer_init,ours,2,asset,recomp,,med,[0x80114528] = align64(cursor); cursor += 0x4B000/0x25800 + 0x40
 0x80030C08,func_80030C08,ours,2,,recomp,,,
 0x80030C98,func_80030C98,ours,20,,recomp,,,
 0x80030EA0,func_80030EA0,ours,21,,recomp,,,
-0x80030FA0,func_80030FA0,ours,1,,recomp,,,
+0x80030FA0,func_80030FA0,ours,1,,rust_verified,unit_diff,high,"colour -103 black, 80038DF8(0x3E4, 0x3E8, 0xFF x4) (game::misc)"
 0x80030FF8,heap_init,ours,22,asset,recomp,,med,"start 0x8014D7E0; end = [0x80114538] - reserve (0 if 4 MB, 0x1400 at 640 wide); clears cursors"
 0x80031134,func_80031134,ours,2,,recomp,,,
 0x80031324,func_80031324,ours,23,,recomp,,,
@@ -500,10 +500,10 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80031924,func_80031924,ours,2,,recomp,,,
 0x80031944,func_80031944,ours,3,,recomp,,,
 0x800319CC,func_800319CC,ours,3,,recomp,,,
-0x800319F4,func_800319F4,ours,1,,recomp,,,
-0x80031AB0,func_80031AB0,ours,1,,recomp,,,
+0x800319F4,func_800319F4,ours,1,,rust_verified,unit_diff,high,start entry k on channel i if k > CURRENT[i] (or equal and idle); QUIRK: k >= 13 hangs (game::channels)
+0x80031AB0,func_80031AB0,ours,1,,rust_verified,unit_diff,high,800319F4 with a given value; QUIRK: k >= 13 hangs (game::channels)
 0x80031B70,func_80031B70,ours,2,,recomp,,,
-0x80031BBC,func_80031BBC,ours,1,,recomp,,,
+0x80031BBC,func_80031BBC,ours,1,,rust_verified,unit_diff,high,"CURRENT[i] = -1, 80031640(i); QUIRK: i = -1 stores before CURRENT (game::channels)"
 0x80031BEC,func_80031BEC,ours,0,channels,rust_verified,unit_diff,high,[0x800DB910 + 4i] = 1 (game::channels)
 0x80031C04,func_80031C04,ours,20,,recomp,,,
 0x80031F80,func_80031F80,ours,0,,rust_verified,unit_diff,high,animation dest = [p+8] (game::misc)
@@ -511,13 +511,13 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80031FA4,func_80031FA4,ours,0,,rust_verified,unit_diff,high,"cycle animation step of [0x800A2DD4] (timer, phases, dest[map[i]] = src[phase]); do_break unreachable (game::misc)"
 0x800320E0,func_800320E0,ours,0,,rust_verified,unit_diff,high,"normalise 7 pod stats (/1000, 1-sqrt/K, (x-450)/200, 8/sqrt - K, /20), clamp [K3, 1] (game::misc)"
 0x800321F0,func_800321F0,ours,0,,rust_verified,unit_diff,high,"7 float stats of a0 by a1 (sltu 7), level a2 1..5: += c*a3 or *= b + a*(1-a3), clamp hi then lo; table-driven port (STATS) with per-block registers; pod upgrades (guess) (game::misc)"
-0x80032F2C,func_80032F2C,ours,1,,recomp,,,
+0x80032F2C,func_80032F2C,ours,1,,rust_verified,unit_diff,high,"copy 0x3C bytes of stats, then 800321F0(dst, i, levels[i], conds[i]/255.0) for i = 0..6 (game::misc)"
 0x80033010,func_80033010,ours,5,,recomp,,,
 0x80033140,func_80033140,ours,5,,recomp,,,
 0x80033328,func_80033328,ours,0,,rust_verified,unit_diff,high,"ease *x toward target by rate*dt (double; 5x toward 0), bias-sided clamp, heading += (x+bias+add)*dt wrapped to +-180 (game::misc)"
 0x800334F4,func_800334F4,ours,0,,rust_verified,unit_diff,high,"*x += (clamp(-(a/b)*s, +-80) - *x) * 5 * dt (double) (game::misc)"
-0x80033590,func_80033590,ours,1,,recomp,,,
-0x8003365C,func_8003365C,ours,1,,recomp,,,
+0x80033590,func_80033590,ours,1,,rust_verified,unit_diff,high,"out = node a's translation, moved along its second axis by node b's y; 0 without a (game::misc)"
+0x8003365C,func_8003365C,ours,1,,rust_verified,unit_diff,high,v = b's translation; a moves along its second axis by -(b.y - v.y) if outside +-lim or flag bit 30 (game::misc)
 0x80033780,func_80033780,ours,4,,recomp,,,
 0x80033878,func_80033878,ours,1,,recomp,,,
 0x80033928,func_80033928,ours,1,,recomp,,,

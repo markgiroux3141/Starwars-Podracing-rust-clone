@@ -13,6 +13,7 @@ recomp_imports! {
     func_8000550C, // matrix stack reset
     func_800059A8, // matrix stack top
     func_80005B80, // object table clear
+    func_80005BB8, // object start
     func_80005CAC, // key fraction
     func_80006704, // key segment
     func_80007A44, // slot +0x18 clear
@@ -41,7 +42,9 @@ recomp_imports! {
     func_800129E4, // text width
     func_80014D4C, // asin in degrees
     func_800151C0, // vec2 length
+    func_80015268, // vec3 set
     func_800152CC, // vec3 equal
+    func_8001535C, // vec3 subtract
     func_800153C0, // vec3 length
     func_80015538, // vec3 cross
     func_800155EC, // vec3 multiply-add
@@ -53,6 +56,7 @@ recomp_imports! {
     func_80016BF4, // vec3 x 3x3
     func_80016CAC, // point x 4x4
     func_80017874, // 4x4 identity
+    func_80017BA8, // 4x4 to node transform
     func_80017C18, // node transform to 4x4
     func_80017C98, // node transform to 4x4 (same code)
     func_80017DA4, // node type word
@@ -77,14 +81,18 @@ recomp_imports! {
     func_8002FF38, // sprite_load
     func_80030328, // texture_read
     func_800304AC, // texture_get
+    func_800314DC, // channel set
     func_80031560, // channel start (self-call for all four)
     func_800315D8, // channel +0xC = 0 (self-call)
     func_80031640, // channel +8 = 0 (self-call)
+    func_800321F0, // stat update
+    func_80038DF8, // six halfwords
     func_8003D488, // [0x800A48D4] = v & 0xFFFF
     func_8003F714, // pool element by tag
     func_8003F7B8, // pool count by id
     func_8003F800, // pool iteration begin
     func_8003FA24, // pool broadcast
+    func_8003FB78, // pool count and base
     func_80051FF4, // first zero of four words
     func_80081730, // point x 4x4 (w = 1)
     func_80081A2C, // closest point on a segment

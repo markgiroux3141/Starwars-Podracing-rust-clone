@@ -17,6 +17,28 @@ use crate::recomp::{addu, call, enter, lh, li, lw, multu, reg::*, sh, sll, slt, 
 /// by id, walking the list with `v0` (the slot) and `v1` (the descriptor).
 pub const POOLS: u32 = 0x800A_2170;
 
+/// `func_80030304(id)`: [`func_8003FB78`]`(id, 0, 0)`: the first pool with
+/// this id gets no elements (count 0 at base 0); returns 0.
+///
+/// Frame (`sp - 0x18`): `ra` at `+0x14`. Leaves `a1 = a2 = 0` and the
+/// callee's registers.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80030304(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    g[A1] = 0;
+    g[A2] = 0;
+    call(imports::func_8003FB78, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x18);
+}
+
 /// `func_8003F300(id)`: initialise the elements of every pool with this id
 /// (the search carries on past a match): element `k` gets `+0 = id` (the
 /// descriptor's word), the halfword `+4 = k` and the halfword `+6` = the
