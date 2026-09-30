@@ -6,7 +6,8 @@
 // Ports keep N64Recomp's names (func_8002EA28), capitals included.
 #![allow(non_snake_case)]
 
-use crate::recomp::{addu, enter, fpu, lb, lhu, li, lw, multu, reg::*, s32, sb, sh, sllv, sltu, sw, RecompContext};
+use crate::imports;
+use crate::recomp::{addu, call, enter, fpu, lb, lbu, ld, lh, lhu, li, lw, multu, reg::*, s32, sb, sd, sh, sllv, sltu, sw, RecompContext};
 
 /// The four pad records `func_8002EA28` writes, 0x18 bytes each: `+0`/`+2`
 /// the stick x/y (s16, clamped to ±100), `+4..+0x13` one byte per button
@@ -218,4 +219,186 @@ pub unsafe extern "C" fn func_8002EA28(rdram: *mut u8, ctx: *mut RecompContext) 
     sw(m, g[AT], 0x26D8, 0);
     g[SP] = addu(g[SP], 0x10);
     g[V0] = g[T2];
+}
+
+/// The button words `func_8002ECA0` derives, four each (one per pad), from
+/// here: `+0` the held word, `+0x10` newly pressed, `+0x20` newly released,
+/// `+0x30` the stick x and `+0x40` the stick y (floats).
+pub const BUTTON_WORDS: u32 = 0x800D_76F0;
+
+/// `func_8002ECA0()` (button words, **guess**): updates [`PAD_RECORDS`]
+/// ([`func_8002EA28`]), then for each pad i = 0..3 builds a word `w` from
+/// its record `r` and stores it with its changes at [`BUTTON_WORDS`] + 4i:
+/// - bits 0..13: whether the bytes `r + 0x13, 0x12, 7, 6, 5, 4, 9, 8,
+///   0x11, 0x10, 0xF, 0xE, 0xD, 0xC` (in that order) are nonzero;
+/// - with `X = f32(s16 [r]) / 100.0` and `Y = f32(s16 [r + 2]) / 100.0`,
+///   `x`, `y` their doubles, and the doubles `A` = `[0x800A9FA8]`, `B` =
+///   `[0x800A9FA0]`, `C` = `[0x800A9F98]`, `D` = `[0x800A9F90]` (0.3, -0.3,
+///   -0.2, 0.2 in the ROM): bit 14 `A < y`, 15 `y < B`, 16 `x < B`, 17 `A <
+///   x`, 18 `C < x < D`, 19 `C < y < D`, 20 `B <= x <= C`, 21 `D <= x <=
+///   A`, 22 `D <= y <= A`, 23 `B <= y <= C`.
+///
+/// With `old` the word at `+0`: `+0x10 = (old ^ w) & w`, `+0x20 = (old ^ w)
+/// & old`, `+0 = w`, `+0x30 = X`, `+0x40 = Y`, stored in that order.
+///
+/// Frame (`sp - 0x30`): `ra` at `+0x2C`, `f20`/`f22`/`f24` (whole 64-bit
+/// registers) at `+0x10`/`+0x18`/`+0x20`, all restored; `ra` is a
+/// temporary (`0x80000`) in between. Leaves, from the last pad: `v0 = w`,
+/// `v1 = old`, `a0 = old ^ w`, `t6` the released bits, `t7 =
+/// 0x800D7740`, `t8`, `t9` and `at` as its tests left them, `a1 =
+/// PAD_RECORDS + 0x60`, `a2`, `t0`, `t1`, `t2`, `a3` just past their
+/// arrays, `t3`..`t5` = `0x10000`..`0x40000`, `f0 = x`, `f2 = y`, `f4`,
+/// `f6`, `f8`, `f10` the halfwords and their floats, `f12`..`f18` = `A`,
+/// `B`, `C`, `D`, and the callee's other registers.
+///
+/// Domain: any memory contents (nothing reaches arithmetic but the
+/// divisions of converted halfwords by 100).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002ECA0(rdram: *mut u8, ctx: *mut RecompContext) {
+    // Bits 1..13: (register loaded, record offset, register holding v0 |
+    // bit, bit), in the C's order and registers.
+    const BUTTONS: [(usize, i32, usize, u64); 13] = [
+        (T7, 0x12, T8, 0x2),
+        (T9, 0x7, T6, 0x4),
+        (T7, 0x6, T8, 0x8),
+        (T9, 0x5, T6, 0x10),
+        (T7, 0x4, T8, 0x20),
+        (T9, 0x9, T6, 0x40),
+        (T7, 0x8, T8, 0x80),
+        (T9, 0x11, T6, 0x100),
+        (T7, 0x10, T8, 0x200),
+        (T9, 0xF, T6, 0x400),
+        (T7, 0xE, T8, 0x800),
+        (T9, 0xD, T6, 0x1000),
+        (T7, 0xC, T8, 0x2000),
+    ];
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x30i64) as u64);
+    sw(m, g[SP], 0x2C, g[RA]);
+    sd(m, g[SP], 0x20, ctx.fpr[24].u64);
+    sd(m, g[SP], 0x18, ctx.fpr[22].u64);
+    sd(m, g[SP], 0x10, ctx.fpr[20].u64);
+    call(imports::func_8002EA28, m, ctx);
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    g[AT] = li(0x42C8_0000);
+    f[24].set_u32l(g[AT] as u32);
+    g[AT] = li(0x800B_0000);
+    f[18].u64 = ld(m, g[AT], -0x6070);
+    f[16].u64 = ld(m, g[AT], -0x6068);
+    f[14].u64 = ld(m, g[AT], -0x6060);
+    f[12].u64 = ld(m, g[AT], -0x6058);
+    g[A1] = li(PAD_RECORDS);
+    g[A2] = li(BUTTON_WORDS);
+    g[T0] = li(BUTTON_WORDS + 0x10);
+    g[T1] = li(BUTTON_WORDS + 0x20);
+    g[T2] = li(BUTTON_WORDS + 0x30);
+    g[A3] = li(BUTTON_WORDS + 0x40);
+    g[RA] = li(0x8_0000);
+    g[T5] = li(0x4_0000);
+    g[T4] = li(0x2_0000);
+    g[T3] = li(0x1_0000);
+    loop {
+        g[T6] = lbu(m, g[A1], 0x13);
+        g[V0] = 0;
+        if g[T6] != 0 {
+            g[V0] = 1;
+        }
+        for &(r, off, t, bit) in &BUTTONS {
+            g[r] = lbu(m, g[A1], off);
+            g[t] = g[V0] | bit;
+            if g[r] != 0 {
+                g[V0] = g[t];
+            }
+        }
+        g[T9] = lh(m, g[A1], 2);
+        g[T6] = g[V0] | 0x4000;
+        f[4].set_u32l(g[T9] as u32);
+        f[6].set_fl(fpu::cvt_s_w(f[4].u32l(), fpu::NEAREST));
+        f[22].set_fl(f[6].fl() / f[24].fl());
+        f[2].set_d(f64::from(f[22].fl()));
+        let (a, b, c, d, y) = (f[12].d(), f[14].d(), f[16].d(), f[18].d(), f[2].d());
+        if a < y {
+            g[V0] = g[T6];
+        }
+        g[T7] = g[V0] | 0x8000;
+        if y < b {
+            g[V0] = g[T7];
+        }
+        g[T8] = lh(m, g[A1], 0);
+        g[A1] = addu(g[A1], 0x18);
+        f[8].set_u32l(g[T8] as u32);
+        f[10].set_fl(fpu::cvt_s_w(f[8].u32l(), fpu::NEAREST));
+        f[20].set_fl(f[10].fl() / f[24].fl());
+        f[0].set_d(f64::from(f[20].fl()));
+        let x = f[0].d();
+        if x < b {
+            g[V0] |= g[T3];
+        }
+        if a < x {
+            g[V0] |= g[T4];
+        }
+        if c < x && x < d {
+            g[V0] |= g[T5];
+        }
+        if c < y && y < d {
+            g[V0] |= g[RA];
+        }
+        if x <= c {
+            g[AT] = li(0x10_0000);
+            g[T9] = g[V0] | g[AT];
+            if b <= x {
+                g[V0] = g[T9];
+            }
+        }
+        if d <= x {
+            g[AT] = li(0x20_0000);
+            g[T6] = g[V0] | g[AT];
+            if x <= a {
+                g[V0] = g[T6];
+            }
+        }
+        if d <= y {
+            g[AT] = li(0x40_0000);
+            g[T7] = g[V0] | g[AT];
+            if y <= a {
+                g[V0] = g[T7];
+            }
+        }
+        g[T7] = li(BUTTON_WORDS + 0x50);
+        if y <= c {
+            g[AT] = li(0x80_0000);
+            g[T8] = g[V0] | g[AT];
+            if b <= y {
+                g[V0] = g[T8];
+            }
+        }
+        // Store: pressed, released, held, x, y.
+        g[V1] = lw(m, g[A2], 0);
+        g[A3] = addu(g[A3], 4);
+        g[A2] = addu(g[A2], 4);
+        g[A0] = g[V1] ^ g[V0];
+        g[T9] = g[A0] & g[V0];
+        g[T6] = g[A0] & g[V1];
+        g[T0] = addu(g[T0], 4);
+        g[T1] = addu(g[T1], 4);
+        g[T2] = addu(g[T2], 4);
+        sw(m, g[T0], -4, g[T9]);
+        sw(m, g[T1], -4, g[T6]);
+        sw(m, g[A2], -4, g[V0]);
+        sw(m, g[T2], -4, u64::from(f[20].u32l()));
+        sw(m, g[A3], -4, u64::from(f[22].u32l()));
+        if g[A3] == g[T7] {
+            break;
+        }
+    }
+    g[RA] = lw(m, g[SP], 0x2C);
+    f[20].u64 = ld(m, g[SP], 0x10);
+    f[22].u64 = ld(m, g[SP], 0x18);
+    f[24].u64 = ld(m, g[SP], 0x20);
+    g[SP] = addu(g[SP], 0x30);
 }

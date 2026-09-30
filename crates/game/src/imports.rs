@@ -22,10 +22,13 @@ recomp_imports! {
     func_8000A920, // record or global on/off
     func_8000AA04, // record +0/+2 halfwords
     func_8000AA78, // record +4/+6 halfwords
+    func_8000AAC0, // record +8/+0xC floats
+    func_8000AB24, // record or global colour bytes
     func_8000AED4, // entry flags |=
     func_8000C5F0, // push current id
     func_8000C6C8, // float clamp-add
     func_8000C724, // int clamp-add
+    func_8000DA6C, // [0x8009B7E4]
     func_8000E8C4, // node tree first word (self)
     func_8000E9BC, // six optional bytes
     func_8000EA4C, // node tree bytes (self)
@@ -38,6 +41,7 @@ recomp_imports! {
     func_800129E4, // text width
     func_80014D4C, // asin in degrees
     func_800151C0, // vec2 length
+    func_800152CC, // vec3 equal
     func_800153C0, // vec3 length
     func_80015538, // vec3 cross
     func_800155EC, // vec3 multiply-add
@@ -62,7 +66,10 @@ recomp_imports! {
     func_80017F28, // RECORDS_170 + 0x170 k
     func_800181BC, // node flags walk (self)
     func_80029A3C, // profile record reset
+    func_8002D968, // three bytes equal (bit 14)
+    func_8002D9D0, // 4 or 3
     func_8002DAD0, // unlock bit
+    func_8002EA28, // pads update
     func_8002FAC4, // heap_set_cursor
     func_8002FAFC, // heap_cursor
     func_8002FC58, // heap_free
@@ -77,6 +84,7 @@ recomp_imports! {
     func_8003F714, // pool element by tag
     func_8003F7B8, // pool count by id
     func_8003F800, // pool iteration begin
+    func_8003FA24, // pool broadcast
     func_80051FF4, // first zero of four words
     func_80081730, // point x 4x4 (w = 1)
     func_80081A2C, // closest point on a segment

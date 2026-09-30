@@ -384,7 +384,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80028498,func_80028498,ours,5,,recomp,,,
 0x80028D60,func_80028D60,ours,4,,recomp,,,
 0x80028E78,func_80028E78,ours,25,,recomp,,,
-0x800290A4,func_800290A4,ours,1,,recomp,,,
+0x800290A4,func_800290A4,ours,1,,rust_verified,unit_diff,high,"fade-in step: alpha of colour -103 from 255 by k*dt, then off; FCR31 idiom via fpu::to_unsigned_s (game::misc)"
 0x80029298,func_80029298,ours,0,,rust_verified,unit_diff,high,40 records at 0x800A4C00: [+8] (and +0x14) = x + const by kind (jump table) (game::misc)
 0x8002932C,func_8002932C,ours,23,,recomp,,,
 0x80029494,func_80029494,ours,2,,recomp,,,
@@ -398,20 +398,20 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8002B3C8,func_8002B3C8,ours,2,,recomp,,,
 0x8002B574,func_8002B574,ours,8,,recomp,,,
 0x8002BBA4,func_8002BBA4,ours,8,,recomp,,,
-0x8002C780,func_8002C780,ours,1,,recomp,,,
-0x8002CC28,func_8002CC28,ours,1,,recomp,,,
+0x8002C780,func_8002C780,ours,1,,rust_verified,unit_diff,high,"HUD panel: two levels += ±s*dt clamped [0,254], records AF AE B2 B1 B4 (B3 B0 if enabled); FCR31 idiom (game::misc)"
+0x8002CC28,func_8002CC28,ours,1,,rust_verified,unit_diff,high,"HUD panel 2: levels 3/4, records AB AA A8 A7 AD (A9 AC if enabled); FCR31 idiom (game::misc)"
 0x8002D048,func_8002D048,ours,10,,recomp,,,
 0x8002D4C4,func_8002D4C4,ours,3,,recomp,,,
 0x8002D598,track_name,ours,0,,rust_verified,unit_diff,high,"address of track name (25), else 0 (jump table) (game::misc)"
 0x8002D6EC,func_8002D6EC,ours,3,,recomp,,,
 0x8002D968,func_8002D968,ours,0,,rust_verified,unit_diff,high,"bit 14 of [0x8009B7D8] and first 3 bytes of a, b equal (game::misc)"
 0x8002D9D0,func_8002D9D0,ours,0,,rust_verified,unit_diff,high,"4 if (s8)a < 3 and (u8)b < 6, else 3 (game::misc)"
-0x8002DA0C,func_8002DA0C,ours,1,,recomp,,,
+0x8002DA0C,func_8002DA0C,ours,1,,rust_verified,unit_diff,high,"1 if D9D0(k,c)==3 and (table s16 >> 2c) % 4 == 0, else bit c+1 of byte clear for k<3 (game::misc)"
 0x8002DAD0,func_8002DAD0,ours,0,,rust_verified,unit_diff,high,"bit (u8)bit of byte table[(s8)i], table by [p+0x6C] (game::misc)"
-0x8002DB20,func_8002DB20,ours,1,,recomp,,,
-0x8002DBD8,func_8002DBD8,ours,1,,recomp,,,
+0x8002DB20,func_8002DB20,ours,1,,rust_verified,unit_diff,high,"index of the n-th set entry by 8002DAD0, count table at 0x800A21B4; -1 if none (game::misc)"
+0x8002DBD8,func_8002DBD8,ours,1,,rust_verified,unit_diff,high,"0 iff three vec3 equalities hold (0x800A4C00 + 32*[o+0x34] vs 0x80118E50/ED0/E10), else 1 (game::misc)"
 0x8002DC7C,func_8002DC7C,ours,0,,rust_verified,unit_diff,high,[p+0x6C] ? halfwords at 0x80113E6C all set : bit 5 of [0x80113688] (game::misc)
-0x8002DCF4,func_8002DCF4,ours,1,,recomp,,,
+0x8002DCF4,func_8002DCF4,ours,1,,rust_verified,unit_diff,high,1 iff 8002D968 holds for four fixed pairs (game::misc)
 0x8002DD7C,func_8002DD7C,ours,3,,recomp,,,
 0x8002DFB0,func_8002DFB0,ours,0,,rust_verified,unit_diff,high,"empty, spills a0 a1 (debug hook?) (game::misc)"
 0x8002DFBC,func_8002DFBC,ours,14,,recomp,,,
@@ -431,13 +431,13 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8002E8D4,func_8002E8D4,ours,0,,rust_verified,unit_diff,high,[0x800D7498 + 4i] (game::misc)
 0x8002E8E8,func_8002E8E8,ours,11,,recomp,,,
 0x8002EA28,func_8002EA28,ours,0,input,rust_verified,unit_diff,high,pads update: four OSContPads to 0x18-byte records at 0x800D74D8; QUIRK: one shared buttons halfword (game::input)
-0x8002ECA0,func_8002ECA0,ours,1,,recomp,,,
+0x8002ECA0,func_8002ECA0,ours,1,,rust_verified,unit_diff,high,"button words: 14 button bits + 10 stick-threshold bits per pad, pressed/released/held, stick floats at 0x800D76F0 (game::input)"
 0x8002F000,func_8002F000,ours,0,,rust_verified,unit_diff,high,"[0x800A26F4] = 0, [0x800A26F8] = 1, float [0x800D7740] = 0 (game::misc)"
 0x8002F024,func_8002F024,ours,6,,recomp,,,
 0x8002F054,func_8002F054,ours,0,,rust_verified,unit_diff,high,get [0x800A26F4] (game::misc)
 0x8002F060,func_8002F060,ours,0,,rust_verified,unit_diff,high,f0 = [0x800D7740] (game::misc)
 0x8002F06C,func_8002F06C,ours,4,,recomp,,,
-0x8002F0EC,func_8002F0EC,ours,1,,recomp,,,
+0x8002F0EC,func_8002F0EC,ours,1,,rust_verified,unit_diff,high,"unless [0x800A26F8]: [0x800A26F4]=0, broadcast {Paws, -1, 8000DA6C()} to All! (game::misc)"
 0x8002F144,func_8002F144,ours,3,,recomp,,,
 0x8002F18C,func_8002F18C,ours,5,,recomp,,,
 0x8002F1CC,func_8002F1CC,ours,0,,rust_verified,unit_diff,high,"[0x800A26F8] = 0, byte [0x800A26FC] = 1 (game::misc)"
@@ -455,7 +455,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8002FA00,heap_set_level,ours,16,asset,recomp,,low,"level = a0; cursors[a0] = cursors[a0-1]; texture_cache_trim(that cursor); func_80007E80(1); zeroes cursors above; clears 0x800A2864. First call only: func_8002E034, then [0x800A68A0] = 1. Not portable yet: func_80007E80 and func_8002E034 cannot be doubled honestly (NOTES)"
 0x8002FAC4,heap_set_cursor,ours,1,asset,rust_verified,unit_diff,high,cursors[level] = a0; heap_check(1)
 0x8002FAFC,heap_cursor,ours,0,asset,rust_verified,unit_diff,high,v0 = cursors[level] (0x800D9DD8[[0x800A2868]])
-0x8002FB18,func_8002FB18,ours,1,,recomp,,,
+0x8002FB18,func_8002FB18,ours,1,,rust_verified,unit_diff,high,1 if p < heap cursor (unsigned) (game::heap)
 0x8002FB4C,heap_level_of,ours,0,,rust_verified,unit_diff,high,heap level whose region holds p (game::misc)
 0x8002FB90,func_8002FB90,ours,6,,recomp,,,
 0x8002FC58,heap_free,ours,1,asset,rust_verified,unit_diff,high,[0x800D9DBC] heap end - heap_cursor()

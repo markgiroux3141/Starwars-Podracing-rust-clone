@@ -11,7 +11,7 @@
 #![allow(non_snake_case)]
 
 use crate::imports;
-use crate::recomp::{addu, call, enter, li, lw, reg::*, s32, sll, sltu, subu, RecompContext};
+use crate::recomp::{addu, call, enter, li, lw, reg::*, s32, sll, sltu, subu, sw, RecompContext};
 
 /// Current heap level (index into [`CURSORS`]).
 pub const LEVEL: u32 = 0x800A_2868;
@@ -43,6 +43,33 @@ pub unsafe extern "C" fn func_8002FAFC(rdram: *mut u8, ctx: *mut RecompContext) 
     g[T7] = sll(g[T6], 2);
     let v0 = addu(s32(0x800E_0000), g[T7]);
     g[V0] = s32(mem.read_u32(at(v0, -0x6228)));
+}
+
+/// `func_8002FB18(p)`: 1 if `p` lies below the current heap cursor
+/// ([`func_8002FAFC`], unsigned compare), else 0.
+///
+/// Frame (`sp - 0x18`): `ra` at `+0x14`, `p` spilled to its slot `+0x18`.
+/// Leaves `t6 = p` (sign-extended from its low word), `at = v0`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002FB18(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    sw(m, g[SP], 0x18, g[A0]);
+    call(imports::func_8002FAFC, m, ctx);
+    let g = &mut ctx.gpr;
+    g[T6] = lw(m, g[SP], 0x18);
+    g[RA] = lw(m, g[SP], 0x14);
+    g[AT] = sltu(g[T6], g[V0]);
+    g[V0] = 0;
+    if g[AT] != 0 {
+        g[V0] = 1;
+    }
+    g[SP] = addu(g[SP], 0x18);
 }
 
 /// `func_8002FC80` (heap_check): find the last nonzero cursor (walking from
