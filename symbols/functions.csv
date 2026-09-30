@@ -766,8 +766,8 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80050290,func_80050290,ours,24,,recomp,,,
 0x800503E8,func_800503E8,ours,2,,recomp,,,
 0x80050450,func_80050450,ours,23,,recomp,,,
-0x8005058C,func_8005058C,ours,1,,recomp,,,
-0x8005065C,func_8005065C,ours,1,,recomp,,,
+0x8005058C,func_8005058C,ours,1,,rust_verified,unit_diff,high,"camera transition start (targets, matrix saves) (game::misc)"
+0x8005065C,func_8005065C,ours,1,,rust_verified,unit_diff,high,camera transition step (translations toward targets) (game::misc)
 0x800509E8,func_800509E8,ours,25,,recomp,,,
 0x80050C00,func_80050C00,ours,2,,recomp,,,
 0x80050F88,func_80050F88,ours,5,,recomp,,,
@@ -785,28 +785,28 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80052060,func_80052060,ours,2,,recomp,,,
 0x800520C8,func_800520C8,ours,0,,rust_verified,unit_diff,high,"index of x among the four words at 0x8011B1BC, or -1 (game::misc)"
 0x80052134,func_80052134,ours,0,,rust_verified,unit_diff,high,wrapped progress figure (game::misc)
-0x800521C0,func_800521C0,ours,1,,recomp,,,
+0x800521C0,func_800521C0,ours,1,,rust_verified,unit_diff,high,"progress figure, or K - [p+0x74] with bit 1 (game::misc)"
 0x80052208,func_80052208,ours,2,,recomp,,,
 0x80052A08,func_80052A08,ours,5,,recomp,,,
 0x80052E44,func_80052E44,ours,24,,recomp,,,
 0x800530CC,func_800530CC,ours,6,,recomp,,,
-0x80053220,func_80053220,ours,1,,recomp,,,
+0x80053220,func_80053220,ours,1,,rust_verified,unit_diff,high,menu buttons pressed by the selected pad (game::misc)
 0x80053300,func_80053300,ours,2,,recomp,,,
 0x8005337C,func_8005337C,ours,25,,recomp,,,
 0x80053AD4,func_80053AD4,ours,5,,recomp,,,
 0x80053C08,func_80053C08,ours,20,,recomp,,,
 0x80054048,func_80054048,ours,21,,recomp,,,
 0x800547EC,func_800547EC,ours,8,,recomp,,,
-0x80055AEC,func_80055AEC,ours,1,,recomp,,,
+0x80055AEC,func_80055AEC,ours,1,,rust_verified,unit_diff,high,texture alpha from R - B against a level threshold (game::misc)
 0x80055D38,func_80055D38,ours,8,,recomp,,,
-0x80056464,func_80056464,ours,1,,recomp,,,
-0x80056844,func_80056844,ours,1,,recomp,,,
+0x80056464,func_80056464,ours,1,,rust_verified,unit_diff,high,fading HUD panel; FCR31 idioms in double (game::misc)
+0x80056844,func_80056844,ours,1,,rust_verified,unit_diff,high,race HUD layout; FCR31 idioms in double (game::misc)
 0x800573E8,func_800573E8,ours,19,,recomp,,,
-0x80057ED4,func_80057ED4,ours,1,,recomp,,,
-0x80057F48,func_80057F48,ours,1,,recomp,,,
+0x80057ED4,func_80057ED4,ours,1,,rust_verified,unit_diff,high,"HUD bar (record 23, a screen rectangle) (game::misc)"
+0x80057F48,func_80057F48,ours,1,,rust_verified,unit_diff,high,hide one of two HUD record sets (game::misc)
 0x80058058,func_80058058,ours,8,,recomp,,,
 0x80059E54,func_80059E54,ours,9,,recomp,,,
-0x8005B2D0,func_8005B2D0,ours,1,,recomp,,,
+0x8005B2D0,func_8005B2D0,ours,1,,rust_verified,unit_diff,high,"object active test (box, node bit 3, flags) (game::misc)"
 0x8005B3F0,func_8005B3F0,ours,20,,recomp,,,
 0x8005B708,func_8005B708,ours,22,,recomp,,,
 0x8005B764,func_8005B764,ours,2,,recomp,,,

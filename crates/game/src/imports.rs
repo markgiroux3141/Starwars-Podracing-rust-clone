@@ -26,6 +26,7 @@ recomp_imports! {
     func_8000AA78, // record +4/+6 halfwords
     func_8000AAC0, // record +8/+0xC floats
     func_8000AB24, // record or global colour bytes
+    func_8000ABD4, // record texture pixels
     func_8000AC34, // record flags |=
     func_8000AED4, // entry flags |=
     func_8000AEFC, // entry +6/+4/+8
@@ -49,6 +50,7 @@ recomp_imports! {
     func_80015268, // vec3 set
     func_80015288, // vec3 copy
     func_800152CC, // vec3 equal
+    func_80015328, // vec3 add
     func_8001535C, // vec3 subtract
     func_800153C0, // vec3 length
     func_80015538, // vec3 cross
@@ -76,12 +78,15 @@ recomp_imports! {
     func_80017F28, // RECORDS_170 + 0x170 k
     func_800181BC, // node flags walk (self)
     func_80018324, // node header init
+    func_800183A8, // [o + 4] (second)
     func_80018450, // empty (two arguments)
     func_80029A3C, // profile record reset
     func_8002D968, // three bytes equal (bit 14)
     func_8002D9D0, // 4 or 3
     func_8002DAD0, // unlock bit
     func_8002EA28, // pads update
+    func_8002F054, // [0x800A26F4]
+    func_8002F060, // f0 = [0x800D7740]
     func_8002FAC4, // heap_set_cursor
     func_8002FAFC, // heap_cursor
     func_8002FC58, // heap_free
@@ -113,10 +118,12 @@ recomp_imports! {
     func_8004110C, // save a pose
     func_8004E488, // mask bits set/clear
     func_80051FF4, // first zero of four words
+    func_80052134, // progress figure
     func_80081530, // n bytes equal
     func_80081730, // point x 4x4 (w = 1)
     func_80081A2C, // closest point on a segment
     func_800827C0, // model_load's error path (not yet understood)
+    func_80087814, // queue a screen rectangle
     func_8008A750, // cosf
     func_8008A8C0, // sinf
 }

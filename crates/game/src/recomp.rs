@@ -584,6 +584,65 @@ pub mod fpu {
         *fcr31 = (g[save] as u32) & 3;
         debug_assert_eq!(*fcr31, NEAREST);
     }
+
+    /// The double form of the idiom ([`to_unsigned_s`]), `cvt.w.d` on the
+    /// double in `src`, in IDO's `beql` shape:
+    ///
+    /// ```text
+    ///     cfc1    save, $31
+    ///     ctc1    tmp, $31          ; tmp holds 1 (round toward zero)
+    ///     cvt.w.d dst, src
+    ///     cfc1    tmp, $31
+    ///     andi    tmp, tmp, 0x78    ; V/Z/O/U flags
+    ///     beql    tmp, zero, ok
+    ///     mfc1    tmp, dst          ; (delay slot, taken path only)
+    ///     mtc1    at, dst + 1       ; at = 0x41E00000 (2^31's high word),
+    ///     mtc1    zero, dst         ; set by the caller before
+    ///     ...                       ; dst = src - 2^31, convert again
+    ///     b       done              ; tmp = -1 if flagged again,
+    ///                               ; else dst | 0x80000000
+    /// ok: bltz    tmp, -1 path
+    /// done:
+    ///     ctc1    save, $31
+    /// ```
+    ///
+    /// As for [`to_unsigned_s`]: the result is left in `g[tmp]`, the flag
+    /// path is dead under the oracle (its `sub.d` would run in round toward
+    /// zero in the C; the `debug_assert` marks that), and the restoring
+    /// `ctc1` is done here, which the caller must check is equivalent.
+    /// Unlike the single form this shape leaves `at` alone on the live path.
+    pub fn to_unsigned_d(g: &mut [u64; 32], f: &mut [super::Fpr; 32], fcr31: &mut u32, save: usize, tmp: usize, dst: usize, src: usize) {
+        use super::reg::AT;
+        use super::{li, s32};
+        g[save] = u64::from(*fcr31);
+        *fcr31 = (g[tmp] as u32) & 3;
+        f[dst].set_u32l(cvt_w_d(f[src].d(), *fcr31));
+        g[tmp] = u64::from(*fcr31) & 0x78;
+        if g[tmp] == 0 {
+            g[tmp] = s32(f[dst].u32l());
+            if (g[tmp] as i64) < 0 {
+                g[tmp] = u64::MAX;
+            }
+        } else {
+            f[dst].set_u32h(g[AT] as u32);
+            f[dst].set_u32l(0);
+            g[tmp] = 1;
+            debug_assert_eq!(*fcr31, NEAREST, "the idiom's sub.d runs in round toward zero in the C");
+            f[dst].set_d(f[src].d() - f[dst].d());
+            *fcr31 = (g[tmp] as u32) & 3;
+            f[dst].set_u32l(cvt_w_d(f[dst].d(), *fcr31));
+            g[tmp] = u64::from(*fcr31) & 0x78;
+            if g[tmp] == 0 {
+                g[tmp] = s32(f[dst].u32l());
+                g[AT] = li(0x8000_0000);
+                g[tmp] |= g[AT];
+            } else {
+                g[tmp] = u64::MAX;
+            }
+        }
+        *fcr31 = (g[save] as u32) & 3;
+        debug_assert_eq!(*fcr31, NEAREST);
+    }
 }
 
 /// Named register indices (o32 ABI names), for readability in ports.
