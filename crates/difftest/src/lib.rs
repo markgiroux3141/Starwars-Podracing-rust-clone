@@ -15,6 +15,7 @@
 //! [`rom`] for reading the ROM). Every call through a stub is recorded, and
 //! the two runs must make the same calls with the same registers.
 
+pub mod hw;
 pub mod rom;
 pub mod world;
 

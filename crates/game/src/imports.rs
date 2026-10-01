@@ -161,6 +161,8 @@ recomp_imports! {
     func_80087FC0, // alHeapDBAlloc
     func_8008A750, // cosf
     func_8008A8C0, // sinf
+    func_8008AB84, // __ll_lshift
+    func_8008C550, // osGetCount (no C: a double in tests)
 }
 
 /// Hooks into the runtime that N64Recomp's generated code calls (recomp.h),

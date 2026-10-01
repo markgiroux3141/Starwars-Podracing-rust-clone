@@ -40,12 +40,26 @@ fn main() {
 
     // Every function N64Recomp generated, from funcs.h.
     let funcs_h = fs::read_to_string(generated.join("funcs.h")).unwrap();
-    let all: BTreeSet<String> = funcs_h
+    let mut all: BTreeSet<String> = funcs_h
         .lines()
         .filter_map(|l| l.strip_prefix("void ")?.strip_suffix("(uint8_t* rdram, recomp_context* ctx);"))
         .map(str::to_string)
         .collect();
     assert!(all.len() > 1000, "funcs.h: expected the full function list, found {}", all.len());
+
+    // The functions recomp.toml has N64Recomp ignore (privileged
+    // instructions) have no C and aren't in funcs.h, but generated callers
+    // still call them. They get stubs like every other function, so a test
+    // can install a double for one (doubles.txt) and anything else traps.
+    // None can be selected: there is no C to compile.
+    let toml_path = root.join("recomp.toml");
+    println!("cargo:rerun-if-changed={}", toml_path.display());
+    let toml = fs::read_to_string(&toml_path).unwrap();
+    let (_, rest) = toml.split_once("ignored = [").expect("recomp.toml: no `ignored = [` list");
+    let (list, _) = rest.split_once(']').expect("recomp.toml: unterminated `ignored` list");
+    for name in list.lines().filter_map(|l| l.trim().strip_prefix('"')?.split_once('"').map(|(n, _)| n.to_string())) {
+        all.insert(name);
+    }
 
     let mut sources = Vec::new();
     for name in &selected {
@@ -111,7 +125,7 @@ pub const LISTED: &[(&str, Kind)] = &[
             panic!("{}: {name} is compiled into the oracle (functions.txt), so a double for it would never run", doubles_path.display());
         }
         if !all.contains(name) {
-            panic!("{}: {name} is not a recompiled function (not in funcs.h)", doubles_path.display());
+            panic!("{}: {name} is not a recompiled function (not in funcs.h nor ignored in recomp.toml)", doubles_path.display());
         }
         writeln!(rs_doubles, "    (\"{name}\", Kind::{kind}),").unwrap();
     }

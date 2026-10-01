@@ -20793,6 +20793,59 @@ pub unsafe extern "C" fn func_800811CC(rdram: *mut u8, ctx: *mut RecompContext) 
     sw(&mut mem, g[AT], 0x6758, g[T6]);
 }
 
+/// `func_800811DC()` (**guess**: the game's 64-bit tick count): `c` =
+/// `osGetCount` (`func_8008C550`, CP0 Count); if `c` is below the last
+/// value `[0x800A6760]` (unsigned: Count wrapped since) the high word
+/// `[0x800A675C]` is incremented; then `[0x800A6760] = c`, and the result
+/// in `v0:v1` (high word first) is `(hi << 32) + c`, the shift by
+/// [`crate::libultra::func_8008AB84`] (`__ll_lshift(0:hi, 32)`) and the
+/// add with its carry by hand.
+///
+/// Frame (`sp - 0x20`): `ra` at `+0x14`, `c` at `+0x1C` (re-read
+/// sign-extended into `t0`). Leaves `t1 = 0x800A6760`, `t6` = the last
+/// value, `t7`/`t8` the increment (if it ran), `a0 = a2 = 0`, `a1 = hi`,
+/// `a3 = 32` as passed, `t2 = 0`, `at` = the carry, and the callee's
+/// registers.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800811DC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x20i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    call(imports::func_8008C550, m, ctx);
+    let g = &mut ctx.gpr;
+    g[T1] = li(0x800A_6760);
+    g[T6] = lw(m, g[T1], 0);
+    g[T0] = g[V0];
+    g[A0] = 0;
+    g[AT] = sltu(g[V0], g[T6]);
+    g[A2] = 0;
+    if g[AT] != 0 {
+        g[V1] = li(0x800A_675C);
+        g[T7] = lw(m, g[V1], 0);
+        g[T8] = addu(g[T7], 1);
+        sw(m, g[V1], 0, g[T8]);
+    }
+    g[V1] = li(0x800A_675C);
+    sw(m, g[T1], 0, g[T0]);
+    g[A1] = lw(m, g[V1], 0);
+    g[A3] = 0x20;
+    sw(m, g[SP], 0x1C, g[T0]);
+    call(imports::func_8008AB84, m, ctx);
+    let g = &mut ctx.gpr;
+    g[T0] = lw(m, g[SP], 0x1C);
+    g[RA] = lw(m, g[SP], 0x14);
+    g[T2] = 0;
+    g[V1] = addu(g[V1], g[T0]);
+    g[AT] = sltu(g[V1], g[T0]);
+    g[V0] = addu(g[AT], g[V0]);
+    g[V0] = addu(g[V0], g[T2]);
+    g[SP] = addu(g[SP], 0x20);
+}
+
 /// `func_80081260()`: `[0x800A675C] = 0`. Leaves `at = 0x800A0000`.
 ///
 /// # Safety

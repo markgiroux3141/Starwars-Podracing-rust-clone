@@ -210,6 +210,14 @@ pub mod doubles {
         TRACE.with_borrow_mut(std::mem::take)
     }
 
+    /// How many calls to `name` this thread's record holds so far (the
+    /// current run's: [`start_trace`] clears it). Inside a double that is
+    /// its own call's position plus one, so a double can give the k-th call
+    /// of a run the same answer in the C and the Rust run.
+    pub fn calls_in_run(name: &str) -> usize {
+        TRACE.with_borrow(|t| t.iter().filter(|c| c.name == name).count())
+    }
+
     /// What a function that follows the o32 ABI leaves behind, for doubles
     /// of functions whose real register effects we can't reproduce (their
     /// callees aren't verified). Registers the ABI lets a callee change, other

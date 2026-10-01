@@ -1027,7 +1027,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80080DB4,func_80080DB4,ours,4,,recomp,,,
 0x800811C0,func_800811C0,ours,0,math,rust_verified,unit_diff,high,store the f12/f13 double at 0x800A6750 (game::math)
 0x800811CC,func_800811CC,ours,0,,rust_verified,unit_diff,high,[0x800A6758] = 1 (game::misc)
-0x800811DC,func_800811DC,ours,1,,recomp,,,
+0x800811DC,func_800811DC,ours,1,,rust_verified,unit_diff,high,64-bit tick count: osGetCount with a wrap-counting high word at 0x800A675C (via the osGetCount double) (game::misc)
 0x80081260,func_80081260,ours,0,,rust_verified,unit_diff,high,[0x800A675C] = 0 (game::misc)
 0x8008126C,func_8008126C,ours,2,,recomp,,,
 0x800812E8,func_800812E8,ours,3,,recomp,,,
