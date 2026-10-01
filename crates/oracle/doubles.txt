@@ -17,4 +17,6 @@
 func_80011CDC  contract  # rom_read (difftest::rom; NOTES "Test doubles for the ROM reads")
 func_80011D60  contract  # rom_read_small (difftest::rom; same)
 func_800827C0  stand-in  # model_error: just returns (tests that reach model_load's error path)
+func_800883E0  contract  # osAiGetLength: v0 = an injected AI_LEN (difftest::hw; NOTES "Hardware doubles", session 14)
 func_8008C550  contract  # osGetCount: v0 = an injected Count (difftest::hw; NOTES "The OS boundary", plan item 3)
+func_80090500  contract  # osSetIntMask: the C's register effects over a modelled MI mask (difftest::hw; same)

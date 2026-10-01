@@ -1129,7 +1129,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80088AD0,func_80088AD0,ours,0,,recomp,,,privileged instrs; runtime-provided
 0x80088B00,func_80088B00,ours,0,,rust_verified,unit_diff,high,[o + 0x3C] = s16(v) (game::libultra)
 0x80088B20,func_80088B20,ours,2,,recomp,,,
-0x80088B70,func_80088B70,ours,1,,recomp,,,
+0x80088B70,func_80088B70,ours,1,,rust_verified,unit_diff,high,"flush one key's events (static helper, -O3 register arguments s2/s3) (game::libultra)"
 0x80088BEC,func_80088BEC,ours,0,,rust_verified,unit_diff,high,empty (game::libultra)
 0x80088BF4,func_80088BF4,ours,0,,rust_verified,unit_diff,high,empty (game::libultra)
 0x80088BFC,func_80088BFC,ours,3,,recomp,,,
@@ -1262,12 +1262,12 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8008F980,func_8008F980,ours,0,,recomp,,,libultra range?
 0x8008FA60,func_8008FA60,ours,0,,recomp,,,libultra range?
 0x8008FA94,func_8008FA94,ours,0,,recomp,,,libultra range?
-0x8008FB20,func_8008FB20,ours,1,,recomp,,,libultra range?
-0x8008FBCC,func_8008FBCC,ours,1,,recomp,,,libultra range?
+0x8008FB20,func_8008FB20,ours,1,,rust_verified,unit_diff,high,alEvtqFlushType (game::libultra)
+0x8008FBCC,func_8008FBCC,ours,1,,rust_verified,unit_diff,high,alEvtqFlush (game::libultra)
 0x8008FC3C,func_8008FC3C,ours,1,,recomp,,,libultra range?
 0x8008FD60,func_8008FD60,ours,1,,recomp,,,libultra range?
 0x8008FDEC,func_8008FDEC,ours,1,,recomp,,,libultra range?
-0x8008FE60,func_8008FE60,ours,1,,recomp,,,libultra range?
+0x8008FE60,func_8008FE60,ours,1,,rust_verified,unit_diff,high,alSynAddPlayer (game::libultra)
 0x8008FEB0,func_8008FEB0,ours,1,,recomp,,,libultra range?
 0x8008FF98,func_8008FF98,ours,2,,recomp,,,libultra range?
 0x800900E0,func_800900E0,ours,1,,recomp,,,libultra range?

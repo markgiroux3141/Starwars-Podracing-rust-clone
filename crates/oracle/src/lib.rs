@@ -99,6 +99,21 @@ pub mod recomp {
     }
 }
 
+/// The generated C of the contract doubles (doubles.txt) that have some,
+/// compiled a second time under another symbol (`probe_func_X`), so a test
+/// can check a double against N64Recomp's code. Such functions touch device
+/// registers outside RDRAM (that is why they have doubles), so the C must
+/// run on a buffer that covers those addresses, not on a difftest state;
+/// their calls go to the stubs like everyone else's.
+pub mod probes {
+    include!(concat!(env!("OUT_DIR"), "/oracle_probes.rs"));
+
+    /// A contract double's generated C, by the function's name.
+    pub fn by_name(name: &str) -> Option<game::recomp::RecompFn> {
+        PROBES.iter().find(|(n, _)| *n == name).map(|&(_, f)| f)
+    }
+}
+
 /// Test doubles: Rust stand-ins for recompiled functions that are not compiled
 /// into the oracle.
 ///

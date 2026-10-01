@@ -171,10 +171,14 @@ recomp_imports! {
     func_80085F78, // camera record +0x154
     func_80087814, // queue a screen rectangle
     func_80087FC0, // alHeapDBAlloc
+    func_80088020, // alUnlink
+    func_80088050, // alLink
+    func_800883E0, // osAiGetLength (a double)
     func_8008A750, // cosf
     func_8008A8C0, // sinf
     func_8008AB84, // __ll_lshift
     func_8008C550, // osGetCount (no C: a double in tests)
+    func_80090500, // osSetIntMask (a double)
 }
 
 /// Hooks into the runtime that N64Recomp's generated code calls (recomp.h),

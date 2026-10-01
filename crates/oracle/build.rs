@@ -133,6 +133,35 @@ pub const LISTED: &[(&str, Kind)] = &[
 ");
     fs::write(out.join("oracle_doubles.rs"), rs_doubles).unwrap();
 
+    // Contract doubles that have generated C get that C compiled a second
+    // time as `probe_func_X` (a define renames the symbol in its own
+    // translation unit), so a test can check the double against N64Recomp's
+    // code: on a buffer that covers the device registers the C touches
+    // (they lie past RDRAM), not in a difftest. Its calls still go to the
+    // stubs above.
+    let probes: Vec<&String> = doubles
+        .iter()
+        .filter(|(name, kind)| *kind == "Contract" && generated.join(format!("{name}.c")).exists())
+        .map(|(name, _)| name)
+        .collect();
+    let mut rs_probes = String::from("extern \"C\" {\n");
+    for name in &probes {
+        writeln!(rs_probes, "    fn probe_{name}(rdram: *mut u8, ctx: *mut game::recomp::RecompContext);").unwrap();
+    }
+    rs_probes.push_str("}\n\n/// The generated C of every contract double that has some, by name.\npub const PROBES: &[(&str, game::recomp::RecompFn)] = &[\n");
+    for name in &probes {
+        writeln!(rs_probes, "    (\"{name}\", probe_{name}),").unwrap();
+    }
+    rs_probes.push_str("];\n");
+    fs::write(out.join("oracle_probes.rs"), rs_probes).unwrap();
+    for name in &probes {
+        let path = generated.join(format!("{name}.c"));
+        println!("cargo:rerun-if-changed={}", path.display());
+        let mut probe = base_build(&include);
+        probe.warnings(false).define(name, Some(format!("probe_{name}").as_str())).file(&path);
+        probe.compile(&format!("oracle_probe_{name}"));
+    }
+
     // Rust declarations for the selected functions.
     let mut rs = String::from("extern \"C\" {\n");
     for name in &selected {

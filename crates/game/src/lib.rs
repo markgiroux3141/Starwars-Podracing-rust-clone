@@ -638,6 +638,7 @@ pub const PORTED: &[Ported] = &[
     Ported { vram: 0x8008_8500, name: "func_80088500", func: libultra::func_80088500 },
     Ported { vram: 0x8008_8530, name: "func_80088530", func: libultra::func_80088530 },
     Ported { vram: 0x8008_8B00, name: "func_80088B00", func: libultra::func_80088B00 },
+    Ported { vram: 0x8008_8B70, name: "func_80088B70", func: libultra::func_80088B70 },
     Ported { vram: 0x8008_8BEC, name: "func_80088BEC", func: libultra::func_80088BEC },
     Ported { vram: 0x8008_8BF4, name: "func_80088BF4", func: libultra::func_80088BF4 },
     Ported { vram: 0x8008_A750, name: "func_8008A750", func: libultra::func_8008A750 },
@@ -654,5 +655,8 @@ pub const PORTED: &[Ported] = &[
     Ported { vram: 0x8008_AD74, name: "func_8008AD74", func: libultra::func_8008AD74 },
     Ported { vram: 0x8008_CA80, name: "func_8008CA80", func: libultra::func_8008CA80 },
     Ported { vram: 0x8008_CAA0, name: "func_8008CAA0", func: libultra::func_8008CAA0 },
+    Ported { vram: 0x8008_FB20, name: "func_8008FB20", func: libultra::func_8008FB20 },
+    Ported { vram: 0x8008_FBCC, name: "func_8008FBCC", func: libultra::func_8008FBCC },
+    Ported { vram: 0x8008_FE60, name: "func_8008FE60", func: libultra::func_8008FE60 },
     Ported { vram: 0x8009_5AA0, name: "func_80095AA0", func: libultra::func_80095AA0 },
 ];

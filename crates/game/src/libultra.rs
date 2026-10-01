@@ -3,13 +3,16 @@
 //! constants read from their tables in the data segment; the game's own
 //! maths, so ports never substitute `std`, SPEC §5.4), the 64-bit helpers
 //! of `ll.c`, and `__osDisableInt`/`__osRestoreInt`, which reach CP0 Status
-//! only through the runtime's hooks (NOTES.md, "CP0 Status").
+//! only through the runtime's hooks (NOTES.md, "CP0 Status"). Also parts of
+//! libaudio: the heap, list links, and the event queue's flushes, which
+//! mask interrupts through `osSetIntMask` (a contract double in the tests,
+//! NOTES.md "Hardware doubles").
 
 // Ports keep N64Recomp's names (func_8008A8C0), capitals included.
 #![allow(non_snake_case)]
 
 use crate::imports;
-use crate::recomp::{addu, ddiv, ddivu, dmultu, enter, fpu, ld, lh, li, lw, multu, reg::*, s32, sd, sh, sll, slt, sltu, sra, subu, sw, RecompContext};
+use crate::recomp::{addu, call, ddiv, ddivu, dmultu, enter, fpu, ld, lh, li, lw, multu, reg::*, s32, sd, sh, sll, slt, sltu, sra, subu, sw, RecompContext};
 use n64mem::Mem;
 
 /// `func_80087CB0(x)`: `sqrtf`: `f0 = sqrt(f12)`, the single-precision
@@ -272,6 +275,72 @@ pub unsafe extern "C" fn func_80088B00(rdram: *mut u8, ctx: *mut RecompContext) 
     g[T7] = sra(g[T6], 16);
     sw(m, g[SP], 4, g[A1]);
     sw(m, g[A0], 0x3C, g[T7]);
+}
+
+/// `func_80088B70` (by shape a static libaudio helper: flush the events of
+/// one key, **guess**: a voice): compiled with IDO's interprocedural
+/// register allocation (-O3), it takes its arguments in callee-saved
+/// registers, the event queue `q = s2` and the key `s3`, and uses `s0`,
+/// `s1`, `s4` without saving them (its caller, `func_80088BFC`, expects
+/// that). With interrupts masked (`osSetIntMask(1)`, the old mask kept in
+/// `s4` and restored at the end by a second call), for each event item
+/// `n` of the list from `[q + 8]` (the allocation list), `next = [n]` read
+/// first: if the word `[n + 0x10]` equals `s3` (as a whole register), the
+/// next item's delta `[next + 8] += [n + 8]` (if `next` is nonzero),
+/// [`func_80088020`]`(n)` (`alUnlink`) and [`func_80088050`]`(n, q)`
+/// (`alLink` onto the free list at `q`).
+///
+/// Frame (`sp - 0x18`): `ra` at `+0x14`. Leaves `s0 = 0`, `s1 = 0` (as it
+/// came for an empty list), `s4` the old mask, `t6` the last key word,
+/// `t7`..`t9` from the
+/// last delta, `a0`, `a1` and the callees' registers (the double's).
+///
+/// Domain: [`crate::imports::func_80090500`]'s (a double); a finite list
+/// in RDRAM, the callees' domains.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80088B70(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    g[A0] = 1;
+    call(imports::func_80090500, m, ctx);
+    let g = &mut ctx.gpr;
+    g[S0] = lw(m, g[S2], 8);
+    g[S4] = g[V0];
+    loop {
+        let g = &mut ctx.gpr;
+        if g[S0] == 0 {
+            break;
+        }
+        g[T6] = lw(m, g[S0], 0x10);
+        g[S1] = lw(m, g[S0], 0);
+        if g[S3] == g[T6] {
+            if g[S1] != 0 {
+                g[T7] = lw(m, g[S1], 8);
+                g[T8] = lw(m, g[S0], 8);
+                g[T9] = addu(g[T7], g[T8]);
+                sw(m, g[S1], 8, g[T9]);
+            }
+            g[A0] = g[S0];
+            call(imports::func_80088020, m, ctx);
+            let g = &mut ctx.gpr;
+            g[A0] = g[S0];
+            g[A1] = g[S2];
+            call(imports::func_80088050, m, ctx);
+        }
+        let g = &mut ctx.gpr;
+        g[S0] = g[S1];
+    }
+    let g = &mut ctx.gpr;
+    g[A0] = g[S4];
+    call(imports::func_80090500, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x18);
 }
 
 /// `func_80088BEC()`: returns at once (an empty libultra function).
@@ -786,6 +855,180 @@ pub unsafe extern "C" fn func_8008CAA0(rdram: *mut u8, ctx: *mut RecompContext) 
     g[T0] = status | g[A0];
     let value = g[T0];
     imports::runtime::cop0_status_write(ctx, value);
+}
+
+/// `func_8008FB20(q, type)` (by shape libaudio's `alEvtqFlushType`): with
+/// interrupts masked (`osSetIntMask(1)`, the old mask saved in the frame
+/// and restored at the end), for each event item `n` of the allocation
+/// list from `[q + 8]`, `next = [n]` read first: if the halfword `h[n +
+/// 0xC]` (the event type, signed) equals `type` (the low halfword of `a1`,
+/// sign-extended), the next item's delta `[next + 8] += [n + 8]` (if `next`
+/// is nonzero), [`func_80088020`]`(n)` (`alUnlink`) and
+/// [`func_80088050`]`(n, q)` (`alLink` onto the free list at `q`).
+///
+/// Frame (`sp - 0x40`): `ra`, `s3`, `s2`, `s1`, `s0` at `+0x24..+0x14`,
+/// restored sign-extended (`s2 = q`, `s3 = type`, `s0`/`s1` the walk); `a1`
+/// spilled to its home slot `+0x44`, the old mask to `+0x2C`. Leaves `t6 =
+/// type`, `t7` the last type read, `t8`..`t0` from the last delta, `a0` the
+/// mask, and the callees' registers.
+///
+/// Domain: [`crate::imports::func_80090500`]'s (a double); a finite list
+/// in RDRAM, the callees' domains.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8008FB20(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x40i64) as u64);
+    sw(m, g[SP], 0x20, g[S3]);
+    g[S3] = sll(g[A1], 16);
+    sw(m, g[SP], 0x1C, g[S2]);
+    g[S2] = g[A0];
+    g[T6] = sra(g[S3], 16);
+    sw(m, g[SP], 0x24, g[RA]);
+    g[S3] = g[T6];
+    sw(m, g[SP], 0x18, g[S1]);
+    sw(m, g[SP], 0x14, g[S0]);
+    sw(m, g[SP], 0x44, g[A1]);
+    g[A0] = 1;
+    call(imports::func_80090500, m, ctx);
+    let g = &mut ctx.gpr;
+    sw(m, g[SP], 0x2C, g[V0]);
+    g[S0] = lw(m, g[S2], 8);
+    loop {
+        let g = &mut ctx.gpr;
+        if g[S0] == 0 {
+            break;
+        }
+        g[T7] = lh(m, g[S0], 0xC);
+        g[S1] = lw(m, g[S0], 0);
+        if g[S3] == g[T7] {
+            if g[S1] != 0 {
+                g[T8] = lw(m, g[S1], 8);
+                g[T9] = lw(m, g[S0], 8);
+                g[T0] = addu(g[T8], g[T9]);
+                sw(m, g[S1], 8, g[T0]);
+            }
+            g[A0] = g[S0];
+            call(imports::func_80088020, m, ctx);
+            let g = &mut ctx.gpr;
+            g[A0] = g[S0];
+            g[A1] = g[S2];
+            call(imports::func_80088050, m, ctx);
+        }
+        let g = &mut ctx.gpr;
+        g[S0] = g[S1];
+    }
+    let g = &mut ctx.gpr;
+    g[A0] = lw(m, g[SP], 0x2C);
+    call(imports::func_80090500, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x24);
+    g[S0] = lw(m, g[SP], 0x14);
+    g[S1] = lw(m, g[SP], 0x18);
+    g[S2] = lw(m, g[SP], 0x1C);
+    g[S3] = lw(m, g[SP], 0x20);
+    g[SP] = addu(g[SP], 0x40);
+}
+
+/// `func_8008FBCC(q)` (by shape libaudio's `alEvtqFlush`): with interrupts
+/// masked (`osSetIntMask(1)`, the old mask saved in the frame and restored
+/// at the end), every event item `n` of the allocation list from `[q + 8]`
+/// (`next = [n]` read first) goes back to the free list:
+/// [`func_80088020`]`(n)` (`alUnlink`), [`func_80088050`]`(n, q)`
+/// (`alLink`). The deltas are left as they are.
+///
+/// Frame (`sp - 0x38`): `ra`, `s2`, `s1`, `s0` at `+0x24..+0x18`, restored
+/// sign-extended (`s2 = q`, `s0`/`s1` the walk); the old mask at `+0x2C`.
+/// Leaves `a0` the mask and the callees' registers.
+///
+/// Domain: [`crate::imports::func_80090500`]'s (a double); a finite list
+/// in RDRAM, the callees' domains.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8008FBCC(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x38i64) as u64);
+    sw(m, g[SP], 0x20, g[S2]);
+    g[S2] = g[A0];
+    sw(m, g[SP], 0x24, g[RA]);
+    sw(m, g[SP], 0x1C, g[S1]);
+    sw(m, g[SP], 0x18, g[S0]);
+    g[A0] = 1;
+    call(imports::func_80090500, m, ctx);
+    let g = &mut ctx.gpr;
+    sw(m, g[SP], 0x2C, g[V0]);
+    g[S0] = lw(m, g[S2], 8);
+    loop {
+        let g = &mut ctx.gpr;
+        if g[S0] == 0 {
+            break;
+        }
+        g[S1] = lw(m, g[S0], 0);
+        g[A0] = g[S0];
+        call(imports::func_80088020, m, ctx);
+        let g = &mut ctx.gpr;
+        g[A0] = g[S0];
+        g[A1] = g[S2];
+        call(imports::func_80088050, m, ctx);
+        let g = &mut ctx.gpr;
+        g[S0] = g[S1];
+    }
+    let g = &mut ctx.gpr;
+    g[A0] = lw(m, g[SP], 0x2C);
+    call(imports::func_80090500, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x24);
+    g[S0] = lw(m, g[SP], 0x18);
+    g[S1] = lw(m, g[SP], 0x1C);
+    g[S2] = lw(m, g[SP], 0x20);
+    g[SP] = addu(g[SP], 0x38);
+}
+
+/// `func_8008FE60(s, p)` (by shape libaudio's `alSynAddPlayer`): with
+/// interrupts masked (`osSetIntMask(1)`, restored after), the player `p` is
+/// pushed on the synthesizer's list: `[p + 0x10] = [s + 0x20]` (its samples
+/// left from the current samples), `[p] = [s]`, `[s] = p`, in that order.
+///
+/// Frame (`sp - 0x18`): `ra` at `+0x14`; `s` and `p` spilled to their home
+/// slots `+0x18`, `+0x1C` and re-read sign-extended. Leaves `a2 = s`, `a1 =
+/// p`, `a0` the old mask, `t6`, `t7` the words copied, and the double's
+/// registers.
+///
+/// Domain: [`crate::imports::func_80090500`]'s (a double); `s` and `p` in
+/// RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8008FE60(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    g[A2] = g[A0];
+    sw(m, g[SP], 0x18, g[A2]);
+    g[A0] = 1;
+    sw(m, g[SP], 0x1C, g[A1]);
+    call(imports::func_80090500, m, ctx);
+    let g = &mut ctx.gpr;
+    g[A2] = lw(m, g[SP], 0x18);
+    g[A1] = lw(m, g[SP], 0x1C);
+    g[A0] = g[V0];
+    g[T6] = lw(m, g[A2], 0x20);
+    sw(m, g[A1], 0x10, g[T6]);
+    g[T7] = lw(m, g[A2], 0);
+    sw(m, g[A1], 0, g[T7]);
+    sw(m, g[A2], 0, g[A1]);
+    call(imports::func_80090500, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x18);
 }
 
 /// `func_80095AA0(e, a, b, c)` (**guess**: initialise a 0x14-byte event or
