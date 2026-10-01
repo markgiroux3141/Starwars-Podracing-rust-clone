@@ -27,7 +27,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80003BF8,func_80003BF8,ours,2,,recomp,,,
 0x80003E4C,func_80003E4C,ours,3,,recomp,,,
 0x80004000,func_80004000,ours,1,,rust_verified,unit_diff,high,"collision query setup: sphere c r, plane pair, mode 3, callbacks, matrix reset (game::collide)"
-0x80004160,func_80004160,ours,2,,recomp,,,
+0x80004160,func_80004160,ours,2,,rust_verified,unit_diff,high,"the query's hit applied to a sphere (push out, normal, contact) (game::collide)"
 0x80004670,func_80004670,ours,4,,recomp,,,
 0x80004704,func_80004704,ours,1,,rust_verified,unit_diff,high,n 28-byte records into model space by flags; word 6 untouched (game::collide)
 0x800049FC,func_800049FC,ours,2,,recomp,,,
