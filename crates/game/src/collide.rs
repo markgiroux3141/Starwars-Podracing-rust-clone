@@ -208,6 +208,206 @@ pub unsafe extern "C" fn func_80000B00(rdram: *mut u8, ctx: *mut RecompContext) 
     g[SP] = addu(g[SP], 0x88);
 }
 
+/// `func_80001E80(plane, a, b, c, ray)` (the query's ray against a
+/// triangle, **guess**): `plane` is the triangle's `n` then `d` (4 floats),
+/// `a`, `b`, `c` its corners, `ray` (on the stack) is `o`, `v` and a length
+/// (7 floats, as [`func_80001D34`](crate::math::func_80001D34) takes them).
+/// With `e = n.z*v.z + (v.x*n.x + v.y*n.y)` (in that order, not fused): if
+/// `0 < e` it needs the word `[0x8009A278]` nonzero (a back face, `back =
+/// 1`), otherwise `[0x8009A274]` (`back = 0`); if that word is 0 nothing
+/// happens. Then `t` = [`func_80001D34`](crate::math::func_80001D34)`(plane,
+/// ray, h)` (`h` a frame point); nothing more unless `0 <= t` and `t < T`
+/// (`T = [TRACKED]`). With the edges `b - a`, `c - b`, `a - c`, if
+/// [`func_800005B4`](crate::math::func_800005B4)`(h, a, b, c, ..)` says `h`
+/// is inside: `[0x800AEC7C] = 1`, `[TRACKED] = t`, `TRACKED + 8 = h`,
+/// `[0x800AE8D8] = [0x800AE938]`, and `TRACKED + 0x18 = n`, or `-n` for a
+/// back face (each component loaded just before its store).
+///
+/// Frame (`sp - 0x78`): `ra`, `s2`, `s1`, `s0` at `+0x34..+0x28`
+/// (`s0 = plane`, `s1 = b`, `s2 = a`), restored sign-extended; `back` at
+/// `+0x38` around both calls, `c` spilled to its home slot `+0x84` and
+/// re-read, `t` at `+0x40` around the second call; `h` at `+0x48`, the
+/// edges at `+0x6C`, `+0x60`, `+0x54` (each component stored after its
+/// subtraction), and their addresses as [`func_800005B4`]'s stack
+/// arguments at `+0x10..+0x18`. Leaves `t6 = ray`, `t7`/`t8` `0x800A0000`
+/// or the flag word, `v1 = back`, `a0 = plane`, `a1 = ray`, `a2 = h`, `f8
+/// = 0.0`, `f0 = e` when it stops at the flags; after the first call `f2 =
+/// t`, `f18 = 0.0`, `at = 0x800B0000`, `f6 = T` past the first compare;
+/// the edge temporaries, `t9`, `t0`, `t1` and the second callee's
+/// registers after it; on a hit `t2 = 1`, `t3` the copied word, `v0 =
+/// 0x800AE8C8` and `f4`..`f18` from the copies.
+///
+/// Domain: canonical pointers (16, 12, 12, 12 and 28 bytes) not overlapping
+/// the frame or [`TRACKED`]; no NaN operand of the products and sums of `e`,
+/// of the edge differences or of a negation (back faces); the callees'
+/// domains. `T`, `t` and `e` are only compared.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80001E80(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    'done: {
+        g[SP] = addu(g[SP], (-0x78i64) as u64);
+        g[T6] = lw(m, g[SP], 0x88);
+        sw(m, g[SP], 0x34, g[RA]);
+        sw(m, g[SP], 0x30, g[S2]);
+        sw(m, g[SP], 0x2C, g[S1]);
+        sw(m, g[SP], 0x28, g[S0]);
+        // e = n.z*v.z + (v.x*n.x + v.y*n.y)
+        f[6].set_u32l(lw(m, g[A0], 0) as u32);
+        f[4].set_u32l(lw(m, g[T6], 0xC) as u32);
+        f[16].set_u32l(lw(m, g[A0], 4) as u32);
+        f[10].set_u32l(lw(m, g[T6], 0x10) as u32);
+        f[8].set_fl(f[4].fl() * f[6].fl());
+        f[6].set_u32l(lw(m, g[A0], 8) as u32);
+        g[S0] = g[A0];
+        f[18].set_fl(f[10].fl() * f[16].fl());
+        f[10].set_u32l(lw(m, g[T6], 0x14) as u32);
+        g[S1] = g[A2];
+        g[S2] = g[A1];
+        f[16].set_fl(f[6].fl() * f[10].fl());
+        g[V1] = 0;
+        g[T7] = li(0x800A_0000);
+        g[T8] = li(0x800A_0000);
+        g[A1] = lw(m, g[SP], 0x88);
+        f[4].set_fl(f[8].fl() + f[18].fl());
+        f[8].set_u32l(0);
+        g[A2] = addu(g[SP], 0x48);
+        g[A0] = g[S0];
+        f[0].set_fl(f[16].fl() + f[4].fl());
+        if f[8].fl() < f[0].fl() {
+            g[T7] = lw(m, g[T7], -0x5D88);
+            if g[T7] == 0 {
+                break 'done;
+            }
+            g[V1] = 1;
+        } else {
+            g[T8] = lw(m, g[T8], -0x5D8C);
+            if g[T8] == 0 {
+                break 'done;
+            }
+        }
+        sw(m, g[SP], 0x38, g[V1]);
+        sw(m, g[SP], 0x84, g[A3]);
+        call(imports::func_80001D34, m, ctx);
+        let g = &mut ctx.gpr;
+        let f = &mut ctx.fpr;
+        f[18].set_u32l(0);
+        g[V1] = lw(m, g[SP], 0x38);
+        g[A3] = lw(m, g[SP], 0x84);
+        f[2].set_u32l(f[0].u32l());
+        g[AT] = li(0x800B_0000);
+        if f[0].fl() < f[18].fl() {
+            break 'done;
+        }
+        f[6].set_u32l(lw(m, g[AT], -0x1750) as u32);
+        if !(f[0].fl() < f[6].fl()) {
+            break 'done;
+        }
+        // The edges b - a, c - b, a - c.
+        f[10].set_u32l(lw(m, g[S1], 0) as u32);
+        f[16].set_u32l(lw(m, g[S2], 0) as u32);
+        g[T9] = addu(g[SP], 0x6C);
+        g[T0] = addu(g[SP], 0x60);
+        f[4].set_fl(f[10].fl() - f[16].fl());
+        g[T1] = addu(g[SP], 0x54);
+        g[A0] = addu(g[SP], 0x48);
+        g[A1] = g[S2];
+        sw(m, g[SP], 0x6C, u64::from(f[4].u32l()));
+        f[18].set_u32l(lw(m, g[S2], 4) as u32);
+        f[8].set_u32l(lw(m, g[S1], 4) as u32);
+        g[A2] = g[S1];
+        f[6].set_fl(f[8].fl() - f[18].fl());
+        sw(m, g[SP], 0x70, u64::from(f[6].u32l()));
+        f[16].set_u32l(lw(m, g[S2], 8) as u32);
+        f[10].set_u32l(lw(m, g[S1], 8) as u32);
+        f[4].set_fl(f[10].fl() - f[16].fl());
+        sw(m, g[SP], 0x74, u64::from(f[4].u32l()));
+        f[8].set_u32l(lw(m, g[A3], 0) as u32);
+        f[18].set_u32l(lw(m, g[S1], 0) as u32);
+        f[6].set_fl(f[8].fl() - f[18].fl());
+        sw(m, g[SP], 0x60, u64::from(f[6].u32l()));
+        f[10].set_u32l(lw(m, g[A3], 4) as u32);
+        f[16].set_u32l(lw(m, g[S1], 4) as u32);
+        f[4].set_fl(f[10].fl() - f[16].fl());
+        sw(m, g[SP], 0x64, u64::from(f[4].u32l()));
+        f[8].set_u32l(lw(m, g[A3], 8) as u32);
+        f[18].set_u32l(lw(m, g[S1], 8) as u32);
+        f[6].set_fl(f[8].fl() - f[18].fl());
+        sw(m, g[SP], 0x68, u64::from(f[6].u32l()));
+        f[16].set_u32l(lw(m, g[A3], 0) as u32);
+        f[10].set_u32l(lw(m, g[S2], 0) as u32);
+        f[4].set_fl(f[10].fl() - f[16].fl());
+        sw(m, g[SP], 0x54, u64::from(f[4].u32l()));
+        f[18].set_u32l(lw(m, g[A3], 4) as u32);
+        f[8].set_u32l(lw(m, g[S2], 4) as u32);
+        f[6].set_fl(f[8].fl() - f[18].fl());
+        sw(m, g[SP], 0x58, u64::from(f[6].u32l()));
+        f[16].set_u32l(lw(m, g[A3], 8) as u32);
+        f[10].set_u32l(lw(m, g[S2], 8) as u32);
+        sw(m, g[SP], 0x40, u64::from(f[2].u32l()));
+        sw(m, g[SP], 0x38, g[V1]);
+        f[4].set_fl(f[10].fl() - f[16].fl());
+        sw(m, g[SP], 0x18, g[T1]);
+        sw(m, g[SP], 0x14, g[T0]);
+        sw(m, g[SP], 0x10, g[T9]);
+        sw(m, g[SP], 0x5C, u64::from(f[4].u32l()));
+        call(imports::func_800005B4, m, ctx);
+        let g = &mut ctx.gpr;
+        let f = &mut ctx.fpr;
+        g[V1] = lw(m, g[SP], 0x38);
+        f[2].set_u32l(lw(m, g[SP], 0x40) as u32);
+        if g[V0] == 0 {
+            break 'done;
+        }
+        // Record the hit.
+        g[T2] = 1;
+        g[AT] = li(0x800B_0000);
+        sw(m, g[AT], -0x1384, g[T2]);
+        g[V0] = li(0x800B_0000);
+        g[AT] = li(0x800B_0000);
+        f[8].set_u32l(lw(m, g[SP], 0x48) as u32);
+        f[18].set_u32l(lw(m, g[SP], 0x4C) as u32);
+        f[6].set_u32l(lw(m, g[SP], 0x50) as u32);
+        g[V0] = addu(g[V0], (-0x1748i64) as u64);
+        sw(m, g[AT], -0x1750, u64::from(f[2].u32l()));
+        g[T3] = li(0x800B_0000);
+        sw(m, g[V0], 0, u64::from(f[8].u32l()));
+        sw(m, g[V0], 4, u64::from(f[18].u32l()));
+        sw(m, g[V0], 8, u64::from(f[6].u32l()));
+        g[T3] = lw(m, g[T3], -0x16C8);
+        g[AT] = li(0x800B_0000);
+        sw(m, g[AT], -0x1728, g[T3]);
+        f[10].set_u32l(lw(m, g[S0], 0) as u32);
+        g[V0] = li(0x800A_E8C8);
+        if g[V1] == 0 {
+            sw(m, g[V0], 0, u64::from(f[10].u32l()));
+            f[16].set_u32l(lw(m, g[S0], 4) as u32);
+            sw(m, g[V0], 4, u64::from(f[16].u32l()));
+            f[4].set_u32l(lw(m, g[S0], 8) as u32);
+            sw(m, g[V0], 8, u64::from(f[4].u32l()));
+        } else {
+            f[16].set_fl(-f[10].fl());
+            sw(m, g[V0], 0, u64::from(f[16].u32l()));
+            f[4].set_u32l(lw(m, g[S0], 4) as u32);
+            f[8].set_fl(-f[4].fl());
+            sw(m, g[V0], 4, u64::from(f[8].u32l()));
+            f[18].set_u32l(lw(m, g[S0], 8) as u32);
+            f[6].set_fl(-f[18].fl());
+            sw(m, g[V0], 8, u64::from(f[6].u32l()));
+        }
+    }
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x34);
+    g[S0] = lw(m, g[SP], 0x28);
+    g[S1] = lw(m, g[SP], 0x2C);
+    g[S2] = lw(m, g[SP], 0x30);
+    g[SP] = addu(g[SP], 0x78);
+}
+
 /// `func_800038E8(flags, pout, p, nout, n)` (query into model space,
 /// **guess**): `n` is a stack argument, all are vec3 pointers. With `M` the
 /// matrix stack's top ([`func_800059A8`](crate::matrix::func_800059A8),

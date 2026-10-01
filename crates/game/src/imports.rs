@@ -9,19 +9,25 @@
 use crate::recomp::recomp_imports;
 
 recomp_imports! {
+    func_800005B4, // point in triangle
     func_8000097C, // collision record step
+    func_80001D34, // ray_plane
     func_8000550C, // matrix stack reset
     func_800059A8, // matrix stack top
     func_80005B80, // object table clear
     func_80005BB8, // object start
     func_80005CAC, // key fraction
+    func_80005CD4, // float track value
+    func_80005DA8, // vec3 track value
     func_80006704, // key segment
     func_80006D5C, // animation object by id and kind
     func_80006EB4, // [o + 0x110] = x
     func_80006FD4, // empty
     func_80007A44, // slot +0x18 clear
     func_80007CE4, // handle lookup
+    func_80007F5C, // handle length
     func_80008718, // special sound id
+    func_80008760, // sound request
     func_8000A44C, // record init
     func_8000A920, // record or global on/off
     func_8000AA04, // record +0/+2 halfwords
@@ -35,6 +41,8 @@ recomp_imports! {
     func_8000C5F0, // push current id
     func_8000C6C8, // float clamp-add
     func_8000C724, // int clamp-add
+    func_8000CC1C, // edit tuning value
+    func_8000D5EC, // edit setting
     func_8000DA6C, // [0x8009B7E4]
     func_8000E8C4, // node tree first word (self)
     func_8000E9BC, // six optional bytes
@@ -62,6 +70,7 @@ recomp_imports! {
     func_800153C0, // vec3 length
     func_800153EC, // vec3 squared distance
     func_80015470, // vec3 distance
+    func_800154D0, // vec3 normalise
     func_80015538, // vec3 cross
     func_800155C0, // vec3 scale
     func_800155EC, // vec3 multiply-add
@@ -76,6 +85,7 @@ recomp_imports! {
     func_80016DD8, // vec4 x 4x4
     func_80017874, // 4x4 identity
     func_80017918, // 4x4 rows scaled
+    func_80017B7C, // node translation set
     func_80017BA8, // 4x4 to node transform
     func_80017C18, // node transform to 4x4
     func_80017C98, // node transform to 4x4 (same code)
@@ -150,6 +160,8 @@ recomp_imports! {
     func_80081530, // n bytes equal
     func_80081700, // 1 - r / (r + a)
     func_80081730, // point x 4x4 (w = 1)
+    func_80081814, // 4x4 split
+    func_80081948, // 4x4 compose
     func_80081A2C, // closest point on a segment
     func_800827C0, // model_load's error path (not yet understood)
     func_80082C80, // node world matrix (self)

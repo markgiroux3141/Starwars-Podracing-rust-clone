@@ -10,11 +10,11 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800005B4,func_800005B4,ours,1,,rust_verified,unit_diff,high,"point in triangle: u x v zero -> 0; edge crosses c1..c3 signs on the dominant axis, thresholds K1/K2 at 0x800A80F0/F4 (game::math)"
 0x8000097C,func_8000097C,ours,0,,rust_verified,unit_diff,high,record time/pos/dir at 0x800AE8B0 unless T-E < t and d.S >= d.r (d = p-q) (game::misc)
 0x80000B00,func_80000B00,ours,1,,rust_verified,unit_diff,high,"nearest of three edge points (func_80081A2C) to q, offered to func_8000097C if D <= T (game::collide)"
-0x80000D80,func_80000D80,ours,2,,recomp,,,
+0x80000D80,func_80000D80,ours,2,,rust_verified,unit_diff,high,line through two points meets a plane (game::math)
 0x80000E94,func_80000E94,ours,3,,recomp,,,
 0x80001864,func_80001864,ours,4,,recomp,,,
 0x80001D34,func_80001D34,ours,0,math,rust_verified,unit_diff,high,"ray/plane hit t in f0 or -1.0; |n.v| band [-1e-4,1e-4] in double; out = v*t + o (game::math)"
-0x80001E80,func_80001E80,ours,2,,recomp,,,
+0x80001E80,func_80001E80,ours,2,,rust_verified,unit_diff,high,the query's ray against a triangle (game::collide)
 0x800020D8,func_800020D8,ours,3,,recomp,,,
 0x800026BC,func_800026BC,ours,3,,recomp,,,
 0x80002BD4,func_80002BD4,ours,0,,rust_verified,unit_diff,high,"0 if 4 points all beyond one face of box C=[0x800AE908] h=[0x800AE8E0], else 1 (game::misc)"
@@ -48,11 +48,11 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80005CD4,func_80005CD4,ours,1,,rust_verified,unit_diff,high,"float track value: v[i+1] after k[i+1], v[i] at or before k[i], else t v[i+1] + (1-t) v[i] (game::anim)"
 0x80005DA8,func_80005DA8,ours,1,,rust_verified,unit_diff,high,"vec3 track value: as 80005CD4, the blend through func_800155EC (game::anim)"
 0x80005F54,func_80005F54,ours,3,,recomp,,,
-0x80006120,func_80006120,ours,2,,recomp,,,
-0x80006200,func_80006200,ours,2,,recomp,,,
+0x80006120,func_80006120,ours,2,,rust_verified,unit_diff,high,vec3 track to a node's translation (game::anim)
+0x80006200,func_80006200,ours,2,,rust_verified,unit_diff,high,vec3 track to a node's scale (game::anim)
 0x8000630C,func_8000630C,ours,4,,recomp,,,
 0x8000646C,func_8000646C,ours,1,,rust_verified,unit_diff,high,"step track: w = v[s+1] if k[s+1] < u else v[s], to [e+8] of each listed target (game::anim)"
-0x8000651C,func_8000651C,ours,2,,recomp,,,
+0x8000651C,func_8000651C,ours,2,,rust_verified,unit_diff,high,"float track to a node halfword, wrapped (QUIRK: vec3 sampler for the blend) (game::anim)"
 0x800066DC,func_800066DC,ours,0,,rust_verified,unit_diff,high,empty; spills a0 to [sp] (game::misc)
 0x800066E4,func_800066E4,ours,0,,rust_verified,unit_diff,high,empty; spills a0 to [sp] (game::misc)
 0x800066EC,func_800066EC,ours,0,,rust_verified,unit_diff,high,empty; spills a0 to [sp] (game::misc)
@@ -108,15 +108,15 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80008718,func_80008718,ours,0,,rust_verified,unit_diff,high,1 if 0x8E <= a0 < 0x9E or a0 == 0x22 (game::misc)
 0x80008750,func_80008750,ours,0,,rust_verified,unit_diff,high,spills a0; byte [0x8009A324] = a0 (game::misc)
 0x80008760,func_80008760,ours,1,,rust_verified,unit_diff,high,"request a sound: slot refresh (keep) or free / lowest-priority slot, volume scaled by settings, pan forced to 0x40 unless stereo; QUIRK writes the caller's pan slot (game::misc)"
-0x80008B14,func_80008B14,ours,2,,recomp,,,
-0x80008B68,func_80008B68,ours,2,,recomp,,,
+0x80008B14,func_80008B14,ours,2,,rust_verified,unit_diff,high,sound request if audible (game::misc)
+0x80008B68,func_80008B68,ours,2,,rust_verified,unit_diff,high,sound request at least at volume 1.0 (game::misc)
 0x80008BC4,func_80008BC4,ours,4,,recomp,,,
 0x80008C58,func_80008C58,ours,3,,recomp,,,
 0x80008F28,func_80008F28,ours,14,,recomp,,,
 0x80008F58,func_80008F58,ours,0,,rust_verified,unit_diff,high,"[0x8009AD08] = f12, [0x8009AD0C] = f14 (game::misc)"
 0x80008F6C,func_80008F6C,ours,0,,rust_verified,unit_diff,high,(kind<<24)|(a1<<16)|table[kind][index]|0x8000 or -1; jump table on kind (game::misc)
 0x80009134,func_80009134,ours,0,,rust_verified,unit_diff,high,"0.0 < F[i] (0x8009AD30) for k 0/1 (64-bit), else 0.0 < G[k] (0x8009AD10) (game::misc)"
-0x800091B0,func_800091B0,ours,2,,recomp,,,
+0x800091B0,func_800091B0,ours,2,,rust_verified,unit_diff,high,a sound's timing by kind (game::misc)
 0x80009278,func_80009278,ours,0,,rust_verified,unit_diff,high,push to the 3-entry recent list 0x8009ADF4; QUIRK unbounded slot (game::misc)
 0x800092B0,func_800092B0,ours,0,,rust_verified,unit_diff,high,1 if a0 is in the recent list (game::misc)
 0x800092EC,func_800092EC,ours,18,,recomp,,,
@@ -178,7 +178,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8000D7DC,func_8000D7DC,ours,1,,rust_verified,unit_diff,high,push id 1 on key 8 if menu flag bit 1 (game::misc)
 0x8000D818,func_8000D818,ours,4,,recomp,,,
 0x8000D89C,func_8000D89C,ours,7,,recomp,,,
-0x8000D90C,func_8000D90C,ours,2,,recomp,,,
+0x8000D90C,func_8000D90C,ours,2,,rust_verified,unit_diff,high,debug page edit dispatch (game::misc)
 0x8000D960,func_8000D960,ours,5,,recomp,,,
 0x8000D9A8,func_8000D9A8,ours,1,,rust_verified,unit_diff,high,reset the id stack (Jdge pool element 0's bit 12 picks id 0 or 2) (game::misc)
 0x8000DA6C,func_8000DA6C,ours,0,,rust_verified,unit_diff,high,returns [0x8009B7E4] (game::misc)
