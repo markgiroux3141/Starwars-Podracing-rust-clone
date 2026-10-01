@@ -198,3 +198,101 @@ pub unsafe extern "C" fn func_8002FB4C(rdram: *mut u8, ctx: *mut RecompContext) 
     }
     g[V0] = addu(g[V1], 1);
 }
+
+/// `func_8002FEE4(n)` (heap_alloc, **guess** at the name): if `n` is below
+/// the bytes left ([`func_8002FC58`], heap_free; compared unsigned, so a
+/// negative free count lets anything through), `p` = the cursor
+/// ([`func_8002FAFC`]), the cursor becomes `p + n` ([`func_8002FAC4`]) and
+/// `v0 = p`; otherwise `v0 = 0`. No alignment.
+///
+/// Frame (`sp - 0x20`): `ra` at `+0x14`; `n` spilled to its home slot
+/// `+0x20` and re-read sign-extended, `p` at `+0x1C`. Leaves `t6 = n`, `at`
+/// the test, on an allocation `t7 = n`, `a0 = p + n`, and the callees'
+/// registers.
+///
+/// Domain: the callees'.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8002FEE4(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x20i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    sw(m, g[SP], 0x20, g[A0]);
+    call(imports::func_8002FC58, m, ctx);
+    let g = &mut ctx.gpr;
+    g[T6] = lw(m, g[SP], 0x20);
+    g[AT] = sltu(g[T6], g[V0]);
+    if g[AT] != 0 {
+        call(imports::func_8002FAFC, m, ctx);
+        let g = &mut ctx.gpr;
+        g[T7] = lw(m, g[SP], 0x20);
+        sw(m, g[SP], 0x1C, g[V0]);
+        g[A0] = addu(g[V0], g[T7]);
+        call(imports::func_8002FAC4, m, ctx);
+        let g = &mut ctx.gpr;
+        g[V0] = lw(m, g[SP], 0x1C);
+    } else {
+        g[V0] = 0;
+    }
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x20);
+}
+
+/// `func_80030C08()` (carve an aligned buffer from the heap, **guess**):
+/// with `p` = the heap cursor ([`func_8002FAFC`]), the word `[0x800DB894] =
+/// p` and then `(p + 0x3F) & !0x3F` (64-aligned); with `s = 0x4000` if the
+/// RDRAM size `[0x80000318]` is below 8 MB (unsigned), else `0x10000`,
+/// `[0x800DB898] = s + [0x800DB894]` (re-read); then the cursor becomes `s +
+/// p + 0x40` ([`func_8002FAC4`]), from the unaligned `p`.
+///
+/// Frame (`sp - 0x18`): `ra` at `+0x14`. Leaves `a1 = p`, `a2 = 0x800000`,
+/// `v1` the RDRAM size, `v0 = s`, `t7 = p + 0x3F`, `t8` the aligned value,
+/// `t9`, `t0`, `at` from the second store, and the callee's registers.
+///
+/// Domain: the callees'.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80030C08(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    call(imports::func_8002FAFC, m, ctx);
+    let g = &mut ctx.gpr;
+    g[A0] = li(0x800D_B894);
+    g[T7] = addu(g[V0], 0x3F);
+    g[AT] = (-0x40i64) as u64;
+    sw(m, g[A0], 0, g[V0]);
+    g[T8] = g[T7] & g[AT];
+    sw(m, g[A0], 0, g[T8]);
+    g[V1] = li(0x8000_0000);
+    g[V1] = lw(m, g[V1], 0x318);
+    g[A2] = li(0x80_0000);
+    g[A1] = g[V0];
+    g[AT] = sltu(g[V1], g[A2]);
+    g[V0] = 0x4000;
+    if g[AT] == 0 {
+        g[V0] = li(0x1_0000);
+    }
+    g[T9] = lw(m, g[A0], 0);
+    g[AT] = li(0x800E_0000);
+    g[T0] = addu(g[V0], g[T9]);
+    sw(m, g[AT], -0x4768, g[T0]);
+    g[AT] = sltu(g[V1], g[A2]);
+    g[V0] = 0x4000;
+    if g[AT] == 0 {
+        g[V0] = li(0x1_0000);
+    }
+    g[A0] = addu(g[V0], g[A1]);
+    g[A0] = addu(g[A0], 0x40);
+    call(imports::func_8002FAC4, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x18);
+}

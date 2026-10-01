@@ -37,8 +37,12 @@ recomp_imports! {
     func_8000AB24, // record or global colour bytes
     func_8000ABD4, // record texture pixels
     func_8000AC34, // record flags |=
+    func_8000ACC0, // entries reset
     func_8000AED4, // entry flags |=
     func_8000AEFC, // entry +6/+4/+8
+    func_8000AF4C, // entry floats
+    func_8000B02C, // entry +0xC/+0x10
+    func_8000B1B0, // entry select
     func_8000C5F0, // push current id
     func_8000C6C8, // float clamp-add
     func_8000C724, // int clamp-add
@@ -131,7 +135,10 @@ recomp_imports! {
     func_80031560, // channel start (self-call for all four)
     func_800315D8, // channel +0xC = 0 (self-call)
     func_80031640, // channel +8 = 0 (self-call)
+    func_800319F4, // start channel entry
+    func_80031BBC, // stop channel
     func_800321F0, // stat update
+    func_80033590, // a point on a node pair
     func_80033E08, // Mtx ring next
     func_800344F4, // 4x4 float to Mtx
     func_80034650, // 4x3 float to Mtx
@@ -148,6 +155,7 @@ recomp_imports! {
     func_8003D110, // render state reset
     func_8003D488, // [0x800A48D4] = v & 0xFFFF
     func_8003E0A0, // texture scroll
+    func_8003F300, // pool elements init
     func_8003F714, // pool element by tag
     func_8003F7B8, // pool count by id
     func_8003F800, // pool iteration begin
@@ -157,6 +165,7 @@ recomp_imports! {
     func_8003FDCC, // nearest pool elements
     func_8004110C, // save a pose
     func_8004E488, // mask bits set/clear
+    func_8005058C, // camera transition start
     func_80051FF4, // first zero of four words
     func_80052134, // progress figure
     func_80073C58, // float clamp

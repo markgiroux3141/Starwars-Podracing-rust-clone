@@ -7,7 +7,7 @@
 
 use crate::imports;
 use n64mem::Mem;
-use crate::recomp::{addu, call, enter, lh, lhu, li, lw, reg::*, sh, sll, slt, subu, sw, RecompContext};
+use crate::recomp::{addu, call, enter, lbu, lh, lhu, li, lw, reg::*, sh, sll, slt, subu, sw, RecompContext};
 
 /// The four 28-byte records at `0x800DB8A0` that [`func_800314C0`] ..
 /// [`func_80031640`] use, by index (sound channels? **guess**).
@@ -180,6 +180,26 @@ pub unsafe extern "C" fn func_80031640(rdram: *mut u8, ctx: *mut RecompContext) 
     });
 }
 
+/// `func_80031924(i)`: [`func_80031BBC`]`(i)` (stop channel `i`).
+///
+/// Frame (`sp - 0x18`): `ra` at `+0x14`. Leaves the callee's registers.
+///
+/// Domain: the callee's.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80031924(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    call(imports::func_80031BBC, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x18);
+}
+
 /// `func_800319F4(i, k)` (start entry `k` on channel `i` if it ranks high
 /// enough, **guess**): with `cur` = [`CURRENT`]`[i]` and the entry `e` =
 /// [`ENTRIES`] `+ 12k`: nothing if `k < cur` (signed); for `k == cur`,
@@ -333,6 +353,44 @@ pub unsafe extern "C" fn func_80031AB0(rdram: *mut u8, ctx: *mut RecompContext) 
     let g = &mut ctx.gpr;
     g[S0] = lw(m, g[SP], 0x18);
     g[SP] = addu(g[SP], 0x20);
+}
+
+/// `func_80031B70(o, k)` (start or stop an element's channel, **guess**):
+/// with the channel `c` = the byte `[[o + 0x1E70] + 0x10]`: if bit 26 of
+/// `[o + 0x64]` is clear, [`func_800319F4`]`(c, k)` (start entry `k`, `a1`
+/// passed through as it came), else [`func_80031BBC`]`(c)` (stop it).
+///
+/// Frame (`sp - 0x18`): `ra` at `+0x14`. Leaves `a2 = o`, `t6` the flags,
+/// `t7 = t6 << 5`, `t8` or `t9` the link, and the callee's registers.
+///
+/// Domain: the callees'; `o`'s words and the link's byte in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80031B70(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    g[T6] = lw(m, g[A0], 0x64);
+    g[A2] = g[A0];
+    g[T7] = sll(g[T6], 5);
+    if (g[T7] as i64) >= 0 {
+        g[T9] = lw(m, g[A2], 0x1E70);
+        g[A0] = lbu(m, g[T9], 0x10);
+        call(imports::func_800319F4, m, ctx);
+        let g = &mut ctx.gpr;
+        g[RA] = lw(m, g[SP], 0x14);
+    } else {
+        g[T8] = lw(m, g[A0], 0x1E70);
+        g[A0] = lbu(m, g[T8], 0x10);
+        call(imports::func_80031BBC, m, ctx);
+        let g = &mut ctx.gpr;
+        g[RA] = lw(m, g[SP], 0x14);
+    }
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], 0x18);
 }
 
 /// `func_80031BBC(i)` (stop channel `i`, **guess**): its entry at

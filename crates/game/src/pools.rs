@@ -17,6 +17,59 @@ use crate::recomp::{addu, call, enter, lh, li, lw, multu, reg::*, sh, sll, slt, 
 /// by id, walking the list with `v0` (the slot) and `v1` (the descriptor).
 pub const POOLS: u32 = 0x800A_2170;
 
+/// `func_80030298(id, count)` (place a pool on the heap, **guess**): with
+/// `p` = the heap cursor ([`func_8002FAFC`](crate::heap::func_8002FAFC)),
+/// `size` = [`func_8003FB78`]`(id, count, p)` (the first pool with this id
+/// gets `count` elements at `p`; `count * element size`, or 0 if none),
+/// [`func_8003F300`]`(id)` (its elements initialised), the cursor set to
+/// `size + p` ([`func_8002FAC4`](crate::heap::func_8002FAC4)), then
+/// [`func_8003FA24`]`(id, &w)` with the word `w = "Load"` (`0x4C6F6164`)
+/// in the frame: the pools' callbacks get the message.
+///
+/// Frame (`sp - 0x28`): `ra` at `+0x14`; `id`, `count` spilled to their
+/// home slots `+0x28`, `+0x2C` and re-read, `p` at `+0x20`, `size` at
+/// `+0x24`, `w` at `+0x1C`. Leaves `t6 = size`, `t7 = p`, `t8 = w`, `a0 =
+/// id`, `a1` = `w`'s address, and the callees' registers.
+///
+/// Domain: the callees' (a pool's callbacks run as they are given).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80030298(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x28i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    sw(m, g[SP], 0x28, g[A0]);
+    sw(m, g[SP], 0x2C, g[A1]);
+    call(imports::func_8002FAFC, m, ctx);
+    let g = &mut ctx.gpr;
+    sw(m, g[SP], 0x20, g[V0]);
+    g[A0] = lw(m, g[SP], 0x28);
+    g[A1] = lw(m, g[SP], 0x2C);
+    g[A2] = g[V0];
+    call(imports::func_8003FB78, m, ctx);
+    let g = &mut ctx.gpr;
+    sw(m, g[SP], 0x24, g[V0]);
+    g[A0] = lw(m, g[SP], 0x28);
+    call(imports::func_8003F300, m, ctx);
+    let g = &mut ctx.gpr;
+    g[T6] = lw(m, g[SP], 0x24);
+    g[T7] = lw(m, g[SP], 0x20);
+    g[A0] = addu(g[T6], g[T7]);
+    call(imports::func_8002FAC4, m, ctx);
+    let g = &mut ctx.gpr;
+    g[T8] = li(0x4C6F_6164);
+    sw(m, g[SP], 0x1C, g[T8]);
+    g[A0] = lw(m, g[SP], 0x28);
+    g[A1] = addu(g[SP], 0x1C);
+    call(imports::func_8003FA24, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x28);
+}
+
 /// `func_80030304(id)`: [`func_8003FB78`]`(id, 0, 0)`: the first pool with
 /// this id gets no elements (count 0 at base 0); returns 0.
 ///

@@ -387,7 +387,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800290A4,func_800290A4,ours,1,,rust_verified,unit_diff,high,"fade-in step: alpha of colour -103 from 255 by k*dt, then off; FCR31 idiom via fpu::to_unsigned_s (game::misc)"
 0x80029298,func_80029298,ours,0,,rust_verified,unit_diff,high,40 records at 0x800A4C00: [+8] (and +0x14) = x + const by kind (jump table) (game::misc)
 0x8002932C,func_8002932C,ours,23,,recomp,,,
-0x80029494,func_80029494,ours,2,,recomp,,,
+0x80029494,func_80029494,ours,2,,rust_verified,unit_diff,high,three boxes of an object's models (game::misc)
 0x8002963C,func_8002963C,ours,21,,recomp,,,
 0x80029A3C,func_80029A3C,ours,0,save,rust_verified,unit_diff,high,"profile record reset, working (0x80113E60) or saved (0x80113694) copy (game::save)"
 0x80029C24,func_80029C24,ours,0,,rust_verified,unit_diff,high,"A = trunc(f32(byte*word)*[0x800A9E08])+1 -> [0x800D6CC8], B likewise -> [0x800D6CCC], halfword [0x800D6CC4] = [0x80113E78]+A < B (game::misc)"
@@ -395,7 +395,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8002A7D4,func_8002A7D4,ours,9,,recomp,,,
 0x8002AD70,func_8002AD70,ours,5,,recomp,,,
 0x8002AFFC,func_8002AFFC,ours,4,,recomp,,,
-0x8002B3C8,func_8002B3C8,ours,2,,recomp,,,
+0x8002B3C8,func_8002B3C8,ours,2,,rust_verified,unit_diff,high,"aim the camera at a target (jump table, transitions) (game::misc)"
 0x8002B574,func_8002B574,ours,8,,recomp,,,
 0x8002BBA4,func_8002BBA4,ours,8,,recomp,,,
 0x8002C780,func_8002C780,ours,1,,rust_verified,unit_diff,high,"HUD panel: two levels += ±s*dt clamped [0,254], records AF AE B2 B1 B4 (B3 B0 if enabled); FCR31 idiom (game::misc)"
@@ -465,13 +465,13 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8002FDF8,func_8002FDF8,ours,1,,rust_verified,unit_diff,high,"clear the block at 0x800D6960 (six floats, +0x18, +0x20 = 2), colour -103 black, 80038DF8(0x3E4, 0x3E8, 0xFF x4) (game::misc)"
 0x8002FE80,func_8002FE80,ours,0,,rust_verified,unit_diff,high,"empty, spills a0..a3 (game::misc)"
 0x8002FE94,func_8002FE94,ours,0,,rust_verified,unit_diff,high,"round up to a power of two, min 16 (game::misc)"
-0x8002FEE4,func_8002FEE4,ours,2,,recomp,,,
+0x8002FEE4,func_8002FEE4,ours,2,,rust_verified,unit_diff,high,heap_alloc (unaligned; unsigned size test) (game::heap)
 0x8002FF38,sprite_load,ours,17,asset,rust_verified,unit_diff,high,"header to the unaligned cursor, table at +0x14, palette/pages 16-aligned (NOTES Sprites); QUIRKs: no space check; CI without palette leaves the header unreserved; palette with <=0 pages reads an unloaded offset; negative count moves the cursor back"
 0x80030130,sprite_load_a1,ours,18,asset,rust_verified,unit_diff,high,sprite_load(a1); a0 only spilled. No references in code or data (dead?)
 0x80030154,sprite_load_thunk,ours,18,asset,rust_verified,unit_diff,high,sprite_load(a0) with a frame; ~100 call sites
 0x80030174,spline_load,ours,17,asset,rust_verified,unit_diff,high,"spline block entry to the heap cursor, +0xC = first point; no space check; index = low word (game::loader)"
 0x80030274,func_80030274,ours,18,,recomp,,,
-0x80030298,func_80030298,ours,2,,recomp,,,
+0x80030298,func_80030298,ours,2,,rust_verified,unit_diff,high,"place a pool on the heap, Load message (game::pools)"
 0x80030304,func_80030304,ours,1,,rust_verified,unit_diff,high,"8003FB78(id, 0, 0): empty the first pool with this id (game::pools)"
 0x80030328,texture_read,ours,17,asset,rust_verified,unit_diff,high,"(hdr, &pix, &pal): pixels then palette at 64-aligned heap; *pal untouched if no palette; OOM if free < size+0x80"
 0x8003043C,texture_block_init,ours,17,asset,rust_verified,unit_diff,high,count -> 0x800DB890 (rom_read_small); zeroes all 1700 cache words whatever the count; QUIRK: count >= 1701 (signed) hangs: b . = pause_self
@@ -482,12 +482,12 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80030A7C,func_80030A7C,ours,0,,rust_verified,unit_diff,high,"merge q into model-style header p: node list, skip Data/Anim, AltN pointers (game::misc)"
 0x80030B68,model_load_stats,ours,0,,rust_verified,unit_diff,high,"*a/*c/*b = model bytes, texture bytes, 0 (game::misc)"
 0x80030B90,mask_buffer_init,ours,2,asset,recomp,,med,[0x80114528] = align64(cursor); cursor += 0x4B000/0x25800 + 0x40
-0x80030C08,func_80030C08,ours,2,,recomp,,,
+0x80030C08,func_80030C08,ours,2,,rust_verified,unit_diff,high,carve a 64-aligned buffer from the heap (game::heap)
 0x80030C98,func_80030C98,ours,20,,recomp,,,
 0x80030EA0,func_80030EA0,ours,21,,recomp,,,
 0x80030FA0,func_80030FA0,ours,1,,rust_verified,unit_diff,high,"colour -103 black, 80038DF8(0x3E4, 0x3E8, 0xFF x4) (game::misc)"
 0x80030FF8,heap_init,ours,22,asset,recomp,,med,"start 0x8014D7E0; end = [0x80114538] - reserve (0 if 4 MB, 0x1400 at 640 wide); clears cursors"
-0x80031134,func_80031134,ours,2,,recomp,,,
+0x80031134,func_80031134,ours,2,,rust_verified,unit_diff,high,HUD entries set up from the cMan pool (game::misc)
 0x80031324,func_80031324,ours,23,,recomp,,,
 0x800313D8,memset,ours,0,,rust_verified,unit_diff,high,"byte fill, returns p (game::misc)"
 0x8003140C,func_8003140C,ours,15,,recomp,,,
@@ -497,12 +497,12 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800315D8,func_800315D8,ours,0,channels,rust_verified,unit_diff,high,channel [+0xC]=0; -1 = all four (self-call) (game::channels)
 0x80031640,func_80031640,ours,0,channels,rust_verified,unit_diff,high,channel [+8]=0; -1 = all four (self-call) (game::channels)
 0x800316A8,func_800316A8,ours,11,,recomp,,,
-0x80031924,func_80031924,ours,2,,recomp,,,
+0x80031924,func_80031924,ours,2,,rust_verified,unit_diff,high,stop channel wrapper (game::channels)
 0x80031944,func_80031944,ours,3,,recomp,,,
 0x800319CC,func_800319CC,ours,3,,recomp,,,
 0x800319F4,func_800319F4,ours,1,,rust_verified,unit_diff,high,start entry k on channel i if k > CURRENT[i] (or equal and idle); QUIRK: k >= 13 hangs (game::channels)
 0x80031AB0,func_80031AB0,ours,1,,rust_verified,unit_diff,high,800319F4 with a given value; QUIRK: k >= 13 hangs (game::channels)
-0x80031B70,func_80031B70,ours,2,,recomp,,,
+0x80031B70,func_80031B70,ours,2,,rust_verified,unit_diff,high,start or stop an element's channel (game::channels)
 0x80031BBC,func_80031BBC,ours,1,,rust_verified,unit_diff,high,"CURRENT[i] = -1, 80031640(i); QUIRK: i = -1 stores before CURRENT (game::channels)"
 0x80031BEC,func_80031BEC,ours,0,channels,rust_verified,unit_diff,high,[0x800DB910 + 4i] = 1 (game::channels)
 0x80031C04,func_80031C04,ours,20,,recomp,,,
