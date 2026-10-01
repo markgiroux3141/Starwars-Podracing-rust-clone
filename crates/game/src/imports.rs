@@ -75,6 +75,7 @@ recomp_imports! {
     func_80017BA8, // 4x4 to node transform
     func_80017C18, // node transform to 4x4
     func_80017C98, // node transform to 4x4 (same code)
+    func_80017D58, // node float k
     func_80017DA4, // node type word
     func_80017DAC, // [o + 0x14]
     func_80017DB4, // child k
@@ -113,6 +114,7 @@ recomp_imports! {
     func_8003609C, // render mode switches
     func_80038DF8, // six halfwords
     func_800390C0, // crc32_table_init
+    func_8003A568, // spline walker point
     func_8003B250, // start a spline walker
     func_8003B300, // four screen words
     func_8003D110, // render state reset
@@ -139,6 +141,9 @@ recomp_imports! {
     func_80081730, // point x 4x4 (w = 1)
     func_80081A2C, // closest point on a segment
     func_800827C0, // model_load's error path (not yet understood)
+    func_80082C80, // node world matrix (self)
+    func_80082FA4, // path to a node (self)
+    func_800833B4, // set a tree's weights (self)
     func_80087814, // queue a screen rectangle
     func_8008A750, // cosf
     func_8008A8C0, // sinf

@@ -1016,8 +1016,8 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80080148,func_80080148,ours,0,,rust_verified,unit_diff,high,zero ten words and two floats (game::misc)
 0x800801B8,func_800801B8,ours,16,,recomp,,,
 0x80080350,func_80080350,ours,0,,rust_verified,unit_diff,high,0.0 and an a0 spill (game::misc)
-0x8008035C,func_8008035C,ours,1,,recomp,,,
-0x80080408,func_80080408,ours,1,,recomp,,,
+0x8008035C,func_8008035C,ours,1,,rust_verified,unit_diff,high,"spline walker value b * [w + 8] + a, capped at 1 (or [0x800ADC5C]) (game::misc)"
+0x80080408,func_80080408,ours,1,,rust_verified,unit_diff,high,table word at 0x8011DCF8 + 4 (trunc(10 [w + 8]) + 10 i) (game::misc)
 0x80080498,func_80080498,ours,4,,recomp,,,
 0x800807E0,func_800807E0,ours,5,,recomp,,,
 0x800808E0,func_800808E0,ours,4,,recomp,,,
@@ -1037,11 +1037,11 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80081680,func_80081680,ours,0,math,rust_verified,unit_diff,high,"sign(x) * min(|x|^n * scale, max) (game::math)"
 0x80081700,func_80081700,ours,0,math,rust_verified,unit_diff,high,"1 - r / (r + a), r = b / [0x800ADCB0] (game::math)"
 0x80081730,func_80081730,ours,0,math,rust_verified,unit_diff,high,"point times 4x4 (w = 1), four outputs, v re-read (game::math)"
-0x80081814,func_80081814,ours,1,,recomp,,,
-0x80081948,func_80081948,ours,1,,recomp,,,
+0x80081814,func_80081814,ours,1,,rust_verified,unit_diff,high,"split a 4x4 into translation, unit rows and row lengths (game::math)"
+0x80081948,func_80081948,ours,1,,rust_verified,unit_diff,high,"compose a 4x4 from translation, rotation and row scales (game::math)"
 0x800819A4,func_800819A4,ours,0,math,rust_verified,unit_diff,high,"projection onto a plane (out = n t, then += p) (game::math)"
 0x80081A2C,func_80081A2C,ours,0,math,rust_verified,unit_diff,high,closest point on a segment (game::math)
-0x80081BE8,func_80081BE8,ours,1,,recomp,,,
+0x80081BE8,func_80081BE8,ours,1,,rust_verified,unit_diff,high,side test of three cross products on the dominant axis (game::math)
 0x80081FB0,func_80081FB0,ours,3,,recomp,,,
 0x800823A4,func_800823A4,ours,0,math,rust_verified,unit_diff,high,plane value d - n.p (game::math)
 0x800823DC,func_800823DC,ours,0,math,rust_verified,unit_diff,high,plane height over a point (game::math)
@@ -1054,11 +1054,11 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800829F4,func_800829F4,ours,2,,recomp,,,
 0x80082B38,func_80082B38,ours,2,,recomp,,,
 0x80082BE0,func_80082BE0,ours,2,,recomp,,,
-0x80082C80,func_80082C80,ours,1,,recomp,,,
-0x80082FA4,func_80082FA4,ours,1,,recomp,,,
+0x80082C80,func_80082C80,ours,1,,rust_verified,unit_diff,high,a node's world matrix (self; QUIRK: 0xD064 pivot from an uninitialised frame word) (game::misc)
+0x80082FA4,func_80082FA4,ours,1,,rust_verified,unit_diff,high,the bit-15 nodes on the path to a node (self) (game::misc)
 0x80083134,func_80083134,ours,2,,recomp,,,
-0x80083190,func_80083190,ours,1,,recomp,,,
-0x800833B4,func_800833B4,ours,1,,recomp,,,
+0x80083190,func_80083190,ours,1,,rust_verified,unit_diff,high,a path's matrix (QUIRK: first pivot from an uninitialised frame word) (game::misc)
+0x800833B4,func_800833B4,ours,1,,rust_verified,unit_diff,high,set the weights of a tree's 0x5066 nodes (self) (game::misc)
 0x800834DC,func_800834DC,ours,0,,rust_verified,unit_diff,high,"empty, spills a0..a3 (game::misc)"
 0x800834F0,func_800834F0,ours,2,,recomp,,,
 0x80083D80,func_80083D80,ours,1,,recomp,,,
