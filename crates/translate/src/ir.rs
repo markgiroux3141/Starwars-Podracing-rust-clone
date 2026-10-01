@@ -144,6 +144,11 @@ pub enum Op {
     /// (IDO's guards after `div`: `break 7` for a zero divisor, `break 6`
     /// for `INT_MIN / -1`). The C carries on after it if it returns.
     Break(u32),
+    /// The runtime's `cop0_status_read(ctx)`, N64Recomp's translation of
+    /// `mfc0 rd, Status`: the register gets what the runtime returns.
+    Cop0StatusRead(u8),
+    /// The runtime's `cop0_status_write(ctx, v)` (`mtc0 v, Status`).
+    Cop0StatusWrite(Val),
     /// `let c<n> = cond;`: a branch condition read before its delay slot
     /// overwrites one of its registers.
     SaveCond(usize, Cond),
@@ -250,7 +255,7 @@ impl Op {
     }
 
     pub fn is_call(&self) -> bool {
-        matches!(self, Op::Call(_) | Op::CallIndirect(_) | Op::PauseSelf)
+        matches!(self, Op::Call(_) | Op::CallIndirect(_) | Op::PauseSelf | Op::Cop0StatusRead(_) | Op::Cop0StatusWrite(_))
     }
 }
 
@@ -386,6 +391,7 @@ fn refusal_for_name(name: &str, e: &E) -> Refusal {
         "do_lwl" | "do_lwr" | "do_swl" | "do_swr" => Refusal::new("unaligned access", format!("unsupported shape `{e}`")),
         "LD" | "SD" => Refusal::new("64-bit", format!("`{e}`")),
         "switch_error" => Refusal::new("jump table", format!("`{e}`")),
+        "cop0_status_read" | "cop0_status_write" => Refusal::new("cop0", format!("unsupported shape `{e}`")),
         n if n.starts_with("(LOOKUP_FUNC") => Refusal::new("indirect call", format!("`{e}`")),
         _ => Refusal::new("unknown", format!("`{e}`")),
     }
@@ -805,11 +811,33 @@ fn unaligned_stmt(st: &crate::c::Stmt) -> Option<Op> {
     }
 }
 
+/// `rd = cop0_status_read(ctx);` and `cop0_status_write(ctx, v);`, the
+/// runtime hooks N64Recomp emits for `mfc0`/`mtc0` of Status.
+fn cop0_stmt(st: &crate::c::Stmt) -> Option<Op> {
+    use crate::c::Stmt;
+    match st {
+        Stmt::Assign(E::Reg(d), E::Call(n, args)) if n == "cop0_status_read" => match args.as_slice() {
+            [E::Ident(c)] if c == "ctx" => Some(Op::Cop0StatusRead(*d)),
+            _ => None,
+        },
+        Stmt::Expr(E::Call(n, args)) if n == "cop0_status_write" => match args.as_slice() {
+            [E::Ident(c), v] if c == "ctx" => Some(Op::Cop0StatusWrite(val(v)?)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 pub fn ops_of_line(stmts: &[crate::c::Stmt]) -> Result<Vec<Op>, Refusal> {
     use crate::c::Stmt;
     let mut out = Vec::new();
     let mut k = 0;
     while k < stmts.len() {
+        if let Some(op) = cop0_stmt(&stmts[k]) {
+            out.push(op);
+            k += 1;
+            continue;
+        }
         if let Some(op) = unaligned_stmt(&stmts[k]) {
             out.push(op);
             k += 1;
@@ -979,6 +1007,14 @@ mod tests {
             Line::Stmts(s) => ops_of_line(&s),
             l => panic!("{l:?}"),
         }
+    }
+
+    #[test]
+    fn cop0_status() {
+        assert_eq!(ops("ctx->r8 = cop0_status_read(ctx);").unwrap(), [Op::Cop0StatusRead(8)]);
+        assert_eq!(ops("cop0_status_write(ctx, ctx->r9);").unwrap(), [Op::Cop0StatusWrite(Val::R(9))]);
+        assert_eq!(ops("cop0_status_write(ctx);").unwrap_err().kind, "cop0");
+        assert_eq!(ops("ctx->r8 = cop0_status_read(rdram);").unwrap_err().kind, "cop0");
     }
 
     #[test]

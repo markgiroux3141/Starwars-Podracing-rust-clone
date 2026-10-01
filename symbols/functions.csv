@@ -1220,8 +1220,8 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8008C7B0,osJamMesg,libultra,4,,recomp,,high,first = (first + msgCount - 1) % msgCount
 0x8008C900,osPiGetCmdQueue,libultra,0,os,recomp,,high,libultra range?
 0x8008C930,osSendMesg,libultra,4,,recomp,,high,index (first + validCount) % msgCount
-0x8008CA80,__osDisableInt,libultra,0,,recomp,,high,mfc0/mtc0 Status IE
-0x8008CAA0,__osRestoreInt,libultra,0,,recomp,,med,
+0x8008CA80,__osDisableInt,libultra,0,,rust_verified,unit_diff,high,"clear CP0 Status IE through the runtime hooks, return the old IE (game::libultra)"
+0x8008CAA0,__osRestoreInt,libultra,0,,rust_verified,unit_diff,high,CP0 Status |= a0 through the runtime hooks (game::libultra)
 0x8008CAC0,func_8008CAC0,ours,0,,recomp,,,libultra range?
 0x8008CB00,func_8008CB00,ours,0,,recomp,,,libultra range?; indirect jr
 0x8008CB10,func_8008CB10,ours,2,,recomp,,,libultra range?; privileged instrs; runtime-provided

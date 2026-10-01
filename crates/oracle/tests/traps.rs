@@ -2,7 +2,7 @@
 //! or hang. Each case re-runs this test binary as a child that hits one stub.
 
 use game::recomp::RecompContext;
-use oracle::runtime::{do_break, get_function, oracle_unexpected_call, switch_error};
+use oracle::runtime::{cop0_status_write, do_break, get_function, oracle_unexpected_call, switch_error};
 use std::process::Command;
 
 extern "C" {
@@ -23,6 +23,10 @@ fn child() {
             }
             "switch" => switch_error(c"func_80001000".as_ptr(), 0x8000_1010, 0x800A_0000),
             "call" => oracle_unexpected_call(c"func_80002000".as_ptr()),
+            "fr" => {
+                let mut ctx = RecompContext { status_reg: 0x2000_0001, ..RecompContext::default() };
+                cop0_status_write(&mut ctx, 0x2400_0001);
+            }
             "stub" => {
                 let mut rdram = n64mem::Rdram::new();
                 let mut ctx = RecompContext::default();
@@ -56,6 +60,7 @@ fn stubs_abort_loudly() {
         ("lookup", "LOOKUP_FUNC(0x80010000)"),
         ("switch", "func_80001000: jump table at 0x800A0000"),
         ("call", "call to func_80002000, which is not compiled into the oracle"),
+        ("fr", "mtc0 Status <- 0x24000001 changes FR (from 0x20000001)"),
         ("stub", "call to func_80011CDC, which is not compiled into the oracle"),
     ] {
         let (ok, stderr) = run_child(which);

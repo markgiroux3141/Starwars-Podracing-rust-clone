@@ -91,7 +91,17 @@ pub fn build(src: &str) -> Result<Cfg, Refusal> {
     let mut in_switch: Option<(u32, Vec<String>, Option<(u32, u32)>)> = None;
     let jt = |n: usize, what: &str| Refusal::new("jump table", format!("line {}: {what}", n + 2));
 
-    for (n, line) in lines.enumerate() {
+    // N64Recomp prints `cop0_status_write(ctx, rN);` without a newline, so
+    // the next instruction's `// 0x...` comment ends that line: split it
+    // off, since it carries the instruction's address.
+    let lines: Vec<(usize, &str)> = lines
+        .enumerate()
+        .flat_map(|(n, l)| match l.find("    // 0x") {
+            Some(i) if !l.trim_start().starts_with("//") => vec![(n, &l[..i]), (n, &l[i..])],
+            _ => vec![(n, l)],
+        })
+        .collect();
+    for (n, line) in lines {
         let parsed = classify(line).map_err(|e| {
             let kind = if e.starts_with("jump table") { "jump table" } else { "parse" };
             Refusal::new(kind, format!("line {}: {e}: `{}`", n + 2, line.trim()))

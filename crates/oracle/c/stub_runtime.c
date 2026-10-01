@@ -2,9 +2,10 @@
  *
  * This is not N64ModernRuntime (GPL-3.0), which is deliberately not linked
  * into tests. It provides only the symbols N64Recomp's generated code and
- * recomp.h reference. A pure function never reaches any of them, so each one
- * traps: it reports what was hit and aborts the test process via
- * oracle_trap() on the Rust side. */
+ * recomp.h reference. A pure function never reaches any of them, so most
+ * trap: they report what was hit and abort the test process via
+ * oracle_trap() on the Rust side. The exception is CP0 Status, which lives in
+ * the context's status_reg (NOTES.md, "CP0 Status"). */
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -58,15 +59,22 @@ void recomp_syscall_handler(uint8_t* rdram, recomp_context* ctx, int32_t instruc
     trap("syscall at 0x%08X", (uint32_t)instruction_vram);
 }
 
+/* CP0 Status is the context's status_reg, a 32-bit register: mfc0 reads it
+ * sign-extended, mtc0 writes the low word. Changing FR (bit 26) would switch
+ * the FPU register mode (mips3_float_mode, f_odd), which the oracle doesn't
+ * model, so that traps. */
+#define STATUS_FR (1u << 26)
+
 gpr cop0_status_read(recomp_context* ctx) {
-    (void)ctx;
-    trap("mfc0 Status: interrupt/OS code is not available in the oracle");
-    return 0;
+    return (gpr)(int64_t)(int32_t)ctx->status_reg;
 }
 
 void cop0_status_write(recomp_context* ctx, gpr value) {
-    (void)ctx;
-    trap("mtc0 Status <- 0x%016llX: interrupt/OS code is not available in the oracle", (unsigned long long)value);
+    uint32_t v = (uint32_t)value;
+    if ((v ^ ctx->status_reg) & STATUS_FR) {
+        trap("mtc0 Status <- 0x%08X changes FR (from 0x%08X): FPU mode switches are not modelled", v, ctx->status_reg);
+    }
+    ctx->status_reg = v;
 }
 
 void pause_self(uint8_t* rdram) {

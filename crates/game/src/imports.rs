@@ -189,6 +189,15 @@ pub mod runtime {
         /// compiled-in C, or a stub running a double) and traps for an
         /// address where no function starts.
         pub fn get_function(vram: i32) -> Option<crate::recomp::RecompFn>;
+
+        /// N64Recomp's `mfc0 rd, Status`: CP0 Status, sign-extended. The
+        /// oracle keeps it in the context's `status_reg` (NOTES.md, "CP0
+        /// Status").
+        pub fn cop0_status_read(ctx: *mut crate::recomp::RecompContext) -> u64;
+
+        /// N64Recomp's `mtc0 v, Status`: the low word becomes CP0 Status (in
+        /// the oracle, `status_reg`; a change of the FR bit traps there).
+        pub fn cop0_status_write(ctx: *mut crate::recomp::RecompContext, value: u64);
     }
 
     #[cfg(test)]
@@ -216,6 +225,20 @@ pub mod runtime {
     #[no_mangle]
     pub unsafe extern "C" fn do_break(_vram: u32) {
         eprintln!("do_break is only linked in the oracle or the game build, not game's unit tests");
+        std::process::abort();
+    }
+
+    #[cfg(test)]
+    #[no_mangle]
+    pub unsafe extern "C" fn cop0_status_read(_ctx: *mut crate::recomp::RecompContext) -> u64 {
+        eprintln!("cop0_status_read is only linked in the oracle or the game build, not game's unit tests");
+        std::process::abort();
+    }
+
+    #[cfg(test)]
+    #[no_mangle]
+    pub unsafe extern "C" fn cop0_status_write(_ctx: *mut crate::recomp::RecompContext, _value: u64) {
+        eprintln!("cop0_status_write is only linked in the oracle or the game build, not game's unit tests");
         std::process::abort();
     }
 }

@@ -628,4 +628,6 @@ pub const PORTED: &[Ported] = &[
     Ported { vram: 0x8008_AC78, name: "func_8008AC78", func: libultra::func_8008AC78 },
     Ported { vram: 0x8008_ACD8, name: "func_8008ACD8", func: libultra::func_8008ACD8 },
     Ported { vram: 0x8008_AD74, name: "func_8008AD74", func: libultra::func_8008AD74 },
+    Ported { vram: 0x8008_CA80, name: "func_8008CA80", func: libultra::func_8008CA80 },
+    Ported { vram: 0x8008_CAA0, name: "func_8008CAA0", func: libultra::func_8008CAA0 },
 ];

@@ -221,6 +221,15 @@ fn op_uses(o: &Op, u: &mut Uses) {
         }
         Op::JrAddend(..) => u.gprs = true,
         Op::SwitchError { .. } | Op::Break(_) => u.runtime = true,
+        Op::Cop0StatusRead(_) => {
+            u.runtime = true;
+            u.gprs = true;
+        }
+        Op::Cop0StatusWrite(v) => {
+            u.runtime = true;
+            u.gprs = true;
+            val_uses(*v, u);
+        }
         Op::SaveCond(_, c) => cond_uses(c, u),
         Op::Label(_) => {}
         Op::FLoad(..) => {
@@ -296,7 +305,7 @@ fn contains_call(code: &[S]) -> bool {
 /// Whether `s` reads or writes `g`.
 fn uses_g(s: &S) -> bool {
     match s {
-        S::Op(Op::Call(_) | Op::PauseSelf | Op::SwitchError { .. } | Op::Break(_) | Op::Label(_)) => false,
+        S::Op(Op::Call(_) | Op::PauseSelf | Op::SwitchError { .. } | Op::Break(_) | Op::Cop0StatusRead(_) | Op::Label(_)) => false,
         S::Op(Op::MulDiv(_, a, b)) => matches!(a, Val::R(_)) || matches!(b, Val::R(_)),
         S::Op(Op::Mtc1(_, v) | Op::Mtc1Odd(_, v) | Op::Ctc1(v)) => matches!(v, Val::R(_)),
         S::Op(Op::FArith(..) | Op::FUn(..) | Op::Cvt(..) | Op::FCmp(..)) => false,
@@ -323,7 +332,7 @@ fn insert_rebinds(code: &mut Vec<S>) {
     for mut s in code.drain(..) {
         let mut after = false;
         match &mut s {
-            S::Op(o) if matches!(o, Op::Call(_) | Op::CallIndirect(_)) => after = true,
+            S::Op(o) if matches!(o, Op::Call(_) | Op::CallIndirect(_) | Op::Cop0StatusRead(_) | Op::Cop0StatusWrite(_)) => after = true,
             S::If(_, t, e) => {
                 insert_rebinds(t);
                 insert_rebinds(e);
@@ -588,6 +597,9 @@ fn op(o: &Op, fcr31: bool) -> String {
         }
         Op::PauseSelf => "imports::runtime::pause_self(m.as_mut_ptr());".into(),
         Op::Break(vram) => format!("imports::runtime::do_break({});", hex(u64::from(*vram))),
+        // The hooks take the whole context, so `g` is re-borrowed after them.
+        Op::Cop0StatusRead(d) => format!("ctx.gpr[{}] = imports::runtime::cop0_status_read(ctx);", REG[*d as usize]),
+        Op::Cop0StatusWrite(v) => format!("{{ let v = {}; imports::runtime::cop0_status_write(ctx, v); }}", val(*v)),
         Op::JrAddend(jr, reg) => format!("let jr_addend_{jr:08X} = {};", r(*reg)),
         Op::SwitchError { func, jr, table } => format!(
             "imports::runtime::switch_error(c\"{func}\".as_ptr(), {}, {});",

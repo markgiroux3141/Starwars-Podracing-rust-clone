@@ -1,8 +1,9 @@
 //! Pure libultra functions (NOTES.md, "The OS boundary"): `sinf` and
 //! `cosf` (single precision in and out, double precision inside, with the
 //! constants read from their tables in the data segment; the game's own
-//! maths, so ports never substitute `std`, SPEC §5.4), and the 64-bit
-//! helpers of `ll.c`.
+//! maths, so ports never substitute `std`, SPEC §5.4), the 64-bit helpers
+//! of `ll.c`, and `__osDisableInt`/`__osRestoreInt`, which reach CP0 Status
+//! only through the runtime's hooks (NOTES.md, "CP0 Status").
 
 // Ports keep N64Recomp's names (func_8008A8C0), capitals included.
 #![allow(non_snake_case)]
@@ -481,4 +482,45 @@ pub unsafe extern "C" fn func_8008AD74(rdram: *mut u8, ctx: *mut RecompContext) 
     ll_args(&mut mem, g, 0);
     g[V0] = ((g[T6] as i64) >> (g[T7] & 63)) as u64;
     ll_result(g);
+}
+
+/// `__osDisableInt` (`func_8008CA80`): clear the interrupt-enable bit (IE,
+/// bit 0) of CP0 Status and return its old value (0 or 1) in `v0`. Status
+/// is read and written through the runtime
+/// ([`imports::runtime::cop0_status_read`] and `cop0_status_write`, as the
+/// C does; NOTES.md, "CP0 Status").
+///
+/// Leaves `t0` = the old Status (sign-extended), `at = -2`, `t1 = t0 & -2`
+/// (the value written).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8008CA80(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (_mem, ctx) = enter(rdram, ctx);
+    let status = imports::runtime::cop0_status_read(ctx);
+    let g = &mut ctx.gpr;
+    g[T0] = status;
+    g[AT] = (-2i64) as u64;
+    g[T1] = g[T0] & g[AT];
+    let disabled = g[T1];
+    imports::runtime::cop0_status_write(ctx, disabled);
+    let g = &mut ctx.gpr;
+    g[V0] = g[T0] & 1;
+}
+
+/// `__osRestoreInt` (`func_8008CAA0`): `Status |= a0` (the 64-bit OR of the
+/// sign-extended Status and `a0`, of which the runtime keeps the low word),
+/// so passing [`func_8008CA80`]'s result puts IE back as it was.
+///
+/// Leaves `t0` = the value written.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8008CAA0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (_mem, ctx) = enter(rdram, ctx);
+    let status = imports::runtime::cop0_status_read(ctx);
+    let g = &mut ctx.gpr;
+    g[T0] = status | g[A0];
+    let value = g[T0];
+    imports::runtime::cop0_status_write(ctx, value);
 }

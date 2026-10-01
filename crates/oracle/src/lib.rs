@@ -84,6 +84,8 @@ pub mod runtime {
         pub fn do_break(vram: u32);
         pub fn pause_self(rdram: *mut u8);
         pub fn oracle_unexpected_call(name: *const c_char);
+        pub fn cop0_status_read(ctx: *mut game::recomp::RecompContext) -> u64;
+        pub fn cop0_status_write(ctx: *mut game::recomp::RecompContext, value: u64);
     }
 }
 
