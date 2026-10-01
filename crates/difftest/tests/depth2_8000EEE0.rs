@@ -759,8 +759,11 @@ fn tie_scenes() -> Vec<Scene> {
         sc.m[5] = 0.1;
         out.push(sc);
     }
-    // w = 0.1 (the threshold) and w = 50 (100 / w = 2).
-    for ww in [f32::from_bits(0x3DCC_CCCD), 50.0, 25.0] {
+    // w = the size threshold (read from the ROM image) and w = 50 (100 / w = 2).
+    let rom = baserom();
+    let o = (0x800A_86A8u32 - 0x8000_0400 + 0x1000) as usize;
+    let small = f32::from_bits(u32::from_be_bytes(rom[o..o + 4].try_into().unwrap()));
+    for ww in [small, 50.0, 25.0] {
         let mut sc = affine(0x10_0000);
         sc.m[15] = ww;
         out.push(sc);
