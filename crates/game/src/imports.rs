@@ -58,12 +58,14 @@ recomp_imports! {
     func_80015328, // vec3 add
     func_8001535C, // vec3 subtract
     func_800153C0, // vec3 length
+    func_800153EC, // vec3 squared distance
     func_80015470, // vec3 distance
     func_80015538, // vec3 cross
     func_800155C0, // vec3 scale
     func_800155EC, // vec3 multiply-add
     func_800156DC, // 4x4 copy
     func_80015724, // 4x4 product
+    func_80015C30, // 4x4 product in place
     func_800160BC, // matrix inverse
     func_80016260, // ludcmp (n = 3)
     func_800167E4, // lubksb (n = 3)
@@ -79,12 +81,15 @@ recomp_imports! {
     func_80017DA4, // node type word
     func_80017DAC, // [o + 0x14]
     func_80017DB4, // child k
+    func_80017E20, // node six floats
     func_80017E70, // node +8 setter
     func_80017EE4, // [o + 4]
     func_80017EEC, // [o + 4] = v
     func_80017EF4, // [o]
     func_80017F20, // returns 4
     func_80017F28, // RECORDS_170 + 0x170 k
+    func_80018114, // [o + 0x168] = v
+    func_8001811C, // field by selector
     func_800181BC, // node flags walk (self)
     func_80018324, // node header init
     func_800183A8, // [o + 4] (second)
@@ -113,6 +118,10 @@ recomp_imports! {
     func_80034650, // 4x3 float to Mtx
     func_8003609C, // render mode switches
     func_80038DF8, // six halfwords
+    func_80038E58, // default Lights1
+    func_80038ED0, // light slot
+    func_80038F68, // light slot from default
+    func_80038FE8, // light slot second light
     func_800390C0, // crc32_table_init
     func_8003A568, // spline walker point
     func_8003B250, // start a spline walker
@@ -144,6 +153,8 @@ recomp_imports! {
     func_80082C80, // node world matrix (self)
     func_80082FA4, // path to a node (self)
     func_800833B4, // set a tree's weights (self)
+    func_80083D80, // first box in world space (self)
+    func_80085F78, // camera record +0x154
     func_80087814, // queue a screen rectangle
     func_8008A750, // cosf
     func_8008A8C0, // sinf
