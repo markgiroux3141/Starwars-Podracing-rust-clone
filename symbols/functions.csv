@@ -190,7 +190,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8000E9BC,func_8000E9BC,ours,0,,rust_verified,unit_diff,high,"six optional bytes at [p+0xC]+0x20, negative = skip (game::misc)"
 0x8000EA4C,func_8000EA4C,ours,1,,rust_verified,unit_diff,high,node tree: six bytes via func_8000E9BC (recursive through the C) (game::misc)
 0x8000EBE8,func_8000EBE8,ours,1,,rust_verified,unit_diff,high,project a point to the screen through 0x80112E20 and a viewport; margins of 8 (game::misc)
-0x8000EEE0,func_8000EEE0,ours,2,,recomp,,,
+0x8000EEE0,func_8000EEE0,ours,2,,rust_verified,unit_diff,high,HUD record scaled about the screen centre and faded (game::misc)
 0x8000F0DC,func_8000F0DC,ours,3,,recomp,,,
 0x8000F5A0,func_8000F5A0,ours,0,render,rust_verified,unit_diff,high,depth-buffer probes: 8x8 window counts and point samples; QUIRK: unbounded sample reads (game::render)
 0x8000FA2C,func_8000FA2C,ours,4,,recomp,,,
@@ -208,15 +208,15 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80010040,func_80010040,ours,0,,rust_verified,unit_diff,high,[0x8009B86C] = 0 (game::misc)
 0x8001004C,func_8001004C,ours,0,,rust_verified,unit_diff,high,"decode handle via (shift, base) table 0x8009B888 (game::misc)"
 0x80010080,func_80010080,ours,9,,recomp,,,
-0x800105DC,func_800105DC,ours,2,,recomp,,,
-0x80010B34,func_80010B34,ours,2,,recomp,,,
+0x800105DC,func_800105DC,ours,2,,rust_verified,unit_diff,high,screen markers for 40 flagged points (two record lists) (game::misc)
+0x80010B34,func_80010B34,ours,2,,rust_verified,unit_diff,high,screen markers for the tracked points (game::misc)
 0x80010EA0,func_80010EA0,ours,3,,recomp,,,
 0x800116E8,func_800116E8,ours,1,,rust_verified,unit_diff,high,"turn off the 80 listed records, clear their bytes (game::misc)"
 0x80011764,func_80011764,ours,0,,rust_verified,unit_diff,high,"[0x8009B878] = f12, [0x8009B87C] = f14 (game::misc)"
 0x80011778,func_80011778,ours,0,,rust_verified,unit_diff,high,four bytes at 0x8009B874 from a0-a3 (game::misc)
-0x800117A4,func_800117A4,ours,2,,recomp,,,
+0x800117A4,func_800117A4,ours,2,,rust_verified,unit_diff,high,"listed-record count, then all off (game::misc)"
 0x800117E4,func_800117E4,ours,0,,rust_verified,unit_diff,high,[0x8009B880] = f12 (game::misc)
-0x800117F0,func_800117F0,ours,2,,recomp,,,
+0x800117F0,func_800117F0,ours,2,,rust_verified,unit_diff,high,listed records reset (game::misc)
 0x80011814,func_80011814,ours,0,,rust_verified,unit_diff,high,byte [0x8009B870] = 1 (game::misc)
 0x80011824,func_80011824,ours,0,,rust_verified,unit_diff,high,[0x800D6140 + 4k] = v; QUIRK unbounded (game::misc)
 0x80011838,func_80011838,ours,0,,rust_verified,unit_diff,high,"0x800D6140 words = -1, 0x800D68C0 bytes = 0 (game::misc)"
@@ -246,7 +246,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80014568,func_80014568,ours,1,,rust_verified,unit_diff,high,"a glyph with an outline (o), shadow (s) or four-way (f) copies in black, then itself (game::render)"
 0x80014C98,func_80014C98,ours,0,render,rust_verified,unit_diff,high,"gDPPipeSync (0xE7000000, 0) onto the display list at [0x801217B0] (game::render)"
 0x80014CC0,func_80014CC0,ours,1,,rust_verified,unit_diff,high,"sine and cosine in degrees (r = f32(deg*pi/180), cosf then sinf) (game::math)"
-0x80014D20,func_80014D20,ours,2,,recomp,,,
+0x80014D20,func_80014D20,ours,2,,rust_verified,unit_diff,high,tan in degrees (game::math)
 0x80014D4C,func_80014D4C,ours,0,math,rust_verified,unit_diff,high,"asin(x) in degrees by the game's series (constants 0x800A8790..): +-90 beyond +-0.999999, reduction via sqrt(1-x^2) outside +-0.7071, r*180/pi in double (game::math)"
 0x80014F2C,func_80014F2C,ours,1,,rust_verified,unit_diff,high,acos in degrees: 90 - asin_deg (game::math)
 0x80014F54,func_80014F54,ours,0,math,rust_verified,unit_diff,high,"atan2(y=f12, x=f14) in degrees by the game's series (constants 0x800A87C0..): octant swap, t < 1e-4 -> 0, quadrant fixups at -1e-4 (game::math)"

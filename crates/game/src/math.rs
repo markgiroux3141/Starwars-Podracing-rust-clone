@@ -510,6 +510,36 @@ pub unsafe extern "C" fn func_80014CC0(rdram: *mut u8, ctx: *mut RecompContext) 
     g[SP] = addu(g[SP], 0x20);
 }
 
+/// `func_80014D20(deg)` (tangent in degrees): with the float `deg` in
+/// `f12`, [`func_80014CC0`]`(deg, &s, &c)` (sine and cosine in degrees,
+/// into the frame) and `f0 = s / c`. No test for `c = 0`.
+///
+/// Frame (`sp - 0x28`): `ra` at `+0x14`, `s` at `+0x20`, `c` at `+0x1C`.
+/// Leaves `a1`, `a2` as the callee left them, `f4 = s`, `f6 = c`, and the
+/// callee's registers.
+///
+/// Domain: the callee's; `s` and `c` not NaN.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80014D20(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x28i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    g[A1] = addu(g[SP], 0x20);
+    g[A2] = addu(g[SP], 0x1C);
+    call(imports::func_80014CC0, m, ctx);
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    f[4].set_u32l(lw(m, g[SP], 0x20) as u32);
+    f[6].set_u32l(lw(m, g[SP], 0x1C) as u32);
+    g[SP] = addu(g[SP], 0x28);
+    f[0].set_fl(f[4].fl() / f[6].fl());
+}
+
 /// `func_80014D4C(x)` (arcsine in degrees, **guess** at the name): `asin(x)`
 /// in degrees in `f0`, by the game's own series. With the floats `C0..C5`
 /// at `0x800A8790` (0.999999, -0.999999, 0.7071068, -0.7071068, 0.001,

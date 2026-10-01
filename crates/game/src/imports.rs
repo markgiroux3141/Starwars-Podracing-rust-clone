@@ -33,6 +33,7 @@ recomp_imports! {
     func_8000AA04, // record +0/+2 halfwords
     func_8000AA78, // record +4/+6 halfwords
     func_8000AAC0, // record +8/+0xC floats
+    func_8000AAF8, // record +0x10 float
     func_8000AB24, // record or global colour bytes
     func_8000ABD4, // record texture pixels
     func_8000AC34, // record flags |=
@@ -44,13 +45,17 @@ recomp_imports! {
     func_8000CC1C, // edit tuning value
     func_8000D5EC, // edit setting
     func_8000DA6C, // [0x8009B7E4]
+    func_8000E680, // record position from pixels
     func_8000E8C4, // node tree first word (self)
     func_8000E9BC, // six optional bytes
     func_8000EA4C, // node tree bytes (self)
+    func_8000EBE8, // project a point
     func_8000F5A0, // depth probes
     func_8000FD74, // 2x8 table entry
     func_8000FEAC, // marker word and triple
     func_8000FF54, // light triple k
+    func_8001004C, // decode a handle
+    func_800116E8, // listed records off
     func_80011940, // comp_decompress
     func_80011CDC, // rom_read
     func_80011D60, // rom_read_small
@@ -58,6 +63,7 @@ recomp_imports! {
     func_80011F38, // glyph rectangle
     func_800125E4, // texture load
     func_800129E4, // text width
+    func_80014CC0, // sin and cos in degrees
     func_80014D4C, // asin in degrees
     func_80014F54, // atan2 in degrees
     func_80015190, // vec2 multiply-add
