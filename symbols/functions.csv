@@ -1134,16 +1134,16 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80088BF4,func_80088BF4,ours,0,,rust_verified,unit_diff,high,empty (game::libultra)
 0x80088BFC,func_80088BFC,ours,3,,recomp,,,
 0x80089144,func_80089144,ours,2,,recomp,,,
-0x80089280,func_80089280,ours,0,,recomp,,,
-0x80089288,func_80089288,ours,0,,recomp,,,
-0x80089290,func_80089290,ours,0,,recomp,,,
-0x8008937C,func_8008937C,ours,0,,recomp,,,
+0x80089280,func_80089280,ours,0,,rust_verified,unit_diff,high,empty (game::libultra)
+0x80089288,func_80089288,ours,0,,rust_verified,unit_diff,high,empty (game::libultra)
+0x80089290,func_80089290,ours,0,,rust_verified,unit_diff,high,bank patching (alBnkfNew's helpers) (game::libultra)
+0x8008937C,func_8008937C,ours,0,,rust_verified,unit_diff,high,empty (game::libultra)
 0x80089384,alBnkfNew,libultra,1,,recomp,,med,checks bank magic 0x4231 ('B1')
-0x80089488,func_80089488,ours,0,,recomp,,,
-0x800894D0,func_800894D0,ours,0,,recomp,,,
-0x80089570,func_80089570,ours,0,,recomp,,,
-0x80089590,func_80089590,ours,0,,recomp,,,
-0x800895E0,func_800895E0,ours,0,,recomp,,,
+0x80089488,func_80089488,ours,0,,rust_verified,unit_diff,high,offset table patching (game::libultra)
+0x800894D0,func_800894D0,ours,0,,rust_verified,unit_diff,high,alSndpAllocate (by shape) (game::libultra)
+0x80089570,func_80089570,ours,0,,rust_verified,unit_diff,high,the current record's +0x28 (game::libultra)
+0x80089590,func_80089590,ours,0,,rust_verified,unit_diff,high,alSndpDeallocate (by shape) (game::libultra)
+0x800895E0,func_800895E0,ours,0,,rust_verified,unit_diff,high,record halfword +0x20 = v & 0xFF (game::libultra)
 0x80089610,func_80089610,ours,2,,recomp,,,
 0x80089670,func_80089670,ours,2,,recomp,,,
 0x800896D0,func_800896D0,ours,2,,recomp,,,

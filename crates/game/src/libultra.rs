@@ -12,7 +12,7 @@
 #![allow(non_snake_case)]
 
 use crate::imports;
-use crate::recomp::{addu, call, ddiv, ddivu, dmultu, enter, fpu, ld, lh, li, lw, multu, reg::*, s32, sd, sh, sll, slt, sltu, sra, subu, sw, RecompContext};
+use crate::recomp::{addu, call, ddiv, ddivu, div, dmultu, enter, fpu, lbu, ld, lh, li, lw, multu, reg::*, s32, sb, sd, sh, sll, slt, sltu, sra, subu, sw, RecompContext};
 use n64mem::Mem;
 
 /// `func_80087CB0(x)`: `sqrtf`: `f0 = sqrt(f12)`, the single-precision
@@ -354,6 +354,302 @@ pub unsafe extern "C" fn func_80088BEC(_rdram: *mut u8, _ctx: *mut RecompContext
 /// # Safety
 /// N64Recomp entry point: see [`crate::recomp::enter`].
 pub unsafe extern "C" fn func_80088BF4(_rdram: *mut u8, _ctx: *mut RecompContext) {}
+
+/// `func_80089280()`: returns at once (an empty libultra function).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80089280(_rdram: *mut u8, _ctx: *mut RecompContext) {}
+
+/// `func_80089288()`: returns at once (an empty libultra function).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80089288(_rdram: *mut u8, _ctx: *mut RecompContext) {}
+
+/// `func_80089290(b, base, _, tbl)` (by shape libaudio's bank patching,
+/// `alBnkfNew`'s helpers inlined: offsets in a bank file become pointers
+/// once): nothing if the byte `[b + 3]` is set; otherwise it is set to 1,
+/// and for each `i` below the halfword `h[b + 0xE]` (signed, re-read after
+/// each): `s = [b + 0x10 + 4i] += base`; unless the byte `[s + 0xE]` is set,
+/// it is set to 1 and `[s] += base`, `[s + 4] += base`, `[s + 8] += base`
+/// (re-read); then with `w = [s + 8]`, unless the byte `[w + 9]` is set, it
+/// is set to 1, `[w] += tbl`, and by the type byte `[w + 8]`: 0 gives
+/// `[w + 0x10] += base` and `[w + 0xC] += base` if nonzero; 1 gives `[w +
+/// 0xC] += base` if nonzero; any other type nothing more. All additions
+/// 32-bit wrapping.
+///
+/// Leaves `t1 = t2 = 1`, `v0` = the count reached, `v1 = b + 4 v0`, `a2`, `t0`
+/// and `t6`..`t9` from the last entry.
+///
+/// Domain: the bank, its sounds and waves in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80089290(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T6] = lbu(m, g[A0], 3);
+    if g[T6] == 0 {
+        g[T7] = lh(m, g[A0], 0xE);
+        g[T1] = 1;
+        sb(m, g[A0], 3, g[T1]);
+        g[V0] = 0;
+        if (g[T7] as i64) > 0 {
+            g[V1] = g[A0];
+            g[T2] = 1;
+            g[T8] = lw(m, g[V1], 0x10);
+            loop {
+                'b_80089360: {
+                    g[T9] = addu(g[T8], g[A1]);
+                    sw(m, g[V1], 0x10, g[T9]);
+                    g[T6] = lbu(m, g[T9], 0xE);
+                    g[A2] = g[T9];
+                    if g[T6] != 0 {
+                        g[T8] = lh(m, g[A0], 0xE);
+                    } else {
+                        g[T7] = lw(m, g[T9], 0);
+                        sb(m, g[T9], 0xE, g[T1]);
+                        g[T8] = addu(g[T7], g[A1]);
+                        sw(m, g[T9], 0, g[T8]);
+                        g[T9] = lw(m, g[T9], 4);
+                        g[T7] = lw(m, g[A2], 8);
+                        g[T6] = addu(g[T9], g[A1]);
+                        g[T8] = addu(g[T7], g[A1]);
+                        sw(m, g[A2], 4, g[T6]);
+                        sw(m, g[A2], 8, g[T8]);
+                        g[T9] = lbu(m, g[T8], 9);
+                        g[T0] = g[T8];
+                        if g[T9] != 0 {
+                            g[T8] = lh(m, g[A0], 0xE);
+                        } else {
+                            g[T6] = lw(m, g[T8], 0);
+                            g[A2] = lbu(m, g[T8], 8);
+                            sb(m, g[T8], 9, g[T1]);
+                            g[T7] = addu(g[T6], g[A3]);
+                            sw(m, g[T8], 0, g[T7]);
+                            if g[A2] != 0 {
+                                if g[T2] != g[A2] {
+                                    g[T8] = lh(m, g[A0], 0xE);
+                                    break 'b_80089360;
+                                }
+                                g[A2] = lw(m, g[T0], 0xC);
+                                g[T7] = addu(g[A2], g[A1]);
+                                if g[A2] != 0 {
+                                    sw(m, g[T0], 0xC, g[T7]);
+                                }
+                            } else {
+                                g[T8] = lw(m, g[T8], 0x10);
+                                g[A2] = lw(m, g[T0], 0xC);
+                                g[T9] = addu(g[T8], g[A1]);
+                                sw(m, g[T0], 0x10, g[T9]);
+                                if g[A2] != 0 {
+                                    g[T6] = addu(g[A2], g[A1]);
+                                    sw(m, g[T0], 0xC, g[T6]);
+                                }
+                            }
+                            g[T8] = lh(m, g[A0], 0xE);
+                        }
+                    }
+                }
+                g[V0] = addu(g[V0], 1);
+                g[V1] = addu(g[V1], 4);
+                g[AT] = slt(g[V0], g[T8]);
+                if g[AT] == 0 {
+                    break;
+                }
+                g[T8] = lw(m, g[V1], 0x10);
+            }
+        }
+    }
+}
+
+/// `func_8008937C()`: returns at once (an empty libultra function).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8008937C(_rdram: *mut u8, _ctx: *mut RecompContext) {}
+
+/// `func_80089488(t, base)` (by shape a table's offsets made pointers):
+/// for each `i` below the halfword `h[t + 2]` (signed, re-read after each),
+/// the word `[t + 4 + 8i] += base` (32-bit wrapping).
+///
+/// Leaves `v0` = the count reached, `v1 = t + 8 v0`, `t7`..`t9` from the
+/// last entry and the loop test.
+///
+/// Domain: the entries in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80089488(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T6] = lh(m, g[A0], 2);
+    g[V0] = 0;
+    g[V1] = g[A0];
+    if (g[T6] as i64) > 0 {
+        g[T7] = lw(m, g[V1], 4);
+        loop {
+            g[V0] = addu(g[V0], 1);
+            g[V1] = addu(g[V1], 8);
+            g[T8] = addu(g[T7], g[A1]);
+            sw(m, g[V1], -4, g[T8]);
+            g[T9] = lh(m, g[A0], 2);
+            g[AT] = slt(g[V0], g[T9]);
+            if g[AT] == 0 {
+                break;
+            }
+            g[T7] = lw(m, g[V1], 4);
+        }
+    }
+}
+
+/// `func_800894D0(p, snd)` (by shape libaudio's `alSndpAllocate`): the
+/// first of the `[p + 0x44]` records of 48 bytes at `[p + 0x40]` (the index
+/// kept as an s16) whose word `+0x1C` is 0 gets `+0x1C = snd`, the halfword
+/// `+0x20 = 5`, `+0x28 = 0`, the bytes `+0x2E = 0x40`, `+0x2F = 0`, `+0x24 =
+/// 1.0`, and the halfword `+0x2C = (v * 0x7FFF) / 0x7F` with `v` the byte
+/// `[snd + 0xD]` (a signed division); `v0` = its index. `v0 = -1` if none is
+/// free (or the count is not positive).
+///
+/// Leaves `a3 = 0x30`, `v1` the index, `a2` the count, `t6` its offset, `a0`
+/// the record, `t7` its word, `at` the last test (`0x7F` and the division's
+/// operands `t0`, `t1`, `t2` and `f4 = 1.0` on a hit; `t3` on a miss).
+///
+/// Domain: the records and `snd`'s byte in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800894D0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    g[A2] = lw(m, g[A0], 0x44);
+    g[V0] = lw(m, g[A0], 0x40);
+    g[V1] = 0;
+    g[A3] = 0x30;
+    if (g[A2] as i64) > 0 {
+        loop {
+            let (lo, _) = multu(g[V1], g[A3]);
+            g[T6] = lo;
+            g[A0] = addu(g[V0], g[T6]);
+            g[T7] = lw(m, g[A0], 0x1C);
+            g[AT] = li(0x3F80_0000);
+            if g[T7] == 0 {
+                f[4].set_u32l(g[AT] as u32);
+                g[T8] = 5;
+                g[T9] = 0x40;
+                sw(m, g[A0], 0x1C, g[A1]);
+                sh(m, g[A0], 0x20, g[T8]);
+                sw(m, g[A0], 0x28, 0);
+                sb(m, g[A0], 0x2E, g[T9]);
+                sb(m, g[A0], 0x2F, 0);
+                sw(m, g[A0], 0x24, u64::from(f[4].u32l()));
+                g[T0] = lbu(m, g[A1], 0xD);
+                g[AT] = 0x7F;
+                g[V0] = g[V1];
+                g[T1] = sll(g[T0], 15);
+                g[T1] = subu(g[T1], g[T0]);
+                let (lo, _) = div(g[T1], g[AT]);
+                g[T2] = lo;
+                sh(m, g[A0], 0x2C, g[T2]);
+                return;
+            }
+            g[V1] = addu(g[V1], 1);
+            g[T3] = sll(g[V1], 16);
+            g[V1] = sra(g[T3], 16);
+            g[AT] = slt(g[V1], g[A2]);
+            if g[AT] == 0 {
+                break;
+            }
+        }
+    }
+    g[V0] = u64::MAX;
+}
+
+/// `func_80089570(p)`: the word `+0x28` of the current record, `[p + 0x40]
+/// + 48 [p + 0x3C]` (32-bit wrapping), in `v0`.
+///
+/// Leaves `t6` the index, `v1` the records, `t7 = 48 t6`, `t8` the record.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80089570(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let m = &mem;
+    let g = &mut ctx.gpr;
+    g[T6] = lw(m, g[A0], 0x3C);
+    g[V1] = lw(m, g[A0], 0x40);
+    g[T7] = sll(g[T6], 2);
+    g[T7] = subu(g[T7], g[T6]);
+    g[T7] = sll(g[T7], 4);
+    g[T8] = addu(g[T7], g[V1]);
+    g[V0] = lw(m, g[T8], 0x28);
+}
+
+/// `func_80089590(p, k)` (by shape libaudio's `alSndpDeallocate`): with
+/// `r` = record `k` (the low halfword of `a1`, signed) at `[p + 0x40] + 48k`:
+/// if its word `+0x28` is 0, `+0x1C = 0`, and if `k` is the current index
+/// `[p + 0x3C]` (compared as whole registers), that becomes -1.
+///
+/// `a1` is spilled to its home slot `sp + 4`. Leaves `t6 = a1 << 16`, `t7 =
+/// k`, `v0` the records, `v1 = 48k`, `t8`, `t0` the record, `t9` its word,
+/// and on a free `t1` the index, `t2 = -1`.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80089590(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T6] = sll(g[A1], 16);
+    g[T7] = sra(g[T6], 16);
+    sw(m, g[SP], 4, g[A1]);
+    g[V0] = lw(m, g[A0], 0x40);
+    g[V1] = sll(g[T7], 2);
+    g[V1] = subu(g[V1], g[T7]);
+    g[V1] = sll(g[V1], 4);
+    g[T8] = addu(g[V1], g[V0]);
+    g[T9] = lw(m, g[T8], 0x28);
+    g[T0] = addu(g[V0], g[V1]);
+    if g[T9] == 0 {
+        sw(m, g[T0], 0x1C, 0);
+        g[T1] = lw(m, g[A0], 0x3C);
+        g[T2] = u64::MAX;
+        if g[T7] == g[T1] {
+            sw(m, g[A0], 0x3C, g[T2]);
+        }
+    }
+}
+
+/// `func_800895E0(p, k, v)`: the halfword `+0x20` of record `k` (the low
+/// halfword of `a1`, signed; `[p + 0x40] + 48k`) = `v & 0xFF`.
+///
+/// `a1`, `a2` are spilled to their home slots `sp + 4`, `sp + 8`. Leaves
+/// `t6`, `t7 = k`, `v0` the records, `t9 = 48k`, `t8 = v & 0xFF`, `t0` the
+/// record.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800895E0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T6] = sll(g[A1], 16);
+    g[T7] = sra(g[T6], 16);
+    sw(m, g[SP], 4, g[A1]);
+    sw(m, g[SP], 8, g[A2]);
+    g[V0] = lw(m, g[A0], 0x40);
+    g[T9] = sll(g[T7], 2);
+    g[T9] = subu(g[T9], g[T7]);
+    g[T9] = sll(g[T9], 4);
+    g[T8] = g[A2] & 0xFF;
+    g[T0] = addu(g[V0], g[T9]);
+    sh(m, g[T0], 0x20, g[T8]);
+}
 
 /// `func_8008A8C0(x)` = `sinf`: for `xpt = (bits(x) >> 22) & 0x1FF`:
 /// - `xpt < 230` (tiny): `x` itself.
