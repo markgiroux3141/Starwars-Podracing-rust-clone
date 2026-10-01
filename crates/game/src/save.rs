@@ -676,6 +676,30 @@ pub unsafe extern "C" fn func_80039178(rdram: *mut u8, ctx: *mut RecompContext) 
     g[V0] = !g[V1];
 }
 
+/// `func_8003931C(p)` (a save block's checksum, **guess**): `v0` =
+/// [`func_80039178`]`(p + 4, 0x3EC)`, the crc32 of the 0x3EC bytes after
+/// the first word.
+///
+/// Frame (`sp - 0x18`): `ra` at `+0x14`. Leaves the callee's registers.
+///
+/// Domain: the callee's.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003931C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    sw(m, g[SP], 0x14, g[RA]);
+    g[A0] = addu(g[A0], 4);
+    g[A1] = 0x3EC;
+    call(imports::func_80039178, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x18);
+}
+
 /// `func_8003960C()`: copy the 0x3F0-byte block at `0x80113680` (the save
 /// data, **guess**; its flags at `+8` are read by [`func_8001F464`] and
 /// [`func_8002DC7C`](crate::misc::func_8002DC7C)) to `0x80113A70`. Leaves `t7 = t0 = 0x80113A70`, `t6

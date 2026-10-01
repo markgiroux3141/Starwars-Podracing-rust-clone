@@ -3424,6 +3424,101 @@ fn write_direction(m: &mut Mem, g: &mut [u64; 32], base: usize, at: i32, dir: us
     }
 }
 
+/// `func_80038C3C()` (reset the render state, **guess**): the word
+/// `[0x80112DD8] = 0x00200405`; the 13 words at `0x800A3D68` are copied to
+/// `0x80112DE0` (three per step, then the last); `[0x80112E14] = 0`,
+/// `[0x80112E18] = -1`. Then five commands are appended to the display list
+/// at [`DL2_HEAD`] (each: read the head, store it advanced by 8, then the
+/// command's two words, second word first): `(0xD9FFFFFF, 0x00200405)`,
+/// `(0xD9F0FDFF, 0)`, `(0xD7000000, 0)`, `(0xE7000000, 0)` and `(0xDE000000,
+/// 0x800A4090)` (a call to the list there); and
+/// [`func_80035BF0`]`(0x800A3D68, 1)`.
+///
+/// Frame (`sp - 0x18`): `ra` at `+0x14`. Leaves `a0 = 0x800A3D68`, `a1 = 1`
+/// and the callee's registers.
+///
+/// Domain: the callee's; the list's head in RDRAM, not overlapping the
+/// words written.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80038C3C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[A0] = li(0x800A_3D68);
+    g[T6] = li(0x20_0000);
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    g[V1] = li(0x8011_0000);
+    g[T6] = g[T6] | 0x405;
+    g[AT] = li(0x8011_0000);
+    g[T7] = li(0x8011_0000);
+    g[V1] = addu(g[V1], 0x2C90);
+    sw(m, g[SP], 0x14, g[RA]);
+    sw(m, g[AT], 0x2DD8, g[T6]);
+    g[T7] = addu(g[T7], 0x2DE0);
+    g[T4] = g[A0];
+    g[T3] = addu(g[A0], 0x30);
+    loop {
+        g[AT] = lw(m, g[T4], 0);
+        g[T4] = addu(g[T4], 0xC);
+        g[T7] = addu(g[T7], 0xC);
+        sw(m, g[T7], -0xC, g[AT]);
+        g[AT] = lw(m, g[T4], -8);
+        sw(m, g[T7], -8, g[AT]);
+        g[AT] = lw(m, g[T4], -4);
+        sw(m, g[T7], -4, g[AT]);
+        if g[T4] == g[T3] {
+            break;
+        }
+    }
+    g[AT] = lw(m, g[T4], 0);
+    g[T5] = u64::MAX;
+    g[T9] = li(0xD9FF_0000);
+    sw(m, g[T7], 0, g[AT]);
+    g[AT] = li(0x8011_0000);
+    sw(m, g[AT], 0x2E14, 0);
+    g[AT] = li(0x8011_0000);
+    sw(m, g[AT], 0x2E18, g[T5]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T8] = li(0x20_0405);
+    g[T6] = addu(g[V0], 8);
+    sw(m, g[V1], 0, g[T6]);
+    g[T9] = g[T9] | 0xFFFF;
+    sw(m, g[V0], 0, g[T9]);
+    sw(m, g[V0], 4, g[T8]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T4] = li(0xD9F0_FDFF);
+    g[T3] = addu(g[V0], 8);
+    sw(m, g[V1], 0, g[T3]);
+    sw(m, g[V0], 4, 0);
+    sw(m, g[V0], 0, g[T4]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T5] = li(0xD700_0000);
+    g[T9] = li(0xE700_0000);
+    g[T7] = addu(g[V0], 8);
+    sw(m, g[V1], 0, g[T7]);
+    sw(m, g[V0], 4, 0);
+    sw(m, g[V0], 0, g[T5]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T4] = li(0x800A_4090);
+    g[T6] = addu(g[V0], 8);
+    sw(m, g[V1], 0, g[T6]);
+    sw(m, g[V0], 4, 0);
+    sw(m, g[V0], 0, g[T9]);
+    g[V0] = lw(m, g[V1], 0);
+    g[T3] = li(0xDE00_0000);
+    g[A1] = 1;
+    g[T8] = addu(g[V0], 8);
+    sw(m, g[V1], 0, g[T8]);
+    sw(m, g[V0], 4, g[T4]);
+    sw(m, g[V0], 0, g[T3]);
+    call(imports::func_80035BF0, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x18);
+}
+
 /// `func_80038E58(ambient, diffuse, dir)`: fill the `Lights1` at
 /// `0x800A3DB0`: the ambient colour (`+0`, `+4`) and the light colour (`+8`,
 /// `+0xC`) from the low bytes of each argument's three halfwords

@@ -1262,6 +1262,146 @@ pub unsafe extern "C" fn func_80033928(rdram: *mut u8, ctx: *mut RecompContext) 
     g[SP] = addu(g[SP], 0x28);
 }
 
+/// `func_8003398C(list, t, x, y, mode, w, z)` (start a set of animation
+/// objects, **guess**): `t`, `x`, `y` are floats in `a1`..`a3`; `mode` (a
+/// word), `w` and `z` (floats) are on the stack. For each object `o` of the
+/// zero-terminated word list at `list` (nothing if `list` or its first word
+/// is 0; each call re-reads `o` from the list):
+/// - [`func_80006DE8`]`(o, x, y)`;
+/// - `mode` 0: the flags `|= 0x04000000` ([`func_80006E50`]), `&=
+///   !0x02000000` ([`func_80006E60`]); otherwise `|= 0x02000010`, `&=
+///   !0x04000000`, and bit `0x40` set with [`func_80006F28`]`(o, z)` if `0 <
+///   z`, else cleared;
+/// - if `0 <= t`: [`func_80006E74`]`(o, t)` if not `0 < w`, else
+///   [`func_80006EC0`]`(o, t, w)`.
+///
+/// Frame (`sp - 0x60`): `ra`, `s4`..`s0` at `+0x5C..+0x48`, `f30`, `f28`,
+/// `f26`, `f24`, `f22`, `f20` (64-bit) at `+0x40`, `+0x38`, `+0x30`,
+/// `+0x28`, `+0x20`, `+0x18`, restored (`s0` the list cursor, `s1 =
+/// 0x04000000`, `s2 = mode`, `s3 = 0x02000010`, `s4 = 0x02000000`, `f20` =
+/// 0.0, `f22 = t`, `f24 = z`, `f26 = w`, `f28 = x`, `f30 = y` meanwhile);
+/// `list` spilled to its home slot `+0x60`. Leaves `a0` = the list's 0, `a1`,
+/// `a2` the last call's, `t6` the first word, and the callees' registers.
+///
+/// Domain: the callees'; the list and its objects in RDRAM. `t`, `w` and
+/// `z` are only compared here.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003398C(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    g[SP] = addu(g[SP], (-0x60i64) as u64);
+    sd(m, g[SP], 0x40, f[30].u64);
+    sd(m, g[SP], 0x38, f[28].u64);
+    sd(m, g[SP], 0x20, f[22].u64);
+    f[22].set_u32l(g[A1] as u32);
+    f[28].set_u32l(g[A2] as u32);
+    f[30].set_u32l(g[A3] as u32);
+    sw(m, g[SP], 0x5C, g[RA]);
+    sw(m, g[SP], 0x58, g[S4]);
+    sw(m, g[SP], 0x54, g[S3]);
+    sw(m, g[SP], 0x50, g[S2]);
+    sw(m, g[SP], 0x4C, g[S1]);
+    sw(m, g[SP], 0x48, g[S0]);
+    sd(m, g[SP], 0x30, f[26].u64);
+    sd(m, g[SP], 0x28, f[24].u64);
+    sd(m, g[SP], 0x18, f[20].u64);
+    sw(m, g[SP], 0x60, g[A0]);
+    if g[A0] != 0 {
+        g[T6] = lw(m, g[A0], 0);
+        g[S0] = g[A0];
+        f[26].set_u32l(lw(m, g[SP], 0x74) as u32);
+        f[24].set_u32l(lw(m, g[SP], 0x78) as u32);
+        if g[T6] != 0 {
+            g[S3] = li(0x200_0000);
+            f[20].set_u32l(0);
+            g[S3] |= 0x10;
+            g[A0] = lw(m, g[A0], 0);
+            g[S4] = li(0x200_0000);
+            g[S2] = lw(m, g[SP], 0x70);
+            g[S1] = li(0x400_0000);
+            g[A1] = s32(f[28].u32l());
+            loop {
+                let g = &mut ctx.gpr;
+                g[A2] = s32(ctx.fpr[30].u32l());
+                call(imports::func_80006DE8, m, ctx);
+                let g = &mut ctx.gpr;
+                g[A1] = g[S1];
+                if g[S2] == 0 {
+                    g[A0] = lw(m, g[S0], 0);
+                    call(imports::func_80006E50, m, ctx);
+                    let g = &mut ctx.gpr;
+                    g[A0] = lw(m, g[S0], 0);
+                    g[A1] = g[S4];
+                    call(imports::func_80006E60, m, ctx);
+                } else {
+                    g[A0] = lw(m, g[S0], 0);
+                    g[A1] = g[S3];
+                    call(imports::func_80006E50, m, ctx);
+                    let g = &mut ctx.gpr;
+                    g[A0] = lw(m, g[S0], 0);
+                    g[A1] = g[S1];
+                    call(imports::func_80006E60, m, ctx);
+                    let g = &mut ctx.gpr;
+                    let f = &mut ctx.fpr;
+                    let shown = f[20].fl() < f[24].fl();
+                    g[A1] = 0x40;
+                    if !shown {
+                        g[A0] = lw(m, g[S0], 0);
+                        call(imports::func_80006E60, m, ctx);
+                    } else {
+                        g[A0] = lw(m, g[S0], 0);
+                        g[A1] = 0x40;
+                        call(imports::func_80006E50, m, ctx);
+                        let g = &mut ctx.gpr;
+                        g[A1] = s32(ctx.fpr[24].u32l());
+                        g[A0] = lw(m, g[S0], 0);
+                        call(imports::func_80006F28, m, ctx);
+                    }
+                }
+                let g = &mut ctx.gpr;
+                let f = &mut ctx.fpr;
+                if f[20].fl() <= f[22].fl() {
+                    if !(f[20].fl() < f[26].fl()) {
+                        g[A1] = s32(f[22].u32l());
+                        g[A0] = lw(m, g[S0], 0);
+                        call(imports::func_80006E74, m, ctx);
+                    } else {
+                        g[A1] = s32(f[22].u32l());
+                        g[A2] = s32(f[26].u32l());
+                        g[A0] = lw(m, g[S0], 0);
+                        call(imports::func_80006EC0, m, ctx);
+                    }
+                }
+                let g = &mut ctx.gpr;
+                g[A0] = lw(m, g[S0], 4);
+                g[S0] = addu(g[S0], 4);
+                if g[A0] == 0 {
+                    break;
+                }
+                g[A1] = s32(ctx.fpr[28].u32l());
+            }
+        }
+    }
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x5C);
+    ctx.fpr[20].u64 = ld(m, g[SP], 0x18);
+    ctx.fpr[22].u64 = ld(m, g[SP], 0x20);
+    ctx.fpr[24].u64 = ld(m, g[SP], 0x28);
+    ctx.fpr[26].u64 = ld(m, g[SP], 0x30);
+    ctx.fpr[28].u64 = ld(m, g[SP], 0x38);
+    ctx.fpr[30].u64 = ld(m, g[SP], 0x40);
+    g[S0] = lw(m, g[SP], 0x48);
+    g[S1] = lw(m, g[SP], 0x4C);
+    g[S2] = lw(m, g[SP], 0x50);
+    g[S3] = lw(m, g[SP], 0x54);
+    g[S4] = lw(m, g[SP], 0x58);
+    g[SP] = addu(g[SP], 0x60);
+}
+
 /// `func_800736AC(list)`: 1 if any object in the 0-terminated pointer list
 /// is not running (bit 28 of `[o + 0x100]` clear) or has reached its end
 /// (`[o + 0x108] <= [o + 0x114]`, floats: the end against the time,

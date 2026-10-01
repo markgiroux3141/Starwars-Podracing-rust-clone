@@ -521,7 +521,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80033780,func_80033780,ours,4,,recomp,,,
 0x80033878,func_80033878,ours,1,,rust_verified,unit_diff,high,"node a's transform with translation v, lowered along its second axis by node b's y (game::misc)"
 0x80033928,func_80033928,ours,1,,rust_verified,unit_diff,high,[o+0x110] = x for each object of a list (game::anim)
-0x8003398C,func_8003398C,ours,2,,recomp,,,
+0x8003398C,func_8003398C,ours,2,,rust_verified,unit_diff,high,start a list of animation objects (game::anim)
 0x80033B14,func_80033B14,ours,0,,rust_verified,unit_diff,high,"1 if p, *p nonzero and bit 29 of [*p + 0x100] (game::misc)"
 0x80033B5C,func_80033B5C,ours,0,,rust_verified,unit_diff,high,f0 = (*pp)->+0x110 or 0.0 (game::misc)
 0x80033B94,func_80033B94,ours,0,,rust_verified,unit_diff,high,f0 = (*pp)->+0x114 or 0.0 (game::misc)
@@ -542,7 +542,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800347D8,func_800347D8,ours,0,,rust_verified,unit_diff,high,4x4 copy with s16 counters (game::misc)
 0x8003483C,func_8003483C,ours,1,,rust_verified,unit_diff,high,"reset the 4x3 stack (0x80112EA0, depth 0x800A3FF0) to identity (game::misc)"
 0x80034948,func_80034948,ours,1,,rust_verified,unit_diff,high,4x3 at the depth and the 4x4 at 0x80112E60 to ring Mtx entries (game::misc)
-0x800349C4,func_800349C4,ours,2,,recomp,,,
+0x800349C4,func_800349C4,ours,2,,rust_verified,unit_diff,high,the model-view matrix (stack top times view) (game::misc)
 0x80034DA8,func_80034DA8,ours,0,render,rust_verified,unit_diff,high,clear [0x800A3FF8]; DL gSPMatrix(proj) + gSPForceMatrix from 0x801134D0/D4 (game::render)
 0x80034E20,func_80034E20,ours,1,,rust_verified,unit_diff,high,"gSPMatrix(4x3 below the depth), gSPForceMatrix(its product with 0x80112E20); QUIRK: offset round trip (game::misc)"
 0x8003527C,func_8003527C,ours,0,render,rust_verified,unit_diff,high,DL gSPMatrix(proj) + gSPForceMatrix from [cam+0x34]/[cam+0x38] (game::render)
@@ -570,7 +570,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80038388,func_80038388,ours,6,,recomp,,,
 0x800387F8,func_800387F8,ours,7,,recomp,,,
 0x80038950,func_80038950,ours,2,,recomp,,,
-0x80038C3C,func_80038C3C,ours,2,,recomp,,,
+0x80038C3C,func_80038C3C,ours,2,,rust_verified,unit_diff,high,render state reset and display list commands (game::render)
 0x80038D5C,func_80038D5C,ours,1,,rust_verified,unit_diff,high,append gSPMatrix of the 4x4 at 0x80112E20 (game::misc)
 0x80038DBC,func_80038DBC,ours,0,,rust_verified,unit_diff,high,"settings [0x800D697C] bit 6 set for 0, cleared otherwise (game::misc)"
 0x80038DF8,func_80038DF8,ours,0,,rust_verified,unit_diff,high,store nonnegative args as halfwords at 0x800A3D44..50 (game::misc)
@@ -586,7 +586,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x800391F4,func_800391F4,ours,15,,recomp,,,
 0x800392A4,func_800392A4,ours,5,,recomp,,,
 0x800392E8,func_800392E8,ours,16,,recomp,,,
-0x8003931C,func_8003931C,ours,2,,recomp,,,
+0x8003931C,func_8003931C,ours,2,,rust_verified,unit_diff,high,a save block's crc32 (game::save)
 0x80039340,func_80039340,ours,17,,recomp,,,
 0x800393DC,func_800393DC,ours,17,,recomp,,,
 0x80039478,func_80039478,ours,16,,recomp,,,
@@ -662,7 +662,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x8003F800,func_8003F800,ours,0,pools,rust_verified,unit_diff,high,"pool iteration begin at i (0x800A4AA4, 0x80118D10) (game::pools)"
 0x8003F890,func_8003F890,ours,0,pools,rust_verified,unit_diff,high,pool iteration next (game::pools)
 0x8003F8FC,func_8003F8FC,ours,1,,rust_verified,unit_diff,high,"16-word message {a, b, src[0..14]} to the empty 80018450(0xEE06, msg) (game::pools)"
-0x8003F974,func_8003F974,ours,2,,recomp,,,
+0x8003F974,func_8003F974,ours,2,,rust_verified,unit_diff,high,debug hook message with All! (game::pools)
 0x8003F99C,func_8003F99C,ours,0,pools,rust_verified,unit_diff,high,"call the element's pool callback [pool+0x24](elem, arg) unless flagged (LOOKUP_FUNC) (game::pools)"
 0x8003FA24,func_8003FA24,ours,0,pools,rust_verified,unit_diff,high,"broadcast cb(elem, arg, arg) to pools with id or All!; 2 stops (LOOKUP_FUNC) (game::pools)"
 0x8003FB34,func_8003FB34,ours,1,,rust_verified,unit_diff,high,Qery message to an element; returns the answer word (game::pools)

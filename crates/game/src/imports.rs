@@ -21,7 +21,13 @@ recomp_imports! {
     func_80005DA8, // vec3 track value
     func_80006704, // key segment
     func_80006D5C, // animation object by id and kind
+    func_80006DE8, // object range
+    func_80006E50, // object flags |=
+    func_80006E60, // object flags &= !
+    func_80006E74, // track time
     func_80006EB4, // [o + 0x110] = x
+    func_80006EC0, // track time blend
+    func_80006F28, // object +0xDC
     func_80006FD4, // empty
     func_80007A44, // slot +0x18 clear
     func_80007CE4, // handle lookup
@@ -142,6 +148,8 @@ recomp_imports! {
     func_80033E08, // Mtx ring next
     func_800344F4, // 4x4 float to Mtx
     func_80034650, // 4x3 float to Mtx
+    func_80034948, // matrices to the RSP
+    func_80035BF0, // render state commands
     func_8003609C, // render mode switches
     func_80038DF8, // six halfwords
     func_80038E58, // default Lights1
@@ -149,6 +157,7 @@ recomp_imports! {
     func_80038F68, // light slot from default
     func_80038FE8, // light slot second light
     func_800390C0, // crc32_table_init
+    func_80039178, // crc32
     func_8003A568, // spline walker point
     func_8003B250, // start a spline walker
     func_8003B300, // four screen words
@@ -159,6 +168,7 @@ recomp_imports! {
     func_8003F714, // pool element by tag
     func_8003F7B8, // pool count by id
     func_8003F800, // pool iteration begin
+    func_8003F8FC, // debug hook message
     func_8003F99C, // element callback
     func_8003FA24, // pool broadcast
     func_8003FB78, // pool count and base

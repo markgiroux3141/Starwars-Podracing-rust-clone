@@ -359,6 +359,30 @@ pub unsafe extern "C" fn func_8003F8FC(rdram: *mut u8, ctx: *mut RecompContext) 
     g[SP] = addu(g[SP], 0x70);
 }
 
+/// `func_8003F974(a, src)`: [`func_8003F8FC`]`(a, "All!", src)` (the debug
+/// hook's message with `b = 0x416C6C21`).
+///
+/// Frame (`sp - 0x18`): `ra` at `+0x14`. Leaves `a2 = src` as passed and the
+/// callee's registers.
+///
+/// Domain: the callee's.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_8003F974(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x18i64) as u64);
+    g[A2] = g[A1];
+    sw(m, g[SP], 0x14, g[RA]);
+    g[A1] = li(0x416C_6C21);
+    call(imports::func_8003F8FC, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x14);
+    g[SP] = addu(g[SP], 0x18);
+}
+
 /// `func_8003F99C(elem, arg)`: call the callback `[pool + 0x24]` of the
 /// first pool whose id equals the element's `[elem + 0]`, as `cb(elem,
 /// arg)`, unless `elem` is 0, no pool matches, the callback is 0, or bit 8
