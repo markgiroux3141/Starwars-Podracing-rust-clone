@@ -243,7 +243,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80012BF0,func_80012BF0,ours,1,,recomp,,,
 0x80013DC0,func_80013DC0,ours,2,,recomp,,,
 0x800141EC,func_800141EC,ours,1,,rust_verified,unit_diff,high,"set up a glyph: colour, combine, texture prologue by font format, metrics, texture load (game::render)"
-0x80014568,func_80014568,ours,1,,recomp,,,
+0x80014568,func_80014568,ours,1,,rust_verified,unit_diff,high,"a glyph with an outline (o), shadow (s) or four-way (f) copies in black, then itself (game::render)"
 0x80014C98,func_80014C98,ours,0,render,rust_verified,unit_diff,high,"gDPPipeSync (0xE7000000, 0) onto the display list at [0x801217B0] (game::render)"
 0x80014CC0,func_80014CC0,ours,1,,rust_verified,unit_diff,high,"sine and cosine in degrees (r = f32(deg*pi/180), cosf then sinf) (game::math)"
 0x80014D20,func_80014D20,ours,2,,recomp,,,

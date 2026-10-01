@@ -211,6 +211,7 @@ pub const PORTED: &[Ported] = &[
     Ported { vram: 0x8001_29E4, name: "func_800129E4", func: misc::func_800129E4 },
     Ported { vram: 0x8001_2B5C, name: "func_80012B5C", func: misc::func_80012B5C },
     Ported { vram: 0x8001_41EC, name: "func_800141EC", func: render::func_800141EC },
+    Ported { vram: 0x8001_4568, name: "func_80014568", func: render::func_80014568 },
     Ported { vram: 0x8001_4C98, name: "func_80014C98", func: render::func_80014C98 },
     Ported { vram: 0x8001_4CC0, name: "func_80014CC0", func: math::func_80014CC0 },
     Ported { vram: 0x8001_4D4C, name: "func_80014D4C", func: math::func_80014D4C },

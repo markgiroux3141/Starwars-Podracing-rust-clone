@@ -1298,6 +1298,520 @@ pub unsafe extern "C" fn func_800141EC(rdram: *mut u8, ctx: *mut RecompContext) 
     g[SP] = addu(g[SP], 0x20);
 }
 
+/// `func_80014568(x, y, mode)` (a glyph with an outline or a shadow): the
+/// current glyph is the one [`func_80011F38`] draws from the words at
+/// `0x800D691C..0x800D6934` (`ox`, `oy` the s16 low halves of the first
+/// two, then `w`, `h`, `s`, `t`, `tile`, all re-read for every call). With
+/// `X = x - w / 2` and `Y = h / 2 + y` (C division, toward zero; 32-bit
+/// wrapping, then s16 for the calls), by the low byte of `mode`:
+/// - `'o'`: copies at the eight neighbours, in the order `(X - 1, Y - 1)`,
+///   `(X + 1, Y + 1)`, `(X + 1, Y - 1)`, `(X - 1, Y + 1)`, `(X - 1, Y)`,
+///   `(X + 1, Y)`, `(X, Y - 1)`, `(X, Y + 1)`;
+/// - `'s'`: one copy at `(X + 1, Y + 1)` (a shadow);
+/// - `'f'`: copies at `(X - 1, Y)`, `(X + 1, Y)`, `(X, Y - 1)`, `(X, Y +
+///   1)`;
+/// - anything else: none.
+///
+/// The copies are drawn after appending `FA000000, a` (a `gDPSetPrimColor`
+/// shape: black with the alpha byte of the text colour at `0x800A1CCC`) at
+/// [`DL_HEAD`]; after them the whole colour `FA000000, r << 24 | g << 16 |
+/// b << 8 | a` is appended and the word `[0x800D6938]` (colour sent,
+/// cleared by [`func_80011F04`]) set to 1. Then, if `[0x800D6938]` is 0,
+/// the colour and the flag the same way, and last the glyph itself at `(X,
+/// Y)`. Each append reads the head, stores it advanced by 8, then the two
+/// words.
+///
+/// Frame (`sp - 0x90`): `s0`..`s7`, `fp`, `ra` saved at `+0x30`..`+0x54`
+/// (they hold the globals' addresses); `mode` spilled to `+0x98`, `X`, `Y`
+/// to `+0x8C`, `+0x88`; the s16 coordinates spilled for later calls to
+/// `+0x58`..`+0x68` (`'o'`: `X - 1` then `X` at `+0x68`, `Y - 1` at
+/// `+0x64`, `X + 1` at `+0x60`, `Y + 1` at `+0x5C`, `Y` at `+0x58`; `'f'`:
+/// `Y` at `+0x58`, `X` at `+0x68`); the callee's stack arguments at
+/// `+0x10`..`+0x20`. Leaves `t6`, `t4`, `t0`, `t2`, `t3` = the last stack
+/// arguments, the last append's temporaries, and the callee's registers.
+///
+/// Domain: the callee's for every copy (the list in RDRAM and apart from
+/// the globals, the box and the frame).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80014568(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x90i64) as u64);
+    sw(m, g[SP], 0x34, g[S1]);
+    g[S1] = li(0x800D_6924);
+    g[T7] = lw(m, g[S1], 0);
+    sw(m, g[SP], 0x38, g[S2]);
+    g[S2] = li(0x800D_6928);
+    g[T0] = lw(m, g[S2], 0);
+    sw(m, g[SP], 0x98, g[A2]);
+    g[T6] = g[A2] & 0xFF;
+    g[A2] = g[T6];
+    sw(m, g[SP], 0x54, g[RA]);
+    sw(m, g[SP], 0x50, g[FP]);
+    sw(m, g[SP], 0x4C, g[S7]);
+    sw(m, g[SP], 0x48, g[S6]);
+    sw(m, g[SP], 0x44, g[S5]);
+    sw(m, g[SP], 0x40, g[S4]);
+    sw(m, g[SP], 0x3C, g[S3]);
+    sw(m, g[SP], 0x30, g[S0]);
+    g[T8] = sra(g[T7], 1);
+    if (g[T7] as i64) < 0 {
+        g[AT] = addu(g[T7], 1);
+        g[T8] = sra(g[AT], 1);
+    }
+    g[T9] = subu(g[A0], g[T8]);
+    sw(m, g[SP], 0x8C, g[T9]);
+    g[T1] = sra(g[T0], 1);
+    if (g[T0] as i64) < 0 {
+        g[AT] = addu(g[T0], 1);
+        g[T1] = sra(g[AT], 1);
+    }
+    g[T2] = addu(g[T1], g[A1]);
+    g[AT] = 0x6F;
+    sw(m, g[SP], 0x88, g[T2]);
+    g[V0] = g[A2];
+    if g[A2] == g[AT] {
+        g[S3] = li(0x8012_17B0);
+        g[V0] = lw(m, g[S3], 0);
+        g[S0] = li(0x800A_0000);
+        g[T4] = li(0xFA00_0000);
+        g[T3] = addu(g[V0], 8);
+        sw(m, g[S3], 0, g[T3]);
+        g[S0] = addu(g[S0], 0x1CCC);
+        sw(m, g[V0], 0, g[T4]);
+        g[T6] = lbu(m, g[S0], 3);
+        g[S6] = li(0x800D_0000);
+        g[S7] = li(0x800D_0000);
+        sw(m, g[V0], 4, g[T6]);
+        g[A1] = lw(m, g[SP], 0x88);
+        g[A0] = lw(m, g[SP], 0x8C);
+        g[FP] = li(0x800D_6934);
+        g[S7] = addu(g[S7], 0x6930);
+        g[S6] = addu(g[S6], 0x692C);
+        g[A1] = addu(g[A1], u64::MAX);
+        g[A0] = addu(g[A0], u64::MAX);
+        g[T3] = lw(m, g[S6], 0);
+        g[T4] = lw(m, g[S7], 0);
+        g[T5] = lw(m, g[FP], 0);
+        g[T2] = lw(m, g[S2], 0);
+        g[T1] = lw(m, g[S1], 0);
+        g[S4] = li(0x800D_0000);
+        g[S5] = li(0x800D_0000);
+        g[T7] = sll(g[A0], 16);
+        g[T9] = sll(g[A1], 16);
+        g[S5] = addu(g[S5], 0x6920);
+        g[S4] = addu(g[S4], 0x691C);
+        g[A1] = sra(g[T9], 16);
+        g[A0] = sra(g[T7], 16);
+        sw(m, g[SP], 0x68, g[A0]);
+        sw(m, g[SP], 0x64, g[A1]);
+        g[A2] = lh(m, g[S4], 2);
+        g[A3] = lh(m, g[S5], 2);
+        sw(m, g[SP], 0x18, g[T3]);
+        sw(m, g[SP], 0x1C, g[T4]);
+        sw(m, g[SP], 0x20, g[T5]);
+        sw(m, g[SP], 0x14, g[T2]);
+        sw(m, g[SP], 0x10, g[T1]);
+        call(imports::func_80011F38, m, ctx);
+        let g = &mut ctx.gpr;
+        g[A0] = lw(m, g[SP], 0x8C);
+        g[A1] = lw(m, g[SP], 0x88);
+        g[T0] = lw(m, g[S1], 0);
+        g[A0] = addu(g[A0], 1);
+        g[A1] = addu(g[A1], 1);
+        g[T1] = lw(m, g[S2], 0);
+        g[T2] = lw(m, g[S6], 0);
+        g[T3] = lw(m, g[S7], 0);
+        g[T4] = lw(m, g[FP], 0);
+        g[T8] = sll(g[A1], 16);
+        g[T6] = sll(g[A0], 16);
+        g[A0] = sra(g[T6], 16);
+        g[A1] = sra(g[T8], 16);
+        sw(m, g[SP], 0x5C, g[A1]);
+        sw(m, g[SP], 0x60, g[A0]);
+        g[A2] = lh(m, g[S4], 2);
+        g[A3] = lh(m, g[S5], 2);
+        sw(m, g[SP], 0x10, g[T0]);
+        sw(m, g[SP], 0x14, g[T1]);
+        sw(m, g[SP], 0x18, g[T2]);
+        sw(m, g[SP], 0x1C, g[T3]);
+        sw(m, g[SP], 0x20, g[T4]);
+        call(imports::func_80011F38, m, ctx);
+        let g = &mut ctx.gpr;
+        g[T5] = lw(m, g[S1], 0);
+        g[T6] = lw(m, g[S2], 0);
+        g[T7] = lw(m, g[S6], 0);
+        g[T8] = lw(m, g[S7], 0);
+        g[T9] = lw(m, g[FP], 0);
+        g[A0] = lh(m, g[SP], 0x62);
+        g[A1] = lh(m, g[SP], 0x66);
+        g[A2] = lh(m, g[S4], 2);
+        g[A3] = lh(m, g[S5], 2);
+        sw(m, g[SP], 0x10, g[T5]);
+        sw(m, g[SP], 0x14, g[T6]);
+        sw(m, g[SP], 0x18, g[T7]);
+        sw(m, g[SP], 0x1C, g[T8]);
+        sw(m, g[SP], 0x20, g[T9]);
+        call(imports::func_80011F38, m, ctx);
+        let g = &mut ctx.gpr;
+        g[T0] = lw(m, g[S1], 0);
+        g[T1] = lw(m, g[S2], 0);
+        g[T2] = lw(m, g[S6], 0);
+        g[T3] = lw(m, g[S7], 0);
+        g[T4] = lw(m, g[FP], 0);
+        g[A0] = lh(m, g[SP], 0x6A);
+        g[A1] = lh(m, g[SP], 0x5E);
+        g[A2] = lh(m, g[S4], 2);
+        g[A3] = lh(m, g[S5], 2);
+        sw(m, g[SP], 0x10, g[T0]);
+        sw(m, g[SP], 0x14, g[T1]);
+        sw(m, g[SP], 0x18, g[T2]);
+        sw(m, g[SP], 0x1C, g[T3]);
+        sw(m, g[SP], 0x20, g[T4]);
+        call(imports::func_80011F38, m, ctx);
+        let g = &mut ctx.gpr;
+        g[A1] = lh(m, g[SP], 0x8A);
+        g[T5] = lw(m, g[S1], 0);
+        g[T6] = lw(m, g[S2], 0);
+        g[T7] = lw(m, g[S6], 0);
+        g[T8] = lw(m, g[S7], 0);
+        g[T9] = lw(m, g[FP], 0);
+        g[A0] = lh(m, g[SP], 0x6A);
+        g[A2] = lh(m, g[S4], 2);
+        g[A3] = lh(m, g[S5], 2);
+        sw(m, g[SP], 0x58, g[A1]);
+        sw(m, g[SP], 0x10, g[T5]);
+        sw(m, g[SP], 0x14, g[T6]);
+        sw(m, g[SP], 0x18, g[T7]);
+        sw(m, g[SP], 0x1C, g[T8]);
+        sw(m, g[SP], 0x20, g[T9]);
+        call(imports::func_80011F38, m, ctx);
+        let g = &mut ctx.gpr;
+        g[T0] = lw(m, g[S1], 0);
+        g[T1] = lw(m, g[S2], 0);
+        g[T2] = lw(m, g[S6], 0);
+        g[T3] = lw(m, g[S7], 0);
+        g[T4] = lw(m, g[FP], 0);
+        g[A1] = lw(m, g[SP], 0x58);
+        g[A0] = lh(m, g[SP], 0x62);
+        g[A2] = lh(m, g[S4], 2);
+        g[A3] = lh(m, g[S5], 2);
+        sw(m, g[SP], 0x10, g[T0]);
+        sw(m, g[SP], 0x14, g[T1]);
+        sw(m, g[SP], 0x18, g[T2]);
+        sw(m, g[SP], 0x1C, g[T3]);
+        sw(m, g[SP], 0x20, g[T4]);
+        call(imports::func_80011F38, m, ctx);
+        let g = &mut ctx.gpr;
+        g[A0] = lh(m, g[SP], 0x8E);
+        g[T5] = lw(m, g[S1], 0);
+        g[T6] = lw(m, g[S2], 0);
+        g[T7] = lw(m, g[S6], 0);
+        g[T8] = lw(m, g[S7], 0);
+        g[T9] = lw(m, g[FP], 0);
+        g[A1] = lh(m, g[SP], 0x66);
+        g[A2] = lh(m, g[S4], 2);
+        g[A3] = lh(m, g[S5], 2);
+        sw(m, g[SP], 0x68, g[A0]);
+        sw(m, g[SP], 0x10, g[T5]);
+        sw(m, g[SP], 0x14, g[T6]);
+        sw(m, g[SP], 0x18, g[T7]);
+        sw(m, g[SP], 0x1C, g[T8]);
+        sw(m, g[SP], 0x20, g[T9]);
+        call(imports::func_80011F38, m, ctx);
+        let g = &mut ctx.gpr;
+        g[T0] = lw(m, g[S1], 0);
+        g[T1] = lw(m, g[S2], 0);
+        g[T2] = lw(m, g[S6], 0);
+        g[T3] = lw(m, g[S7], 0);
+        g[T4] = lw(m, g[FP], 0);
+        g[A0] = lw(m, g[SP], 0x68);
+        g[A1] = lh(m, g[SP], 0x5E);
+        g[A2] = lh(m, g[S4], 2);
+        g[A3] = lh(m, g[S5], 2);
+        sw(m, g[SP], 0x10, g[T0]);
+        sw(m, g[SP], 0x14, g[T1]);
+        sw(m, g[SP], 0x18, g[T2]);
+        sw(m, g[SP], 0x1C, g[T3]);
+        sw(m, g[SP], 0x20, g[T4]);
+        call(imports::func_80011F38, m, ctx);
+        let g = &mut ctx.gpr;
+        g[V0] = lw(m, g[S3], 0);
+        g[T6] = li(0xFA00_0000);
+        g[A2] = li(0x800D_0000);
+        g[T5] = addu(g[V0], 8);
+        sw(m, g[S3], 0, g[T5]);
+        sw(m, g[V0], 0, g[T6]);
+        g[T0] = lbu(m, g[S0], 0);
+        g[T4] = lbu(m, g[S0], 1);
+        g[T8] = lbu(m, g[S0], 3);
+        g[T9] = lbu(m, g[S0], 2);
+        g[T1] = sll(g[T0], 24);
+        g[T5] = sll(g[T4], 16);
+        g[T2] = g[T8] | g[T1];
+        g[T6] = g[T2] | g[T5];
+        g[T0] = sll(g[T9], 8);
+        g[T8] = g[T6] | g[T0];
+        g[A2] = addu(g[A2], 0x6938);
+        g[T1] = 1;
+        sw(m, g[V0], 4, g[T8]);
+        sw(m, g[A2], 0, g[T1]);
+    } else {
+        g[AT] = 0x73;
+        g[S3] = li(0x8012_0000);
+        if g[V0] == g[AT] {
+            g[S3] = addu(g[S3], 0x17B0);
+            g[V0] = lw(m, g[S3], 0);
+            g[S0] = li(0x800A_0000);
+            g[T4] = li(0xFA00_0000);
+            g[T3] = addu(g[V0], 8);
+            sw(m, g[S3], 0, g[T3]);
+            g[S0] = addu(g[S0], 0x1CCC);
+            sw(m, g[V0], 0, g[T4]);
+            g[T5] = lbu(m, g[S0], 3);
+            g[S6] = li(0x800D_0000);
+            g[S7] = li(0x800D_0000);
+            sw(m, g[V0], 4, g[T5]);
+            g[A1] = lw(m, g[SP], 0x88);
+            g[A0] = lw(m, g[SP], 0x8C);
+            g[FP] = li(0x800D_6934);
+            g[S7] = addu(g[S7], 0x6930);
+            g[S6] = addu(g[S6], 0x692C);
+            g[T3] = lw(m, g[S6], 0);
+            g[T4] = lw(m, g[S7], 0);
+            g[T2] = lw(m, g[FP], 0);
+            g[T1] = lw(m, g[S2], 0);
+            g[T8] = lw(m, g[S1], 0);
+            g[S4] = li(0x800D_0000);
+            g[S5] = li(0x800D_0000);
+            g[A1] = addu(g[A1], 1);
+            g[A0] = addu(g[A0], 1);
+            g[S5] = addu(g[S5], 0x6920);
+            g[S4] = addu(g[S4], 0x691C);
+            g[T7] = sll(g[A0], 16);
+            g[T6] = sll(g[A1], 16);
+            g[A1] = sra(g[T6], 16);
+            g[A0] = sra(g[T7], 16);
+            g[A2] = lh(m, g[S4], 2);
+            g[A3] = lh(m, g[S5], 2);
+            sw(m, g[SP], 0x18, g[T3]);
+            sw(m, g[SP], 0x1C, g[T4]);
+            sw(m, g[SP], 0x20, g[T2]);
+            sw(m, g[SP], 0x14, g[T1]);
+            sw(m, g[SP], 0x10, g[T8]);
+            call(imports::func_80011F38, m, ctx);
+            let g = &mut ctx.gpr;
+            g[V0] = lw(m, g[S3], 0);
+            g[T7] = li(0xFA00_0000);
+            g[A2] = li(0x800D_0000);
+            g[T5] = addu(g[V0], 8);
+            sw(m, g[S3], 0, g[T5]);
+            sw(m, g[V0], 0, g[T7]);
+            g[T8] = lbu(m, g[S0], 0);
+            g[T2] = lbu(m, g[S0], 1);
+            g[T6] = lbu(m, g[S0], 3);
+            g[T0] = lbu(m, g[S0], 2);
+            g[T1] = sll(g[T8], 24);
+            g[T5] = sll(g[T2], 16);
+            g[T3] = g[T6] | g[T1];
+            g[T7] = g[T3] | g[T5];
+            g[T8] = sll(g[T0], 8);
+            g[T6] = g[T7] | g[T8];
+            g[A2] = addu(g[A2], 0x6938);
+            g[T1] = 1;
+            sw(m, g[V0], 4, g[T6]);
+            sw(m, g[A2], 0, g[T1]);
+        } else {
+            g[AT] = 0x66;
+            if g[V0] == g[AT] {
+                g[S3] = addu(g[S3], 0x17B0);
+                g[V0] = lw(m, g[S3], 0);
+                g[S0] = li(0x800A_0000);
+                g[T2] = li(0xFA00_0000);
+                g[T4] = addu(g[V0], 8);
+                sw(m, g[S3], 0, g[T4]);
+                g[S0] = addu(g[S0], 0x1CCC);
+                sw(m, g[V0], 0, g[T2]);
+                g[T5] = lbu(m, g[S0], 3);
+                g[S6] = li(0x800D_0000);
+                g[S7] = li(0x800D_0000);
+                sw(m, g[V0], 4, g[T5]);
+                g[A0] = lw(m, g[SP], 0x8C);
+                g[FP] = li(0x800D_6934);
+                g[S7] = addu(g[S7], 0x6930);
+                g[S6] = addu(g[S6], 0x692C);
+                g[T6] = lw(m, g[S6], 0);
+                g[T1] = lw(m, g[S7], 0);
+                g[T4] = lw(m, g[FP], 0);
+                g[T8] = lw(m, g[S2], 0);
+                g[T7] = lw(m, g[S1], 0);
+                g[A1] = lh(m, g[SP], 0x8A);
+                g[S4] = li(0x800D_0000);
+                g[S5] = li(0x800D_0000);
+                g[A0] = addu(g[A0], u64::MAX);
+                g[S5] = addu(g[S5], 0x6920);
+                g[S4] = addu(g[S4], 0x691C);
+                g[T9] = sll(g[A0], 16);
+                g[A0] = sra(g[T9], 16);
+                g[A2] = lh(m, g[S4], 2);
+                g[A3] = lh(m, g[S5], 2);
+                sw(m, g[SP], 0x18, g[T6]);
+                sw(m, g[SP], 0x1C, g[T1]);
+                sw(m, g[SP], 0x20, g[T4]);
+                sw(m, g[SP], 0x14, g[T8]);
+                sw(m, g[SP], 0x10, g[T7]);
+                sw(m, g[SP], 0x58, g[A1]);
+                call(imports::func_80011F38, m, ctx);
+                let g = &mut ctx.gpr;
+                g[A0] = lw(m, g[SP], 0x8C);
+                g[T5] = lw(m, g[S1], 0);
+                g[T9] = lw(m, g[S2], 0);
+                g[T0] = lw(m, g[S6], 0);
+                g[T7] = lw(m, g[S7], 0);
+                g[T8] = lw(m, g[FP], 0);
+                g[A0] = addu(g[A0], 1);
+                g[T2] = sll(g[A0], 16);
+                g[A1] = lw(m, g[SP], 0x58);
+                g[A0] = sra(g[T2], 16);
+                g[A2] = lh(m, g[S4], 2);
+                g[A3] = lh(m, g[S5], 2);
+                sw(m, g[SP], 0x10, g[T5]);
+                sw(m, g[SP], 0x14, g[T9]);
+                sw(m, g[SP], 0x18, g[T0]);
+                sw(m, g[SP], 0x1C, g[T7]);
+                sw(m, g[SP], 0x20, g[T8]);
+                call(imports::func_80011F38, m, ctx);
+                let g = &mut ctx.gpr;
+                g[A1] = lw(m, g[SP], 0x88);
+                g[A0] = lh(m, g[SP], 0x8E);
+                g[T4] = lw(m, g[S1], 0);
+                g[T2] = lw(m, g[S2], 0);
+                g[T3] = lw(m, g[S6], 0);
+                g[T5] = lw(m, g[S7], 0);
+                g[T9] = lw(m, g[FP], 0);
+                g[A1] = addu(g[A1], u64::MAX);
+                g[T6] = sll(g[A1], 16);
+                g[A1] = sra(g[T6], 16);
+                g[A2] = lh(m, g[S4], 2);
+                g[A3] = lh(m, g[S5], 2);
+                sw(m, g[SP], 0x68, g[A0]);
+                sw(m, g[SP], 0x10, g[T4]);
+                sw(m, g[SP], 0x14, g[T2]);
+                sw(m, g[SP], 0x18, g[T3]);
+                sw(m, g[SP], 0x1C, g[T5]);
+                sw(m, g[SP], 0x20, g[T9]);
+                call(imports::func_80011F38, m, ctx);
+                let g = &mut ctx.gpr;
+                g[A1] = lw(m, g[SP], 0x88);
+                g[T8] = lw(m, g[S1], 0);
+                g[T6] = lw(m, g[S2], 0);
+                g[T1] = lw(m, g[S6], 0);
+                g[T4] = lw(m, g[S7], 0);
+                g[T2] = lw(m, g[FP], 0);
+                g[A1] = addu(g[A1], 1);
+                g[T0] = sll(g[A1], 16);
+                g[A0] = lw(m, g[SP], 0x68);
+                g[A1] = sra(g[T0], 16);
+                g[A2] = lh(m, g[S4], 2);
+                g[A3] = lh(m, g[S5], 2);
+                sw(m, g[SP], 0x10, g[T8]);
+                sw(m, g[SP], 0x14, g[T6]);
+                sw(m, g[SP], 0x18, g[T1]);
+                sw(m, g[SP], 0x1C, g[T4]);
+                sw(m, g[SP], 0x20, g[T2]);
+                call(imports::func_80011F38, m, ctx);
+                let g = &mut ctx.gpr;
+                g[V0] = lw(m, g[S3], 0);
+                g[T5] = li(0xFA00_0000);
+                g[A2] = li(0x800D_0000);
+                g[T3] = addu(g[V0], 8);
+                sw(m, g[S3], 0, g[T3]);
+                sw(m, g[V0], 0, g[T5]);
+                g[T8] = lbu(m, g[S0], 0);
+                g[T2] = lbu(m, g[S0], 1);
+                g[T0] = lbu(m, g[S0], 3);
+                g[T7] = lbu(m, g[S0], 2);
+                g[T6] = sll(g[T8], 24);
+                g[T3] = sll(g[T2], 16);
+                g[T1] = g[T0] | g[T6];
+                g[T5] = g[T1] | g[T3];
+                g[T8] = sll(g[T7], 8);
+                g[T0] = g[T5] | g[T8];
+                g[A2] = addu(g[A2], 0x6938);
+                g[T6] = 1;
+                sw(m, g[V0], 4, g[T0]);
+                sw(m, g[A2], 0, g[T6]);
+            }
+        }
+    }
+    let g = &mut ctx.gpr;
+    g[A2] = li(0x800D_6938);
+    g[T4] = lw(m, g[A2], 0);
+    g[S0] = li(0x800A_0000);
+    g[S3] = li(0x8012_0000);
+    g[S4] = li(0x800D_0000);
+    g[S5] = li(0x800D_0000);
+    g[S6] = li(0x800D_0000);
+    g[S7] = li(0x800D_0000);
+    g[FP] = li(0x800D_6934);
+    g[S7] = addu(g[S7], 0x6930);
+    g[S6] = addu(g[S6], 0x692C);
+    g[S5] = addu(g[S5], 0x6920);
+    g[S4] = addu(g[S4], 0x691C);
+    g[S3] = addu(g[S3], 0x17B0);
+    g[S0] = addu(g[S0], 0x1CCC);
+    g[A1] = lh(m, g[SP], 0x8A);
+    g[A0] = lh(m, g[SP], 0x8E);
+    if g[T4] == 0 {
+        g[V0] = lw(m, g[S3], 0);
+        g[T1] = li(0xFA00_0000);
+        g[T2] = addu(g[V0], 8);
+        sw(m, g[S3], 0, g[T2]);
+        sw(m, g[V0], 0, g[T1]);
+        g[T5] = lbu(m, g[S0], 0);
+        g[T4] = lbu(m, g[S0], 1);
+        g[T9] = lbu(m, g[S0], 3);
+        g[T7] = lbu(m, g[S0], 2);
+        g[T8] = sll(g[T5], 24);
+        g[T2] = sll(g[T4], 16);
+        g[T0] = g[T9] | g[T8];
+        g[T1] = g[T0] | g[T2];
+        g[T5] = sll(g[T7], 8);
+        g[T9] = g[T1] | g[T5];
+        g[T8] = 1;
+        sw(m, g[V0], 4, g[T9]);
+        sw(m, g[A2], 0, g[T8]);
+    }
+    g[T6] = lw(m, g[S1], 0);
+    g[T4] = lw(m, g[S2], 0);
+    g[T0] = lw(m, g[S6], 0);
+    g[T2] = lw(m, g[S7], 0);
+    g[T3] = lw(m, g[FP], 0);
+    g[A2] = lh(m, g[S4], 2);
+    g[A3] = lh(m, g[S5], 2);
+    sw(m, g[SP], 0x10, g[T6]);
+    sw(m, g[SP], 0x14, g[T4]);
+    sw(m, g[SP], 0x18, g[T0]);
+    sw(m, g[SP], 0x1C, g[T2]);
+    sw(m, g[SP], 0x20, g[T3]);
+    call(imports::func_80011F38, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x54);
+    g[S0] = lw(m, g[SP], 0x30);
+    g[S1] = lw(m, g[SP], 0x34);
+    g[S2] = lw(m, g[SP], 0x38);
+    g[S3] = lw(m, g[SP], 0x3C);
+    g[S4] = lw(m, g[SP], 0x40);
+    g[S5] = lw(m, g[SP], 0x44);
+    g[S6] = lw(m, g[SP], 0x48);
+    g[S7] = lw(m, g[SP], 0x4C);
+    g[FP] = lw(m, g[SP], 0x50);
+    g[SP] = addu(g[SP], 0x90);
+}
+
 /// `func_80014C98()`: append `gDPPipeSync` (`0xE7000000`, `0`) at the
 /// display list pointer [`DL_HEAD`] and advance it by 8 (the pointer is
 /// stored before the command, then the low word, then the high).

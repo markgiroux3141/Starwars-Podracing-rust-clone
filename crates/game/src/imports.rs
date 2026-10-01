@@ -46,6 +46,7 @@ recomp_imports! {
     func_80011CDC, // rom_read
     func_80011D60, // rom_read_small
     func_80011E54, // select pointer k
+    func_80011F38, // glyph rectangle
     func_800125E4, // texture load
     func_800129E4, // text width
     func_80014D4C, // asin in degrees
