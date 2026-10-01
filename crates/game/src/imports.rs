@@ -65,6 +65,7 @@ recomp_imports! {
     func_800129E4, // text width
     func_80014CC0, // sin and cos in degrees
     func_80014D4C, // asin in degrees
+    func_80014F2C, // acos in degrees
     func_80014F54, // atan2 in degrees
     func_80015190, // vec2 multiply-add
     func_800151C0, // vec2 length

@@ -286,20 +286,20 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80016D78,func_80016D78,ours,0,math,rust_verified,unit_diff,high,"vec4 set (z spill, w stack) (game::math)"
 0x80016DA0,func_80016DA0,ours,0,math,rust_verified,unit_diff,high,vec4 scale (game::math)
 0x80016DD8,func_80016DD8,ours,0,math,rust_verified,unit_diff,high,"out = vec4 x 4x4, via frame (game::math)"
-0x80016F0C,func_80016F0C,ours,2,,recomp,,,
-0x8001723C,func_8001723C,ours,2,,recomp,,,
-0x8001734C,func_8001734C,ours,2,,recomp,,,
+0x80016F0C,func_80016F0C,ours,2,,rust_verified,unit_diff,high,a 4x4's translation and three angles (acos) (game::math)
+0x8001723C,func_8001723C,ours,2,,rust_verified,unit_diff,high,rotation from three angles into a 4x4 (game::math)
+0x8001734C,func_8001734C,ours,2,,rust_verified,unit_diff,high,rotation from three angles into a packed 3x3 (game::math)
 0x8001745C,func_8001745C,ours,3,,recomp,,,
 0x800174B8,func_800174B8,ours,3,,recomp,,,
 0x80017520,func_80017520,ours,0,math,rust_verified,unit_diff,high,"4x4 scale matrix diag(x, y, z, 1) (game::math)"
 0x80017580,func_80017580,ours,0,math,rust_verified,unit_diff,high,"4x4 translation matrix, row 3 = (x, y, z, 1) (game::math)"
-0x800175E0,func_800175E0,ours,2,,recomp,,,
+0x800175E0,func_800175E0,ours,2,,rust_verified,unit_diff,high,rotation about a unit axis (game::math)
 0x80017824,func_80017824,ours,3,,recomp,,,
 0x80017874,func_80017874,ours,0,math,rust_verified,unit_diff,high,4x4 identity (game::math)
 0x800178C4,func_800178C4,ours,3,,recomp,,,
 0x80017918,func_80017918,ours,0,math,rust_verified,unit_diff,high,"out = m (5th arg) with rows 0..2 times sx, sy, sz (game::math)"
-0x800179EC,func_800179EC,ours,2,,recomp,,,
-0x80017AC0,func_80017AC0,ours,2,,recomp,,,
+0x800179EC,func_800179EC,ours,2,,rust_verified,unit_diff,high,a triangle's plane (game::math)
+0x80017AC0,func_80017AC0,ours,2,,rust_verified,unit_diff,high,a plane from a normal and a point (game::math)
 0x80017B34,func_80017B34,ours,3,,recomp,,,
 0x80017B7C,func_80017B7C,ours,0,,rust_verified,unit_diff,high,"node translation +0x40..+0x48 = (x, y, z); flags halfword +0xC |= 3 (game::misc)"
 0x80017BA8,func_80017BA8,ours,0,,rust_verified,unit_diff,high,node 3x4 transform +0x1C..+0x48 = 4x4 m's first three columns; flags |= 3 (game::misc)
