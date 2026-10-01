@@ -643,6 +643,48 @@ pub unsafe extern "C" fn func_80006FD4(_rdram: *mut u8, _ctx: *mut RecompContext
 /// N64Recomp entry point: see [`crate::recomp::enter`].
 pub unsafe extern "C" fn func_80006FDC(_rdram: *mut u8, _ctx: *mut RecompContext) {}
 
+/// `func_80006FE4(x, heap, num, size)` (**guess**: the game's audio heap
+/// allocation): [`func_80087FC0`]`(0, 0, heap, num, size)` (libultra's
+/// `alHeapDBAlloc` without a file and line; `size` passed on as its stack
+/// argument), then [`func_80006FD4`] (empty); returns the allocation in
+/// `v0`. `x` is only spilled.
+///
+/// Frame (`sp - 0x28`): `ra` at `+0x1C`, the result at `+0x24`, the four
+/// arguments spilled to their home slots `+0x28..+0x34` (`num` and `size`
+/// re-read sign-extended), `size` also at `+0x10`. Leaves `t6 = size`, `a0
+/// = a1 = 0`, `a2 = heap`, `a3 = num` as passed, and the callee's
+/// registers.
+///
+/// Domain: the callee's.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80006FE4(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[SP] = addu(g[SP], (-0x28i64) as u64);
+    sw(m, g[SP], 0x34, g[A3]);
+    g[T6] = lw(m, g[SP], 0x34);
+    sw(m, g[SP], 0x30, g[A2]);
+    g[A2] = g[A1];
+    sw(m, g[SP], 0x1C, g[RA]);
+    sw(m, g[SP], 0x28, g[A0]);
+    sw(m, g[SP], 0x2C, g[A1]);
+    g[A3] = lw(m, g[SP], 0x30);
+    g[A1] = 0;
+    g[A0] = 0;
+    sw(m, g[SP], 0x10, g[T6]);
+    call(imports::func_80087FC0, m, ctx);
+    let g = &mut ctx.gpr;
+    sw(m, g[SP], 0x24, g[V0]);
+    call(imports::func_80006FD4, m, ctx);
+    let g = &mut ctx.gpr;
+    g[RA] = lw(m, g[SP], 0x1C);
+    g[V0] = lw(m, g[SP], 0x24);
+    g[SP] = addu(g[SP], 0x28);
+}
+
 /// `func_8000758C`: returns at once.
 ///
 /// # Safety

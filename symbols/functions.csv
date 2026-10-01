@@ -76,7 +76,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80006F60,func_80006F60,ours,6,,recomp,,,
 0x80006FD4,func_80006FD4,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
 0x80006FDC,func_80006FDC,ours,0,,rust_verified,unit_diff,high,empty (game::misc)
-0x80006FE4,func_80006FE4,ours,1,,recomp,,,
+0x80006FE4,func_80006FE4,ours,1,,rust_verified,unit_diff,high,"alHeapDBAlloc(0, 0, heap, num, size), then the empty func_80006FD4 (game::misc)"
 0x80007034,func_80007034,ours,5,,recomp,,,
 0x80007218,func_80007218,ours,8,,recomp,,,
 0x800073A4,func_800073A4,ours,13,,recomp,,,

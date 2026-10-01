@@ -18,6 +18,7 @@ recomp_imports! {
     func_80006704, // key segment
     func_80006D5C, // animation object by id and kind
     func_80006EB4, // [o + 0x110] = x
+    func_80006FD4, // empty
     func_80007A44, // slot +0x18 clear
     func_80007CE4, // handle lookup
     func_80008718, // special sound id
@@ -157,6 +158,7 @@ recomp_imports! {
     func_80083D80, // first box in world space (self)
     func_80085F78, // camera record +0x154
     func_80087814, // queue a screen rectangle
+    func_80087FC0, // alHeapDBAlloc
     func_8008A750, // cosf
     func_8008A8C0, // sinf
 }
