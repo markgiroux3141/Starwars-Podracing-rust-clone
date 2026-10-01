@@ -9,7 +9,7 @@
 #![allow(non_snake_case)]
 
 use crate::imports;
-use crate::recomp::{addu, ddiv, ddivu, dmultu, enter, fpu, ld, lh, li, lw, reg::*, s32, sd, slt, sra, sw, RecompContext};
+use crate::recomp::{addu, ddiv, ddivu, dmultu, enter, fpu, ld, lh, li, lw, multu, reg::*, s32, sd, sh, sll, slt, sltu, sra, subu, sw, RecompContext};
 use n64mem::Mem;
 
 /// `func_80087CB0(x)`: `sqrtf`: `f0 = sqrt(f12)`, the single-precision
@@ -22,6 +22,269 @@ pub unsafe extern "C" fn func_80087CB0(rdram: *mut u8, ctx: *mut RecompContext) 
     let (_mem, ctx) = enter(rdram, ctx);
     ctx.fpr[0].set_fl(ctx.fpr[12].fl().sqrt());
 }
+
+/// `func_80087FC0(file, line, heap, num, size)` (libultra's
+/// `alHeapDBAlloc`; `size` the stack argument `sp + 0x10`): with the heap
+/// record `{base, cur, len}` at `heap` and `n = (num * size + 15) & ~15`
+/// (32-bit, the low word of `multu`), if `cur + n <= base + len` (unsigned)
+/// returns `cur` in `v0` and advances `cur` by `n`; otherwise returns 0.
+/// `file` and `line` (a debug build's caller) are only spilled to their
+/// home slots `sp + 0`, `sp + 4`.
+///
+/// Leaves `t6 = size`, `t8 = base`, `t9 = len`, `a0 = cur`, `at` = the
+/// compare, `t0 = base + len`, `t7 = n`, `t1 = t2 = cur + n`, `v1` = the
+/// result.
+///
+/// Domain: canonical `heap` and `sp` with their words in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80087FC0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T6] = lw(m, g[SP], 0x10);
+    sw(m, g[SP], 0, g[A0]);
+    sw(m, g[SP], 4, g[A1]);
+    let (lo, _) = multu(g[A3], g[T6]);
+    g[T9] = lw(m, g[A2], 8);
+    g[T8] = lw(m, g[A2], 0);
+    g[A0] = lw(m, g[A2], 4);
+    g[AT] = (-0x10i64) as u64;
+    g[T0] = addu(g[T8], g[T9]);
+    g[V1] = 0;
+    g[V0] = lo;
+    g[V0] = addu(g[V0], 0xF);
+    g[T7] = g[V0] & g[AT];
+    g[T1] = addu(g[A0], g[T7]);
+    g[AT] = sltu(g[T0], g[T1]);
+    g[T2] = addu(g[A0], g[T7]);
+    if g[AT] == 0 {
+        g[V1] = g[A0];
+        sw(m, g[A2], 4, g[T2]);
+    }
+    g[V0] = g[V1];
+}
+
+/// `func_80088020(ln)` (libultra's `alUnlink`): unlink the doubly linked
+/// node `{next, prev}` at `ln`: `next->prev = ln->prev` if `next` is set,
+/// then `prev->next = ln->next` if `prev` is set (each field re-read from
+/// `ln` when it is stored). `ln` itself keeps its links.
+///
+/// Leaves `v0` = `prev` (re-read), `t6`, `t7` the words copied.
+///
+/// Domain: canonical pointers with the words in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80088020(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V0] = lw(m, g[A0], 0);
+    if g[V0] != 0 {
+        g[T6] = lw(m, g[A0], 4);
+        sw(m, g[V0], 4, g[T6]);
+    }
+    g[V0] = lw(m, g[A0], 4);
+    if g[V0] != 0 {
+        g[T7] = lw(m, g[A0], 0);
+        sw(m, g[V0], 0, g[T7]);
+    }
+}
+
+/// `func_80088050(ln, to)` (libultra's `alLink`): insert the node `ln`
+/// after `to` in a doubly linked list of `{next, prev}`: `ln->prev = to`,
+/// `ln->next = to->next`, `to->next->prev = ln` if `to->next` (re-read) is
+/// set, then `to->next = ln`, in that order.
+///
+/// Leaves `t6` = the old `to->next`, `v0` = it re-read.
+///
+/// Domain: canonical pointers with the words in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80088050(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T6] = lw(m, g[A1], 0);
+    sw(m, g[A0], 4, g[A1]);
+    sw(m, g[A0], 0, g[T6]);
+    g[V0] = lw(m, g[A1], 0);
+    if g[V0] != 0 {
+        sw(m, g[V0], 4, g[A0]);
+    }
+    sw(m, g[A1], 0, g[A0]);
+}
+
+/// `func_80088110(heap, base, len)` (libultra's `alHeapInit`): the heap
+/// record at `heap` becomes `{b, b, len, 0}` (`+0` base, `+4` cur, `+8`
+/// len, `+0xC` count), `b` = `base` rounded up to 16 (`base + 16 - (base &
+/// 15)` unless it is aligned). Stored base, len, count, then cur (re-read
+/// from `+0`).
+///
+/// Leaves `v1 = 16`, `t6 = base & 15`, `v0 = 16 - t6`, `t7 = base + v0`,
+/// `t8 = b`.
+///
+/// Domain: canonical `heap` with 16 bytes in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80088110(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V1] = 0x10;
+    g[T6] = g[A1] & 0xF;
+    g[V0] = subu(g[V1], g[T6]);
+    g[T7] = addu(g[A1], g[V0]);
+    if g[V1] == g[V0] {
+        sw(m, g[A0], 0, g[A1]);
+    } else {
+        sw(m, g[A0], 0, g[T7]);
+    }
+    g[T8] = lw(m, g[A0], 0);
+    sw(m, g[A0], 8, g[A2]);
+    sw(m, g[A0], 0xC, 0);
+    sw(m, g[A0], 4, g[T8]);
+}
+
+/// `func_800883F0()`: returns at once (an empty libultra function; nothing
+/// changes).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800883F0(_rdram: *mut u8, _ctx: *mut RecompContext) {}
+
+/// `func_800883F8(o, t)` (**guess**: microseconds to samples at the rate
+/// `[o + 0x44]`): `v0 = trunc(f32(f64(f32(t) * f32(rate)) / [0x800ADD80] +
+/// 0.5)) & ~15` with `t` and the rate converted from words (round to
+/// nearest), the constant a double (1e6 in the ROM), the product widened
+/// exactly and the sum narrowed to nearest; so the samples rounded to the
+/// nearest whole number and then down to a multiple of 16.
+///
+/// Leaves `t6` = the rate, `at = -16`, `f4`/`f5` = the constant, `f6`/`f7`
+/// = 0.5, `f8` = the quotient, `f10` = the sum, `f16` = the conversion,
+/// `f18` = the product as a double, `f0` = the narrowed sum, `t8 = v0`.
+///
+/// Domain: canonical `o`; any `t` and rate (the product of two converted
+/// words is finite).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800883F8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mem, ctx) = enter(rdram, ctx);
+    let m = &mem;
+    let g = &mut ctx.gpr;
+    let f = &mut ctx.fpr;
+    g[T6] = lw(m, g[A0], 0x44);
+    f[4].set_u32l(g[A1] as u32);
+    g[AT] = li(0x800B_0000);
+    f[8].set_u32l(g[T6] as u32);
+    f[6].set_fl(fpu::cvt_s_w(f[4].u32l(), fpu::NEAREST));
+    f[4].u64 = ld(m, g[AT], -0x2280);
+    g[AT] = li(0x3FE0_0000);
+    f[6].set_u32h(g[AT] as u32);
+    g[AT] = (-0x10i64) as u64;
+    f[10].set_fl(fpu::cvt_s_w(f[8].u32l(), fpu::NEAREST));
+    f[16].set_fl(f[6].fl() * f[10].fl());
+    f[6].set_u32l(0);
+    f[18].set_d(f64::from(f[16].fl()));
+    f[8].set_d(f[18].d() / f[4].d());
+    f[10].set_d(f[8].d() + f[6].d());
+    f[0].set_fl(fpu::cvt_s_d(f[10].d(), fpu::NEAREST));
+    f[16].set_u32l(fpu::trunc_w_s(f[0].fl()));
+    g[V0] = s32(f[16].u32l());
+    g[T8] = g[V0] & g[AT];
+    g[V0] = g[T8];
+}
+
+/// `func_800884E8(p)` (**guess**: return a parameter record to the audio
+/// free list): with `G = [0x800A6990]`, `[p] = [G + 0x2C]`, then `[G +
+/// 0x2C] = p` (the reverse of [`func_80088500`]).
+///
+/// Leaves `v0 = G`, `t6` = the old head.
+///
+/// Domain: `G` and `p` canonical with the words in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_800884E8(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V0] = li(0x800A_0000);
+    g[V0] = lw(m, g[V0], 0x6990);
+    g[T6] = lw(m, g[V0], 0x2C);
+    sw(m, g[A0], 0, g[T6]);
+    sw(m, g[V0], 0x2C, g[A0]);
+}
+
+/// `func_80088500()` (**guess**: take a parameter record from the audio
+/// free list): with `G = [0x800A6990]` and the head `p = [G + 0x2C]`,
+/// returns `p` in `v0` and, if it is set, unlinks it (`[G + 0x2C] = [p]`,
+/// `[p] = 0`); 0 for an empty list.
+///
+/// Leaves `a0 = p`, `t6` = its successor, `v1 = p`.
+///
+/// Domain: `G` (and a set `p`) canonical with the words in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80088500(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[V0] = li(0x800A_0000);
+    g[V0] = lw(m, g[V0], 0x6990);
+    g[V1] = 0;
+    g[A0] = lw(m, g[V0], 0x2C);
+    if g[A0] != 0 {
+        g[T6] = lw(m, g[A0], 0);
+        g[V1] = g[A0];
+        sw(m, g[V0], 0x2C, g[T6]);
+        sw(m, g[A0], 0, 0);
+    }
+    g[V0] = g[V1];
+}
+
+/// `func_80088530()`: returns at once (an empty libultra function).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80088530(_rdram: *mut u8, _ctx: *mut RecompContext) {}
+
+/// `func_80088B00(o, v)`: `[o + 0x3C] = s16(v)` (the low halfword,
+/// sign-extended to a word); `v` is spilled to its home slot `sp + 4`.
+///
+/// Leaves `t6 = v << 16`, `t7 = s16(v)`.
+///
+/// Domain: canonical `o` and `sp` with the words in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80088B00(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    g[T6] = sll(g[A1], 16);
+    g[T7] = sra(g[T6], 16);
+    sw(m, g[SP], 4, g[A1]);
+    sw(m, g[A0], 0x3C, g[T7]);
+}
+
+/// `func_80088BEC()`: returns at once (an empty libultra function).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80088BEC(_rdram: *mut u8, _ctx: *mut RecompContext) {}
+
+/// `func_80088BF4()`: returns at once (an empty libultra function).
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80088BF4(_rdram: *mut u8, _ctx: *mut RecompContext) {}
 
 /// `func_8008A8C0(x)` = `sinf`: for `xpt = (bits(x) >> 22) & 0x1FF`:
 /// - `xpt < 230` (tiny): `x` itself.
@@ -523,4 +786,25 @@ pub unsafe extern "C" fn func_8008CAA0(rdram: *mut u8, ctx: *mut RecompContext) 
     g[T0] = status | g[A0];
     let value = g[T0];
     imports::runtime::cop0_status_write(ctx, value);
+}
+
+/// `func_80095AA0(e, a, b, c)` (**guess**: initialise a 0x14-byte event or
+/// list record): `[e] = 0`, `[e + 4] = a`, `[e + 8] = b`, the halfwords
+/// `[e + 0xC] = [e + 0xE] = 0`, `[e + 0x10] = c` (low words), in that
+/// order.
+///
+/// Domain: canonical `e` with 0x14 bytes in RDRAM.
+///
+/// # Safety
+/// N64Recomp entry point: see [`crate::recomp::enter`].
+pub unsafe extern "C" fn func_80095AA0(rdram: *mut u8, ctx: *mut RecompContext) {
+    let (mut mem, ctx) = enter(rdram, ctx);
+    let m = &mut mem;
+    let g = &mut ctx.gpr;
+    sw(m, g[A0], 0, 0);
+    sw(m, g[A0], 4, g[A1]);
+    sw(m, g[A0], 8, g[A2]);
+    sh(m, g[A0], 0xC, 0);
+    sh(m, g[A0], 0xE, 0);
+    sw(m, g[A0], 0x10, g[A3]);
 }

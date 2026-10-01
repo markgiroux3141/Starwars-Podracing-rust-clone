@@ -1106,32 +1106,32 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80087CC0,func_80087CC0,ours,0,,recomp,,,privileged instrs; runtime-provided
 0x80087D70,osPiStartDma,libultra,5,os,recomp,,high,
 0x80087E80,osRecvMesg,libultra,4,,recomp,,high,blocking wait via __osEnqueueAndYield
-0x80087FC0,func_80087FC0,ours,0,,recomp,,,
-0x80088020,func_80088020,ours,0,,recomp,,,
-0x80088050,func_80088050,ours,0,,recomp,,,
+0x80087FC0,func_80087FC0,ours,0,,rust_verified,unit_diff,high,alHeapDBAlloc by shape: (num * size + 15) & ~15 from the heap if it fits (game::libultra)
+0x80088020,func_80088020,ours,0,,rust_verified,unit_diff,high,"alUnlink by shape: unlink a {next, prev} node (game::libultra)"
+0x80088050,func_80088050,ours,0,,rust_verified,unit_diff,high,"alLink by shape: insert a {next, prev} node after another (game::libultra)"
 0x80088074,func_80088074,ours,1,,recomp,,,
 0x800880AC,alInit,libultra,4,,recomp,,med,"sets alGlobals 0x800A6990 once, calls 0x800887D0"
 0x800880E0,osCreateMesgQueue,libultra,0,,recomp,,high,OSMesgQueue: +0 mtqueue +4 fullqueue (&__osThreadTail 0x800A7BB0) +8 validCount +0xC first +0x10 msgCount +0x14 msg
-0x80088110,func_80088110,ours,0,,recomp,,,
+0x80088110,func_80088110,ours,0,,rust_verified,unit_diff,high,"alHeapInit by shape: {align16(base), same, len, 0} (game::libultra)"
 0x80088150,func_80088150,ours,0,,recomp,,,
 0x800882B0,func_800882B0,ours,2,,recomp,,,
 0x80088360,func_80088360,ours,1,,recomp,,,
 0x800883E0,func_800883E0,ours,0,,recomp,,,
-0x800883F0,func_800883F0,ours,0,,recomp,,,
-0x800883F8,func_800883F8,ours,0,,recomp,,,
+0x800883F0,func_800883F0,ours,0,,rust_verified,unit_diff,high,empty (game::libultra)
+0x800883F8,func_800883F8,ours,0,,rust_verified,unit_diff,high,"microseconds to samples, rounded, then down to a multiple of 16 (guess) (game::libultra)"
 0x80088450,func_80088450,ours,1,,recomp,,,
 0x80088488,func_80088488,ours,1,,recomp,,,
-0x800884E8,func_800884E8,ours,0,,recomp,,,
-0x80088500,func_80088500,ours,0,,recomp,,,
-0x80088530,func_80088530,ours,0,,recomp,,,
+0x800884E8,func_800884E8,ours,0,,rust_verified,unit_diff,high,push a record onto the audio free list [[0x800A6990] + 0x2C] (game::libultra)
+0x80088500,func_80088500,ours,0,,rust_verified,unit_diff,high,pop a record from the audio free list [[0x800A6990] + 0x2C] (game::libultra)
+0x80088530,func_80088530,ours,0,,rust_verified,unit_diff,high,empty (game::libultra)
 0x80088538,alAudioFrame,libultra,2,,recomp,,med,"walks alGlobals client list, calls handlers indirectly"
 0x800887D0,func_800887D0,ours,3,,recomp,,,
 0x80088AD0,func_80088AD0,ours,0,,recomp,,,privileged instrs; runtime-provided
-0x80088B00,func_80088B00,ours,0,,recomp,,,
+0x80088B00,func_80088B00,ours,0,,rust_verified,unit_diff,high,[o + 0x3C] = s16(v) (game::libultra)
 0x80088B20,func_80088B20,ours,2,,recomp,,,
 0x80088B70,func_80088B70,ours,1,,recomp,,,
-0x80088BEC,func_80088BEC,ours,0,,recomp,,,
-0x80088BF4,func_80088BF4,ours,0,,recomp,,,
+0x80088BEC,func_80088BEC,ours,0,,rust_verified,unit_diff,high,empty (game::libultra)
+0x80088BF4,func_80088BF4,ours,0,,rust_verified,unit_diff,high,empty (game::libultra)
 0x80088BFC,func_80088BFC,ours,3,,recomp,,,
 0x80089144,func_80089144,ours,2,,recomp,,,
 0x80089280,func_80089280,ours,0,,recomp,,,
@@ -1345,7 +1345,7 @@ vram,name,name_source,depth,subsystem,status,test_kind,confidence,notes
 0x80095820,func_80095820,ours,2,,recomp,,,libultra range?
 0x800958D4,func_800958D4,ours,1,,recomp,,,libultra range?
 0x80095990,func_80095990,ours,2,,recomp,,,libultra range?
-0x80095AA0,func_80095AA0,ours,0,,recomp,,,libultra range?
+0x80095AA0,func_80095AA0,ours,0,,rust_verified,unit_diff,high,"init a 0x14-byte record {0, a, b, 0h, 0h, c} (game::libultra)"
 0x80095AC0,func_80095AC0,ours,0,,recomp,,,libultra range?
 0x80095B68,func_80095B68,ours,2,,recomp,,,libultra range?
 0x80095C20,func_80095C20,ours,2,,recomp,,,libultra range?
