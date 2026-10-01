@@ -588,11 +588,14 @@ fn colour() -> BoxedStrategy<f32> {
     prop_oneof![4 => -1.0f32..300.0, 1 => (0i32..256).prop_map(|n| n as f32), 1 => float(), 1 => Just(f32::INFINITY), 1 => Just(f32::NAN)].boxed()
 }
 
+/// Directions: ordinary, zero, edge, and short ones of every scale (unit
+/// vectors times 2^-20 .. 2^3), so lengths fall on both sides of any
+/// threshold.
 fn dir() -> BoxedStrategy<[f32; 3]> {
     prop_oneof![
         3 => prop::array::uniform3(ordinary()),
         1 => Just([0.0f32, 0.0, 0.0]),
-        1 => prop::array::uniform3(-0.01f32..0.01),
+        2 => (prop::array::uniform3(-1.0f32..1.0), -20i32..4).prop_map(|(v, e)| v.map(|x| x * 2f32.powi(e))),
         1 => prop::array::uniform3(float()),
     ]
     .boxed()
